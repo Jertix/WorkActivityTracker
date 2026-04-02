@@ -16,7 +16,8 @@ Designed for software teams: log work sessions, associate them with clients and 
 
 ## Screenshot
 
-> _(aggiungere screenshot dell'interfaccia principale qui)_
+![Screenshot dell'interfaccia principale]<img width="1239" height="853" alt="Screenshot" src="https://github.com/user-attachments/assets/e6963a10-1dcc-4f04-b968-90c32124e5cc" />
+
 
 ---
 

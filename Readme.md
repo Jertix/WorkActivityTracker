@@ -1,10 +1,26 @@
-# WorkActivityTracker — Specifiche del Progetto
+# WorkActivityTracker
+
+![Version](https://img.shields.io/badge/version-4.4-blue)
+![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+A Windows desktop application for tracking daily work activities, built with **.NET MAUI Blazor Hybrid** and **SQL Server**.
+Designed for software teams: log work sessions, associate them with clients and software versions, track SVN/Git changesets, and manage deployments across frozen environments (test/production).
+
+> **WorkActivityTracker** è un'applicazione desktop Windows per il tracciamento delle attività lavorative giornaliere. Costruita con .NET MAUI Blazor Hybrid, utilizza una WebView interna per renderizzare un'interfaccia Bootstrap 5.
+>
+> L'applicazione permette a uno o più utenti (identificati dal login Windows) di registrare le proprie attività, associarle a clienti e versioni software, tracciare i changeset SVN/Git coinvolti e gestire il riporto delle modifiche sui congelati (ambienti di test/produzione).
+
+---
+
+## Screenshot
+
+> _(aggiungere screenshot dell'interfaccia principale qui)_
+
+---
 
 ## Panoramica
-
-**WorkActivityTracker** è un'applicazione desktop Windows per il tracciamento delle attività lavorative giornaliere. Costruita con .NET MAUI Blazor Hybrid, utilizza una WebView interna per renderizzare un'interfaccia Bootstrap 5.
-
-L'applicazione permette a uno o più utenti (identificati dal login Windows) di registrare le proprie attività, associarle a clienti e versioni software, tracciare i changeset SVN/Git coinvolti e gestire il riporto delle modifiche sui congelati (ambienti di test/produzione).
 
 ---
 
@@ -22,7 +38,7 @@ L'applicazione permette a uno o più utenti (identificati dal login Windows) di 
 
 1. Esegui `Database/CreateDatabase.sql` in SSMS per creare il database iniziale
 2. Applica in ordine tutti gli script `MigrateToVX.Y.sql` fino all'ultimo disponibile
-3. Configura la connection string in `appsettings.json`:
+3. Crea il file `appsettings.json` nella root del progetto (non è incluso nel repository) e configura la connection string:
 
 ```json
 {
@@ -31,7 +47,7 @@ L'applicazione permette a uno o più utenti (identificati dal login Windows) di 
   },
   "AppSettings": {
     "AppName": "Work Activity Tracker",
-    "Version": "4.0",
+    "Version": "4.4",
     "MostraModalitaAdmin": true,
     "PrivacyMode": false
   }
@@ -64,6 +80,7 @@ Ogni attività registrata contiene:
 | `Note` | HTML | Descrizione dettagliata del lavoro (con grassetto) |
 | `TestoCheckIn` | string | Testo del messaggio di check-in SCM (in **grassetto**) |
 | `ChangesetCoinvolti` | HTML | Elenco changeset/commit coinvolti (con grassetto) |
+| `NumeroTicket` | string | Numero/i del ticket (separati da virgola se più di uno) |
 | `UrlPatchRilasci` | string | URL patch/pacchetto nei rilasci (NVARCHAR(MAX), può contenere più URL) |
 | `AmbientiSelezionatiIds` | List\<int\> | Congelati su cui è riportata la modifica |
 | `AmbientiRilascioNomi` | string? | Nomi ambienti rilascio separati da virgola (solo lettura, per griglia) |
@@ -181,7 +198,7 @@ Ricerca full-text su tutte le attività (senza filtri data) con griglia risultat
 Pulsante **"🐛 Segnala"** nella barra superiore (sempre visibile, indipendente dalla modalità admin), apre la modale `SegnalazioniModal`:
 
 - **Form invio**: combo utente (auto-seleziona utente corrente) + textarea + bottone "Invia Segnalazione".
-- **Griglia segnalazioni**: Utente, Testo (troncato), Data, Stato con badge colorati. Pulsante "💬 Rispondi" visibile solo per segnalazioni di altri utenti.
+- **Griglia segnalazioni**: Utente, Testo (troncato), Data, Stato con badge colorati. Pulsante "💬 Rispondi" sempre visibile (anche per chi ha originato la segnalazione).
 - **Dettaglio segnalazione selezionata**: testo formattato readonly con Utente, Data, Testo, Stato, storico risposte.
 - **Form risposta**: textarea + combo stato + bottone "Invia Risposta".
 - **Stati disponibili**: In attesa di risposta, Risposta, Richiesta accettata, Richiesta rifiutata, Modifica proposta accettata, Risolto.
@@ -236,6 +253,12 @@ Appunti             — Appunti/Knowledge Base per utente
 AppuntiTags         — Tag associati agli appunti
 Segnalazioni        — Segnalazioni bug / richieste di modifica
 Segnalazioni_Risposte — Risposte alle segnalazioni
+TipiAmbientiRilascio  — Lookup tipi di ambiente (Test, Qualità, Produzione, ecc.) (v4.1)
+VersioniRilascio      — Lookup versioni di rilascio (v4.1)
+AttivitaAmbientiRilascio — Relazione N:N tra Attivita e ambienti di rilascio (v4.1)
+TipiAttivita          — Tipi attività configurabili (Lavoro/Permesso/Ferie + custom) (v4.2)
+TipiAttivita_Log      — Log modifiche ai tipi attività (v4.2)
+EventiCalendario      — Eventi del calendario con scadenza e stato risolto (v4.2)
 ```
 
 ### Tipo Attività
@@ -259,7 +282,7 @@ EF Core DbContext
 SQL Server Database
 ```
 
-- **Single Page Application**: `Components/Pages/Home.razor` (~2200 righe).
+- **Single Page Application**: `Components/Pages/Home.razor` (~2700 righe).
 - **Modali** come componenti Blazor separati in `Components/`.
 - **JS Interop**: script in `wwwroot/index.html` per gli editor contenteditable e Ctrl+S.
 - **Nessuna EF Migration**: aggiornamenti schema tramite script SQL manuali in `Database/`.
@@ -278,6 +301,9 @@ SQL Server Database
 | `SegnalazioneService` | Scoped | CRUD segnalazioni + risposte |
 | `AppConfigService` | Singleton | Lettura `appsettings.json` |
 | `UnsavedChangesService` | Singleton | Stato modifiche non salvate (chiusura app) |
+| `AmbientiRilascioService` | Scoped | CRUD tipi ambienti e versioni di rilascio (v4.1) |
+| `TipiAttivitaService` | Scoped | CRUD tipi attività dinamici (v4.2) |
+| `CalendarioService` | Scoped | CRUD eventi calendario + eventi imminenti (v4.2) |
 
 ### Script JS in `wwwroot/index.html`
 
@@ -354,6 +380,25 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 - 🆕 **Bottone TODO→"--"**: aggiunto in tutte e 4 le toolbar (sopra/sotto Note, sopra/sotto Changeset); sostituisce le occorrenze di TODO (parola isolata) con `--` preservando la formattazione HTML; funzione JS `sostituisciTodoNeiNodi(el)` che opera sui text node
 - 🆕 **Data Dismissione nei Congelati**: nuovo campo `DataDismissione` (obbligatorio quando `Attivo = false`); colonna nella griglia, campo nel form con validazione; incluso nel log `Ambienti_Log` (VecchioValore/NuovoValore)
 - 🆕 Nuova migrazione DB: `MigrateToV4.4.sql`
+
+### v4.3
+- 🆕 **NumeroTicket**: nuovo campo `NVARCHAR(200)` affiancato al campo URL Ticket nel form; tooltip "Inserire il numero del ticket, usare la virgola se sono più di uno"; incluso nella ricerca full-text; copiato correttamente da "Duplica attività"
+- 🔧 **Visibilità campi per tipo attività**: URL Ticket, Numero Ticket, Cartella Documentazione e Vedere ora visibili anche per i tipi personalizzati (custom); nascosti solo per Permesso e Ferie
+- 🆕 **GetTipoBadge()**: badge grigio `📌 {tipo}` per i tipi personalizzati (usa `HtmlEncode` per sicurezza)
+
+### v4.2
+- 🆕 **Tipi Attività dinamici**: nuova tabella `TipiAttivita` + `TipiAttivita_Log`; dropdown caricato da DB via `TipiAttivitaService`; pulsante ✏️ accanto alla combo apre `TipiAttivitaEditorModal`; `EnsureTipiBaseAsync()` garantisce Lavoro/Permesso/Ferie all'avvio; i tipi base non possono essere rinominati né eliminati
+- 🆕 **Calendario eventi**: nuova tabella `EventiCalendario`; servizio `CalendarioService`; icona 📅 accanto al campo Data apre `CalendarioModal` (griglia mensile con navigazione e form evento); barra colorata in cima alla pagina mostra l'evento più urgente non risolto (verde/arancione/rosso/grigio per distanza in giorni)
+- 🆕 **Popup errore DB**: `MostraMessaggioConPopup()` in Home.razor mostra modale con OK per errori critici (connessione all'avvio, salvataggio)
+- 🆕 Nuove tabelle DB: `TipiAttivita`, `TipiAttivita_Log`, `EventiCalendario`
+- 🆕 Nuovi servizi: `TipiAttivitaService`, `CalendarioService`
+
+### v4.1
+- 🆕 **Ambienti di rilascio**: nel form (visibili quando cliente ≠ "Sviluppo") compaiono 3 coppie **(Tipo ambiente / Versione)** con `<input list>` e autocompletamento; i valori nuovi vengono aggiunti automaticamente ai lookup al salvataggio
+- 🆕 **Colonna Ambienti in griglia**: mostra i nomi degli ambienti di rilascio compilati, separati da virgola (es. "Test, Produzione"), senza versione
+- 🆕 **Colonna Patch in griglia**: indicatore ✔ verde se `UrlPatchRilasci` è compilato
+- 🆕 Nuove tabelle DB: `TipiAmbientiRilascio`, `VersioniRilascio`, `AttivitaAmbientiRilascio` + log per entrambe
+- 🆕 Nuovo servizio: `AmbientiRilascioService`
 
 ### v4.0
 - 🆕 **Editor Note con indent + bold**: "Descrizione dettagliata lavoro svolto" convertita da `textarea` a `contenteditable div` con toolbar (⇥→, ⇤←, **G** grassetto)
@@ -434,13 +479,15 @@ WorkActivityTracker/
 ├── appsettings.json                      # Connection string + config (NON in repo)
 ├── Components/
 │   ├── Pages/
-│   │   └── Home.razor                    # Pagina principale (~2200 righe)
+│   │   └── Home.razor                    # Pagina principale (~2700 righe)
 │   ├── SearchModal.razor                 # Ricerca avanzata
 │   ├── TodoListModal.razor               # TODO List
 │   ├── AppuntiModal.razor                # Appunti / Knowledge Base
 │   ├── CongelatiEditorModal.razor        # Editor congelati
 │   ├── ClientiEditorModal.razor          # Editor clienti (v4.0)
 │   ├── SegnalazioniModal.razor           # Segnalazioni bug/richieste (v4.0)
+│   ├── TipiAttivitaEditorModal.razor     # Editor tipi attività dinamici (v4.2)
+│   ├── CalendarioModal.razor             # Calendario eventi (v4.2)
 │   ├── _Imports.razor
 │   └── Routes.razor
 ├── Data/
@@ -464,7 +511,10 @@ WorkActivityTracker/
 │   ├── SegnalazioneService.cs            # (v4.0) CRUD segnalazioni + risposte
 │   ├── TodoService.cs
 │   ├── UnsavedChangesService.cs          # (v4.0) Singleton flag modifiche non salvate
-│   └── UserService.cs
+│   ├── UserService.cs
+│   ├── AmbientiRilascioService.cs        # (v4.1) CRUD tipi ambienti + versioni rilascio
+│   ├── TipiAttivitaService.cs            # (v4.2) CRUD tipi attività dinamici
+│   └── CalendarioService.cs              # (v4.2) CRUD eventi calendario
 ├── wwwroot/
 │   ├── css/app.css                       # Stili custom (font 13px, TODO, editor toolbar)
 │   └── index.html                        # Entry point HTML + script JS custom
@@ -472,3 +522,23 @@ WorkActivityTracker/
 ├── MauiProgram.cs                        # Composizione DI
 └── WorkActivityTracker.csproj            # ClosedXML 0.102.2 (v4.0)
 ```
+
+---
+
+## Contributing
+
+Le segnalazioni di bug e le richieste di nuove funzionalità sono benvenute tramite le **Issues** di GitHub.
+
+Per contribuire al codice:
+1. Fai un fork del repository
+2. Crea un branch per la tua modifica (`git checkout -b feature/nome-funzionalita`)
+3. Esegui il commit delle modifiche
+4. Apri una Pull Request descrivendo cosa hai cambiato e perché
+
+Prima di proporre modifiche strutturali al database, consulta la sezione [Script di Migrazione Database](#script-di-migrazione-database): le migration sono manuali (script SQL in `Database/`), non usa EF Migrations.
+
+---
+
+## Licenza
+
+Distribuito sotto licenza **MIT**. Consulta il file [LICENSE](LICENSE) per i dettagli.

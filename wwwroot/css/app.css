@@ -1,0 +1,335 @@
+html, body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+    font-size: 0.8125rem; /* 13px */
+}
+
+.page {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main {
+    flex: 1;
+}
+
+/* =============================================
+   FONT SIZE PER I FORM
+   ============================================= */
+.form-control,
+.form-select,
+.form-label,
+.form-check-label,
+.input-group-text,
+.btn,
+textarea,
+input,
+select,
+label {
+    font-size: 0.8125rem; /* 13px */
+}
+
+/* Riduzione anche per i form-control-sm e lg proporzionalmente */
+.form-control-sm,
+.form-select-sm,
+.btn-sm {
+    font-size: 0.6875rem; /* 11px */
+}
+
+.form-control-lg,
+.form-select-lg,
+.btn-lg {
+    font-size: 0.9375rem; /* 15px */
+}
+
+/* Card body e contenuto form */
+.card-body {
+    font-size: 0.8125rem;
+}
+
+/* Tabelle */
+.table {
+    font-size: 0.8125rem;
+}
+
+.table-sm {
+    font-size: 0.75rem; /* 12px */
+}
+
+/* Stile tabella */
+.table-responsive {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+}
+
+.table {
+    margin-bottom: 0;
+}
+
+.table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+/* Card form */
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+/* Riga selezionata nella griglia - colore vivace per distinguerla chiaramente */
+.row-selected {
+    background-color: #ffe066 !important; /* Giallo vivace */
+    outline: 2px solid #0d6efd;
+    outline-offset: -2px;
+}
+
+.row-selected td {
+    background-color: #ffe066 !important;
+}
+
+/* Riga selezionata + TODO: arancione (mix giallo+rosso) */
+.row-selected.todo-row,
+.row-selected.todo-row td {
+    background-color: #ffb347 !important;
+}
+
+/* =============================================
+   EVIDENZIAZIONE RIGHE CON TODO
+   ============================================= */
+.todo-row {
+    background-color: #ffcccc !important; /* Rosso chiaro */
+}
+
+.todo-row:hover {
+    background-color: #ffb3b3 !important; /* Rosso più scuro al hover */
+}
+
+/* Se la riga TODO è anche selezionata, mantieni un colore distinguibile */
+.todo-row.table-primary,
+.todo-row.table-active {
+    background-color: #ff9999 !important; /* Rosso medio */
+}
+
+/* =============================================
+   RIGHE CON ZERO ORE LAVORATE
+   ============================================= */
+.zero-ore-row {
+    color: #999 !important;
+    font-style: italic;
+}
+
+.zero-ore-row td {
+    color: #999 !important;
+}
+
+/* Se selezionata o TODO, il colore specifico ha precedenza sul grigio */
+.row-selected.zero-ore-row,
+.row-selected.zero-ore-row td {
+    color: inherit !important;
+    font-style: normal;
+}
+
+.todo-row.zero-ore-row,
+.todo-row.zero-ore-row td {
+    color: inherit !important;
+    font-style: normal;
+}
+
+/* Badge TODO opzionale per la griglia */
+.todo-badge {
+    background-color: #dc3545;
+    color: white;
+    font-size: 0.7rem;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-left: 5px;
+}
+
+/* Error UI */
+#blazor-error-ui {
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+/* Checkbox list per ambienti */
+.form-check {
+    padding-left: 1.75rem;
+}
+
+/* Focus states */
+.form-control:focus,
+.form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Buttons */
+.btn {
+    font-weight: 500;
+}
+
+.btn-success {
+    background-color: #198754;
+}
+
+.btn-primary {
+    background-color: #0d6efd;
+}
+
+/* Pulsante duplica nella griglia */
+.btn-info {
+    background-color: #0dcaf0;
+    border-color: #0dcaf0;
+}
+
+.btn-info:hover {
+    background-color: #31d2f2;
+    border-color: #25cff2;
+}
+
+/* =============================================
+   TODO LIST - Colonna Titolo su 2 linee
+   ============================================= */
+.todo-title-cell {
+    white-space: normal;
+    word-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.4;
+    vertical-align: middle;
+}
+
+/* =============================================
+   CHANGESET EDITOR (contenteditable div)
+   ============================================= */
+.changeset-editor {
+    cursor: text;
+    line-height: 1.5;
+}
+
+.changeset-editor:empty:before {
+    content: attr(placeholder);
+    color: #6c757d;
+    pointer-events: none;
+}
+
+.changeset-editor:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.changeset-editor strong {
+    font-weight: 700;
+    color: #0d3b77;
+}
+
+/* Tabella griglia - riga totale nel footer */
+tfoot.table-secondary td {
+    border-top: 2px solid #adb5bd;
+    font-size: 0.8125rem;
+}
+
+/* =============================================
+   BARRA DI STATO IN BASSO (STATUS BAR)
+   ============================================= */
+.status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 28px;
+    background-color: #212529;
+    color: #dee2e6;
+    font-size: 0.75rem;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 16px;
+    border-top: 1px solid #495057;
+}
+
+.status-bar .badge {
+    font-size: 0.65rem;
+}
+
+/* Padding extra sul fondo del contenuto principale per non coprirlo con la status bar */
+.container-fluid.main-content {
+    padding-bottom: 36px;
+}
+
+/* Bordo rosso sui campi che contengono TODO */
+.campo-con-todo {
+    border-color: #dc3545 !important;
+    border-width: 2px !important;
+    box-shadow: 0 0 0 0.15rem rgba(220, 53, 69, 0.25) !important;
+}
+
+/* =============================================
+   NOTE EDITOR (contenteditable, stile simile al changeset editor)
+   ============================================= */
+.note-editor {
+    cursor: text;
+    line-height: 1.6;
+    min-height: 120px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 0.8125rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.note-editor:empty:before {
+    content: attr(placeholder);
+    color: #6c757d;
+    pointer-events: none;
+}
+
+.note-editor:focus {
+    outline: none;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.note-editor strong {
+    font-weight: 700;
+}
+
+/* Barra pulsanti editor (indent, bold) */
+.editor-toolbar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.editor-toolbar .btn {
+    padding: 1px 7px;
+    font-size: 0.75rem;
+}
+
+.editor-toolbar .separator {
+    width: 1px;
+    height: 20px;
+    background-color: #dee2e6;
+    margin: 0 2px;
+}

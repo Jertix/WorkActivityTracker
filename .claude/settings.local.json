@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(del \"C:\\\\Lavori\\\\HistoryLavori\\\\WorkActivityTracker\\\\README.md\")",
+      "Bash(sed -i 's/@onclick=\"\"\\(\\) => NoteHighlight\\(\"\"yellow\"\"\\)\"\"/@onclick=\"\"NoteHighlightGiallo\"\"/g' Components/Pages/Home.razor)",
+      "Bash(sed -i 's/@onclick=\"\"\\(\\) => NoteHighlight\\(\"\"orange\"\"\\)\"\"/@onclick=\"\"NoteHighlightArancione\"\"/g' Components/Pages/Home.razor)",
+      "Bash(sed -i 's/@onclick=\"\"\\(\\) => NoteColoreTesto\\(\"\"red\"\"\\)\"\"/@onclick=\"\"NoteColoreTessoRosso\"\"/g' Components/Pages/Home.razor)",
+      "Bash(sed -i 's/@onclick=\"\"\\(\\) => ChangesetHighlight\\(\"\"yellow\"\"\\)\"\"/@onclick=\"\"ChangesetHighlightGiallo\"\"/g' Components/Pages/Home.razor)",
+      "Bash(sed -i 's/@onclick=\"\"\\(\\) => ChangesetHighlight\\(\"\"orange\"\"\\)\"\"/@onclick=\"\"ChangesetHighlightArancione\"\"/g' Components/Pages/Home.razor)",
+      "Bash(sed -i 's/@onclick=\"\"\\(\\) => ChangesetColoreTesto\\(\"\"red\"\"\\)\"\"/@onclick=\"\"ChangesetColoreTessoRosso\"\"/g' Components/Pages/Home.razor)",
+      "Bash(grep -E \"\\\\.sql$\")"
+    ]
+  }
+}

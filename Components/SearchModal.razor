@@ -1,0 +1,908 @@
+@using WorkActivityTracker.Models
+@using WorkActivityTracker.Services
+@using System.Text.RegularExpressions
+@inject IJSRuntime JSRuntime
+
+@* 
+    Componente modale per la ricerca avanzata.
+    Permette di cercare in campi specifici e visualizzare i risultati con evidenziazione.
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-scrollable @modalSizeClass" style="@modalCustomStyle">
+            <div class="modal-content" style="@modalContentStyle">
+                
+                @* ===== HEADER ===== *@
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">🔍 Ricerca Avanzata</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        @* Bottoni ridimensionamento *@
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn @(modalSize == ModalSize.Normal ? "btn-light" : "btn-outline-light")" 
+                                    @onclick="() => SetModalSize(ModalSize.Normal)" title="Normale">
+                                🗗
+                            </button>
+                            <button type="button" class="btn @(modalSize == ModalSize.Large ? "btn-light" : "btn-outline-light")" 
+                                    @onclick="() => SetModalSize(ModalSize.Large)" title="Grande">
+                                🗖
+                            </button>
+                            <button type="button" class="btn @(modalSize == ModalSize.FullScreen ? "btn-light" : "btn-outline-light")" 
+                                    @onclick="() => SetModalSize(ModalSize.FullScreen)" title="Schermo intero">
+                                ⛶
+                            </button>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white ms-2" @onclick="Chiudi"></button>
+                    </div>
+                </div>
+                
+                @* ===== BODY ===== *@
+                <div class="modal-body" style="overflow-y: auto;">
+                    
+                    @* ===== BARRA DI RICERCA ===== *@
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <input type="text" class="form-control form-control-lg" 
+                                       @bind="TestoRicerca" @bind:event="oninput"
+                                       @onkeypress="OnSearchKeyPress"
+                                       placeholder="Inserisci testo da cercare..." />
+                                <button class="btn btn-primary btn-lg" @onclick="EseguiRicerca">
+                                    🔍 Cerca
+                                </button>
+                                <button class="btn @(mostraFiltriAvanzati ? "btn-warning" : "btn-outline-secondary") btn-lg" 
+                                        @onclick="ToggleFiltriAvanzati">
+                                    ⚙️ Ricerca avanzata
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-center justify-content-end">
+                            <span class="text-muted">
+                                @if (Risultati.Any())
+                                {
+                                    <span>Trovati <strong>@Risultati.Count</strong> risultati</span>
+                                    if (indiceSelezionato >= 0)
+                                    {
+                                        <span class="ms-2">| Posizione: <strong>@(indiceSelezionato + 1)</strong> di @Risultati.Count</span>
+                                    }
+                                }
+                            </span>
+                        </div>
+                    </div>
+
+                    @* ===== FILTRI AVANZATI (collassabile) ===== *@
+                    @if (mostraFiltriAvanzati)
+                    {
+                        <div class="card mb-3 border-warning">
+                            <div class="card-header bg-warning bg-opacity-25">
+                                <strong>📋 Seleziona i campi in cui cercare:</strong>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkDescrizione" 
+                                                   @bind="cercaInDescrizione" />
+                                            <label class="form-check-label" for="chkDescrizione">Descrizione</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkUrlTicket"
+                                                   @bind="cercaInUrlTicket" />
+                                            <label class="form-check-label" for="chkUrlTicket">URL Ticket / CR / Backlog</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkNumeroTicket"
+                                                   @bind="cercaInNumeroTicket" />
+                                            <label class="form-check-label" for="chkNumeroTicket">Numero del ticket</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkVedere"
+                                                   @bind="cercaInVedere" />
+                                            <label class="form-check-label" for="chkVedere">Vedere (riferimenti)</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkNote" 
+                                                   @bind="cercaInNote" />
+                                            <label class="form-check-label" for="chkNote">Descrizione dettagliata</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkChangeset" 
+                                                   @bind="cercaInChangeset" />
+                                            <label class="form-check-label" for="chkChangeset">Elenco Changeset</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkUrlPatchRilasci" 
+                                                   @bind="cercaInUrlPatchRilasci" />
+                                            <label class="form-check-label" for="chkUrlPatchRilasci">URL Patch/Rilasci</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkTestoCheckIn" 
+                                                   @bind="cercaInTestoCheckIn" />
+                                            <label class="form-check-label" for="chkTestoCheckIn">Testo del check-in</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkVersione" 
+                                                   @bind="cercaInVersione" />
+                                            <label class="form-check-label" for="chkVersione">Versione</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkCliente" 
+                                                   @bind="cercaInCliente" />
+                                            <label class="form-check-label" for="chkCliente">Cliente</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkCartella" 
+                                                   @bind="cercaInCartella" />
+                                            <label class="form-check-label" for="chkCartella">Cartella Documentazione</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <button class="btn btn-sm btn-outline-primary me-2" @onclick="SelezionaTutti">
+                                        ✅ Seleziona tutti
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" @onclick="DeselezionaTutti">
+                                        ⬜ Deseleziona tutti
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @* ===== GRIGLIA RISULTATI CON NAVIGAZIONE ===== *@
+                    <div class="d-flex">
+                        <div class="flex-grow-1">
+                            <div class="table-responsive" style="max-height: @gridHeight; overflow-y: auto;">
+                                <table class="table table-striped table-hover table-sm">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th style="width: 40px;">#</th>
+                                            <th style="width: 100px;">Data</th>
+                                            @if (IsAdminMode)
+                                            {
+                                                <th style="width: 120px;">Utente</th>
+                                            }
+                                            <th>Descrizione</th>
+                                            <th style="width: 120px;">Cliente</th>
+                                            <th style="width: 60px;">Ore</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (Risultati.Any())
+                                        {
+                                            @for (int i = 0; i < Risultati.Count; i++)
+                                            {
+                                                var idx = i;
+                                                var att = Risultati[i];
+                                                <tr @onclick="() => SelezionaRisultato(idx)" 
+                                                    class="@GetRowClass(att, idx)"
+                                                    style="cursor: pointer;">
+                                                    <td><span class="badge bg-secondary">@(idx + 1)</span></td>
+                                                    <td>@att.Data.ToString("dd/MM/yyyy")</td>
+                                                    @if (IsAdminMode)
+                                                    {
+                                                        <td>@(att.UtenteUsername ?? "-")</td>
+                                                    }
+                                                    <td>
+                                                        @TruncateText(att.Descrizione, 60)
+                                                        @if (ContieneTodo(att))
+                                                        {
+                                                            <span class="todo-badge">TODO</span>
+                                                        }
+                                                    </td>
+                                                    <td>@(att.ClienteNome ?? "-")</td>
+                                                    <td>@att.OreLavorate</td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="@(IsAdminMode ? 6 : 5)" class="text-center text-muted py-4">
+                                                    @if (ricercaEseguita)
+                                                    {
+                                                        <span>Nessun risultato trovato per "<strong>@TestoRicerca</strong>"</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>Inserisci un testo e premi "Cerca"</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        @* ===== FRECCE NAVIGAZIONE ===== *@
+                        <div class="d-flex flex-column justify-content-center align-items-center ms-2" style="width: 50px;">
+                            <button class="btn btn-outline-primary btn-lg mb-2" 
+                                    @onclick="VaiPrecedente" 
+                                    disabled="@(!Risultati.Any() || indiceSelezionato <= 0)"
+                                    title="Risultato precedente (↑)">
+                                ⬆️
+                            </button>
+                            <button class="btn btn-outline-primary btn-lg" 
+                                    @onclick="VaiSuccessivo"
+                                    disabled="@(!Risultati.Any() || indiceSelezionato >= Risultati.Count - 1)"
+                                    title="Risultato successivo (↓)">
+                                ⬇️
+                            </button>
+                        </div>
+                    </div>
+
+                    @* ===== DETTAGLIO ELEMENTO SELEZIONATO ===== *@
+                    @if (indiceSelezionato >= 0 && indiceSelezionato < Risultati.Count)
+                    {
+                        <div class="card mt-3">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                <strong>📄 Dettaglio elemento selezionato</strong>
+                                <span class="badge bg-primary">ID: @Risultati[indiceSelezionato].Id</span>
+                            </div>
+                            <div class="card-body">
+                                <div id="dettaglio-container" class="border rounded p-3 bg-light" 
+                                     style="max-height: @detailHeight; overflow-y: auto; font-family: 'Consolas', 'Courier New', monospace; white-space: pre-wrap;">
+                                    @((MarkupString)GetCachedDetailHtml())
+                                </div>
+                                
+                                @* ===== NAVIGAZIONE OCCORRENZE ===== *@
+                                @if (totalHighlights > 0)
+                                {
+                                    <div class="d-flex justify-content-end align-items-center mt-2 gap-2">
+                                        <span class="text-muted small">
+                                            Occorrenza @(currentHighlightIndex + 1) di @totalHighlights
+                                        </span>
+                                        <button class="btn btn-outline-secondary btn-sm" 
+                                                @onclick="VaiOccorrenzaPrecedente"
+                                                disabled="@(currentHighlightIndex <= 0)">
+                                            ⬅️ Precedente
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" 
+                                                @onclick="VaiOccorrenzaSuccessiva"
+                                                disabled="@(currentHighlightIndex >= totalHighlights - 1)">
+                                            Prossimo ➡️
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+                
+                @* ===== FOOTER ===== *@
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Chiudi">
+                        ❌ Chiudi
+                    </button>
+                    @if (indiceSelezionato >= 0 && indiceSelezionato < Risultati.Count)
+                    {
+                        <button type="button" class="btn btn-success btn-lg" @onclick="SelezionaEChiudi">
+                            ✅ Seleziona
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    #region Parameters
+
+    /// <summary>Indica se la modale è visibile</summary>
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    /// <summary>Testo di ricerca iniziale (dalla pagina principale)</summary>
+    [Parameter]
+    public string TestoRicercaIniziale { get; set; } = string.Empty;
+
+    /// <summary>Lista delle attività su cui cercare</summary>
+    [Parameter]
+    public List<WorkActivityDto> AttivitaTutte { get; set; } = new();
+
+    /// <summary>Evento quando la modale viene chiusa</summary>
+    [Parameter]
+    public EventCallback OnChiudi { get; set; }
+
+    /// <summary>Evento quando viene selezionato un elemento</summary>
+    [Parameter]
+    public EventCallback<WorkActivityDto> OnSeleziona { get; set; }
+
+    /// <summary>Indica se la modalità admin è attiva (mostra colonna Utente)</summary>
+    [Parameter]
+    public bool IsAdminMode { get; set; }
+
+    #endregion
+
+    #region Private Fields
+
+    private string TestoRicerca { get; set; } = string.Empty;
+    private List<WorkActivityDto> Risultati { get; set; } = new();
+    private int indiceSelezionato = -1;
+    private bool ricercaEseguita = false;
+    private bool mostraFiltriAvanzati = false;
+
+    // Filtri campi di ricerca (default tutti selezionati)
+    private bool cercaInDescrizione = true;
+    private bool cercaInUrlTicket = true;
+    private bool cercaInNumeroTicket = true;
+    private bool cercaInVedere = true;
+    private bool cercaInNote = true;
+    private bool cercaInChangeset = true;
+    private bool cercaInUrlPatchRilasci = true;
+    private bool cercaInTestoCheckIn = true;
+    private bool cercaInVersione = true;
+    private bool cercaInCliente = true;
+    private bool cercaInCartella = true;
+
+    // Dimensione modale
+    private enum ModalSize { Normal, Large, FullScreen }
+    private ModalSize modalSize = ModalSize.Large;
+
+    // Navigazione occorrenze evidenziate
+    private int totalHighlights = 0;
+    private int currentHighlightIndex = 0;
+    
+    // Cache per l'HTML del dettaglio (evita ri-generazione quando si naviga tra occorrenze)
+    private string cachedDetailHtml = string.Empty;
+    private int lastRenderedIndex = -1;
+
+    #endregion
+
+    #region Computed Properties for Modal Size
+
+    private string modalSizeClass => modalSize switch
+    {
+        ModalSize.Normal => "modal-lg",
+        ModalSize.Large => "modal-xl",
+        ModalSize.FullScreen => "modal-fullscreen",
+        _ => "modal-xl"
+    };
+
+    private string modalCustomStyle => modalSize switch
+    {
+        ModalSize.Normal => "",
+        ModalSize.Large => "max-width: 90%;",
+        ModalSize.FullScreen => "",
+        _ => ""
+    };
+
+    private string modalContentStyle => modalSize switch
+    {
+        ModalSize.Normal => "height: 70vh;",
+        ModalSize.Large => "height: 85vh;",
+        ModalSize.FullScreen => "height: 100%;",
+        _ => "height: 85vh;"
+    };
+
+    private string gridHeight => modalSize switch
+    {
+        ModalSize.Normal => "180px",
+        ModalSize.Large => "220px",
+        ModalSize.FullScreen => "35vh",
+        _ => "220px"
+    };
+
+    private string detailHeight => modalSize switch
+    {
+        ModalSize.Normal => "180px",
+        ModalSize.Large => "250px",
+        ModalSize.FullScreen => "35vh",
+        _ => "250px"
+    };
+
+    #endregion
+
+    #region Lifecycle
+
+    protected override void OnParametersSet()
+    {
+        if (IsVisible && !string.IsNullOrEmpty(TestoRicercaIniziale) && TestoRicerca != TestoRicercaIniziale)
+        {
+            TestoRicerca = TestoRicercaIniziale;
+            EseguiRicerca();
+        }
+    }
+
+    #endregion
+
+    #region Dimensione Modale
+
+    /// <summary>
+    /// Imposta la dimensione della modale
+    /// </summary>
+    private void SetModalSize(ModalSize size)
+    {
+        modalSize = size;
+    }
+
+    #endregion
+
+    #region Ricerca
+
+    /// <summary>
+    /// Normalizza una stringa rimuovendo spazi multipli e trasformando in lowercase.
+    /// </summary>
+    private static string NormalizeForSearch(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+        
+        return Regex.Replace(text.Trim(), @"\s+", " ").ToLower();
+    }
+
+    /// <summary>
+    /// Verifica se un testo normalizzato contiene la stringa di ricerca normalizzata.
+    /// </summary>
+    private static bool ContainsNormalized(string? text, string normalizedSearch)
+    {
+        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(normalizedSearch))
+            return false;
+        
+        return NormalizeForSearch(text).Contains(normalizedSearch);
+    }
+
+    /// <summary>
+    /// Esegue la ricerca applicando i filtri selezionati.
+    /// La ricerca normalizza gli spazi, quindi "oggi   sono" trova anche "oggi sono".
+    /// </summary>
+    private async Task EseguiRicerca()
+    {
+        ricercaEseguita = true;
+        indiceSelezionato = -1;
+        
+        // Invalida la cache perché il testo cercato potrebbe essere cambiato
+        cachedDetailHtml = string.Empty;
+        lastRenderedIndex = -1;
+
+        if (string.IsNullOrWhiteSpace(TestoRicerca))
+        {
+            Risultati = new List<WorkActivityDto>();
+            return;
+        }
+
+        // Normalizza la stringa di ricerca (spazi multipli → singolo)
+        var normalizedSearch = NormalizeForSearch(TestoRicerca);
+
+        Risultati = AttivitaTutte.Where(a =>
+        {
+            bool match = false;
+
+            if (cercaInDescrizione)
+                match = match || ContainsNormalized(a.Descrizione, normalizedSearch);
+
+            if (cercaInUrlTicket)
+                match = match || ContainsNormalized(a.UrlTicket, normalizedSearch);
+
+            if (cercaInNumeroTicket)
+                match = match || ContainsNormalized(a.NumeroTicket, normalizedSearch);
+
+            if (cercaInVedere)
+                match = match || ContainsNormalized(a.Vedere, normalizedSearch);
+
+            if (cercaInNote)
+                match = match || ContainsNormalized(a.Note, normalizedSearch);
+
+            if (cercaInChangeset)
+                match = match || ContainsNormalized(a.ChangesetCoinvolti, normalizedSearch);
+
+            if (cercaInUrlPatchRilasci)
+                match = match || ContainsNormalized(a.UrlPatchRilasci, normalizedSearch);
+
+            if (cercaInTestoCheckIn)
+                match = match || ContainsNormalized(a.TestoCheckIn, normalizedSearch);
+
+            if (cercaInVersione)
+                match = match || ContainsNormalized(a.Versione, normalizedSearch);
+
+            if (cercaInCliente)
+                match = match || ContainsNormalized(a.ClienteNome, normalizedSearch);
+
+            if (cercaInCartella)
+                match = match || ContainsNormalized(a.CartellaDocumentazione, normalizedSearch);
+
+            return match;
+        })
+        .OrderByDescending(a => a.Data)
+        .ToList();
+
+        // Seleziona automaticamente il primo risultato se presente e scrolla all'evidenziazione
+        if (Risultati.Any())
+        {
+            indiceSelezionato = 0;
+            await ScrollToHighlight();
+        }
+    }
+
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await EseguiRicerca();
+        }
+    }
+
+    #endregion
+
+    #region Navigazione
+
+    private async Task SelezionaRisultato(int indice)
+    {
+        indiceSelezionato = indice;
+        currentHighlightIndex = 0; // Reset alla prima occorrenza quando cambia elemento
+        await ScrollToHighlight();
+    }
+
+    private async Task VaiPrecedente()
+    {
+        if (indiceSelezionato > 0)
+        {
+            indiceSelezionato--;
+            currentHighlightIndex = 0; // Reset alla prima occorrenza quando cambia elemento
+            await ScrollToHighlight();
+        }
+    }
+
+    private async Task VaiSuccessivo()
+    {
+        if (indiceSelezionato < Risultati.Count - 1)
+        {
+            indiceSelezionato++;
+            currentHighlightIndex = 0; // Reset alla prima occorrenza quando cambia elemento
+            await ScrollToHighlight();
+        }
+    }
+
+    /// <summary>
+    /// Scrolla il contenitore del dettaglio all'occorrenza evidenziata corrente
+    /// </summary>
+    private async Task ScrollToHighlight()
+    {
+        // Attendi che Blazor abbia renderizzato il nuovo contenuto
+        await Task.Delay(100);
+        
+        try
+        {
+            // Esegue lo scroll all'elemento con id="highlight-{currentHighlightIndex}" all'interno del container
+            await JSRuntime.InvokeVoidAsync("eval", $@"
+                (function() {{
+                    var container = document.getElementById('dettaglio-container');
+                    var highlight = document.getElementById('highlight-{currentHighlightIndex}');
+                    if (container && highlight) {{
+                        // Calcola la posizione relativa dell'elemento rispetto al container
+                        var scrollTop = highlight.offsetTop - container.offsetTop - 50;
+                        container.scrollTop = Math.max(0, scrollTop);
+                    }}
+                }})();
+            ");
+        }
+        catch
+        {
+            // Ignora errori JS (es: se il DOM non è ancora pronto)
+        }
+    }
+
+    /// <summary>
+    /// Va all'occorrenza precedente del testo cercato nel dettaglio
+    /// </summary>
+    private async Task VaiOccorrenzaPrecedente()
+    {
+        if (currentHighlightIndex > 0)
+        {
+            currentHighlightIndex--;
+            await ScrollToHighlight();
+        }
+    }
+
+    /// <summary>
+    /// Va all'occorrenza successiva del testo cercato nel dettaglio
+    /// </summary>
+    private async Task VaiOccorrenzaSuccessiva()
+    {
+        if (currentHighlightIndex < totalHighlights - 1)
+        {
+            currentHighlightIndex++;
+            await ScrollToHighlight();
+        }
+    }
+
+    #endregion
+
+    #region Filtri Avanzati
+
+    private void ToggleFiltriAvanzati()
+    {
+        mostraFiltriAvanzati = !mostraFiltriAvanzati;
+    }
+
+    private void SelezionaTutti()
+    {
+        cercaInDescrizione = true;
+        cercaInUrlTicket = true;
+        cercaInNumeroTicket = true;
+        cercaInVedere = true;
+        cercaInNote = true;
+        cercaInChangeset = true;
+        cercaInUrlPatchRilasci = true;
+        cercaInTestoCheckIn = true;
+        cercaInVersione = true;
+        cercaInCliente = true;
+        cercaInCartella = true;
+    }
+
+    private void DeselezionaTutti()
+    {
+        cercaInDescrizione = false;
+        cercaInUrlTicket = false;
+        cercaInNumeroTicket = false;
+        cercaInVedere = false;
+        cercaInNote = false;
+        cercaInChangeset = false;
+        cercaInUrlPatchRilasci = false;
+        cercaInTestoCheckIn = false;
+        cercaInVersione = false;
+        cercaInCliente = false;
+        cercaInCartella = false;
+    }
+
+    #endregion
+
+    #region Azioni
+
+    private async Task Chiudi()
+    {
+        // Reset stato
+        indiceSelezionato = -1;
+        ricercaEseguita = false;
+        Risultati = new List<WorkActivityDto>();
+        mostraFiltriAvanzati = false;
+        totalHighlights = 0;
+        currentHighlightIndex = 0;
+        cachedDetailHtml = string.Empty;
+        lastRenderedIndex = -1;
+        
+        await OnChiudi.InvokeAsync();
+    }
+
+    private async Task SelezionaEChiudi()
+    {
+        if (indiceSelezionato >= 0 && indiceSelezionato < Risultati.Count)
+        {
+            var selezionato = Risultati[indiceSelezionato];
+            await OnSeleziona.InvokeAsync(selezionato);
+            await Chiudi();
+        }
+    }
+
+    #endregion
+
+    #region Formattazione e Evidenziazione
+
+    /// <summary>
+    /// Restituisce l'HTML del dettaglio, usando la cache se l'elemento selezionato non è cambiato.
+    /// Questo evita di rigenerare l'HTML quando si naviga tra le occorrenze.
+    /// </summary>
+    private string GetCachedDetailHtml()
+    {
+        if (indiceSelezionato != lastRenderedIndex || string.IsNullOrEmpty(cachedDetailHtml))
+        {
+            // L'elemento è cambiato, rigenera l'HTML
+            cachedDetailHtml = GeneraDettaglioFormattato(Risultati[indiceSelezionato]);
+            lastRenderedIndex = indiceSelezionato;
+        }
+        return cachedDetailHtml;
+    }
+
+    /// <summary>
+    /// Genera il dettaglio formattato con evidenziazione in rosso del testo cercato
+    /// </summary>
+    private string GeneraDettaglioFormattato(WorkActivityDto att)
+    {
+        var sb = new System.Text.StringBuilder();
+        // Reset del contatore per l'evidenziazione (NON resettare currentHighlightIndex qui!)
+        highlightCounter = 0;
+
+        sb.AppendLine($"<strong>📅 Data:</strong> {att.Data:dd/MM/yyyy}");
+        sb.AppendLine();
+        
+        if (IsAdminMode && !string.IsNullOrEmpty(att.UtenteUsername))
+        {
+            sb.AppendLine($"<strong>👤 Utente:</strong> {System.Net.WebUtility.HtmlEncode(att.UtenteUsername)}");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine($"<strong>📝 Descrizione:</strong>");
+        sb.AppendLine(EvidenziaTestoHtml(att.Descrizione ?? "-"));
+        sb.AppendLine();
+
+        if (!string.IsNullOrEmpty(att.UrlTicket))
+        {
+            sb.AppendLine($"<strong>🔗 URL Ticket / CR / Backlog:</strong>");
+            sb.AppendLine(EvidenziaTestoHtml(att.UrlTicket));
+            sb.AppendLine();
+        }
+
+        if (!string.IsNullOrEmpty(att.NumeroTicket))
+        {
+            sb.AppendLine($"<strong>🎫 Numero del ticket:</strong> {EvidenziaTestoHtml(att.NumeroTicket)}");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine($"<strong>👤 Cliente:</strong> {EvidenziaTestoHtml(att.ClienteNome ?? "-")}");
+        sb.AppendLine($"<strong>⏱️ Ore Lavorate:</strong> {att.OreLavorate}");
+        
+        if (!string.IsNullOrEmpty(att.Versione))
+        {
+            sb.AppendLine($"<strong>🏷️ Versione:</strong> {EvidenziaTestoHtml(att.Versione)}");
+        }
+
+        if (!string.IsNullOrEmpty(att.Vedere))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"<strong>👀 Vedere:</strong>");
+            sb.AppendLine(EvidenziaTestoHtml(att.Vedere));
+        }
+
+        if (!string.IsNullOrEmpty(att.CartellaDocumentazione))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"<strong>📁 Cartella Documentazione:</strong>");
+            sb.AppendLine(EvidenziaTestoHtml(att.CartellaDocumentazione));
+        }
+
+        if (!string.IsNullOrEmpty(att.Note))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"<strong>📋 Descrizione dettagliata lavoro svolto:</strong>");
+            sb.AppendLine(EvidenziaTestoHtml(HtmlToPlainText(att.Note)));
+        }
+
+        if (!string.IsNullOrEmpty(att.TestoCheckIn))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"<strong>✏️ Testo del check-in:</strong>");
+            sb.AppendLine(EvidenziaTestoHtml(att.TestoCheckIn));
+        }
+
+        if (!string.IsNullOrEmpty(att.ChangesetCoinvolti))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"<strong>🔢 Elenco Changeset e lista files coinvolti:</strong>");
+            sb.AppendLine(EvidenziaTestoHtml(HtmlToPlainText(att.ChangesetCoinvolti)));
+        }
+
+        if (!string.IsNullOrEmpty(att.UrlPatchRilasci))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"<strong>📦 URL Patch/Pacchetto nei rilasci:</strong>");
+            sb.AppendLine(EvidenziaTestoHtml(att.UrlPatchRilasci));
+        }
+
+        // Salva il totale delle occorrenze trovate
+        totalHighlights = highlightCounter;
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Contatore per assegnare id univoci agli elementi evidenziati
+    /// </summary>
+    private int highlightCounter = 0;
+
+    /// <summary>
+    /// Rimuove i tag HTML e decodifica le entità. Usato per i campi che contengono HTML (Note, Changeset).
+    /// </summary>
+    private static string HtmlToPlainText(string? html)
+    {
+        if (string.IsNullOrEmpty(html)) return string.Empty;
+        // <br>, </p>, </div> → newline
+        var testo = System.Text.RegularExpressions.Regex.Replace(html, @"<br\s*/?>|</p>|</div>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        // Rimuovi tutti i restanti tag HTML
+        testo = System.Text.RegularExpressions.Regex.Replace(testo, @"<[^>]+>", "");
+        // Decodifica entità HTML
+        testo = System.Net.WebUtility.HtmlDecode(testo);
+        // Normalizza righe vuote multiple
+        testo = System.Text.RegularExpressions.Regex.Replace(testo, @"\n{3,}", "\n\n");
+        return testo.Trim();
+    }
+
+    /// <summary>
+    /// Evidenzia il testo cercato in rosso (HTML) - usato solo nel dettaglio.
+    /// Ogni elemento evidenziato ha un id univoco (highlight-0, highlight-1, etc.) per la navigazione.
+    /// </summary>
+    private string EvidenziaTestoHtml(string? testo)
+    {
+        if (string.IsNullOrEmpty(testo) || string.IsNullOrWhiteSpace(TestoRicerca))
+            return System.Net.WebUtility.HtmlEncode(testo ?? "");
+
+        // Escape HTML prima
+        var testoEscaped = System.Net.WebUtility.HtmlEncode(testo);
+        var searchEscaped = System.Net.WebUtility.HtmlEncode(TestoRicerca);
+
+        // Usa regex per case-insensitive replace
+        var pattern = Regex.Escape(searchEscaped);
+        var result = Regex.Replace(
+            testoEscaped, 
+            pattern, 
+            match => 
+            {
+                var currentId = highlightCounter;
+                highlightCounter++;
+                // Ogni elemento evidenziato ha un id univoco per permettere la navigazione
+                return $"<span id=\"highlight-{currentId}\" class=\"search-highlight\" style=\"background-color: #ff6b6b; color: white; padding: 1px 3px; border-radius: 3px; font-weight: bold;\">{match.Value}</span>";
+            },
+            RegexOptions.IgnoreCase
+        );
+
+        return result;
+    }
+
+    /// <summary>
+    /// Tronca un testo alla lunghezza specificata (senza HTML, usato nella griglia)
+    /// </summary>
+    private string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text))
+            return "-";
+        return text.Length > maxLength ? text[..maxLength] + "..." : text;
+    }
+
+    /// <summary>
+    /// Verifica se un'attività contiene la parola TODO nella descrizione o nelle note.
+    /// </summary>
+    private bool ContieneTodo(WorkActivityDto attivita)
+    {
+        var descrizione = attivita.Descrizione?.ToUpper() ?? "";
+        var note = attivita.Note?.ToUpper() ?? "";
+        
+        return descrizione.Contains("TODO") || note.Contains("TODO");
+    }
+
+    /// <summary>
+    /// Determina la classe CSS per una riga della griglia.
+    /// Gestisce sia la selezione che l'evidenziazione TODO.
+    /// </summary>
+    private string GetRowClass(WorkActivityDto attivita, int indice)
+    {
+        var classes = new List<string>();
+        
+        // Riga selezionata
+        if (indiceSelezionato == indice)
+        {
+            classes.Add("table-primary");
+        }
+        
+        // Riga con TODO
+        if (ContieneTodo(attivita))
+        {
+            classes.Add("todo-row");
+        }
+        
+        return string.Join(" ", classes);
+    }
+
+    #endregion
+}

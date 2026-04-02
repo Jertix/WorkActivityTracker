@@ -1,0 +1,303 @@
+@using WorkActivityTracker.Models
+@using WorkActivityTracker.Services
+@inject TipiAttivitaService TipiAttivitaService
+
+@*
+    Componente modale per la gestione della lista dei tipi di attività.
+    Permette di aggiungere, modificare e disattivare tipi attività con logging.
+    I tipi base (Lavoro, Permesso, Ferie) non possono essere eliminati.
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg" style="max-width: 70%;">
+            <div class="modal-content" style="height: 75vh;">
+
+                @* ===== HEADER ===== *@
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">⚙️ Gestione Tipi Attività</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Chiudi"></button>
+                </div>
+
+                @* ===== BODY ===== *@
+                <div class="modal-body" style="overflow-y: auto;">
+
+                    @if (!string.IsNullOrEmpty(messaggio))
+                    {
+                        <div class="alert @(isErrore ? "alert-danger" : "alert-success") alert-dismissible py-2" role="alert">
+                            @messaggio
+                            <button type="button" class="btn-close" @onclick="() => messaggio = string.Empty"></button>
+                        </div>
+                    }
+
+                    @* ===== GRIGLIA TIPI ===== *@
+                    <div class="card mb-3">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <strong>Tipi Attività (@tipi.Count elementi)</strong>
+                            @if (isLoading)
+                            {
+                                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                    <span class="visually-hidden">Caricamento...</span>
+                                </div>
+                            }
+                        </div>
+                        <div class="card-body p-0">
+                            <div style="max-height: 280px; overflow-y: auto;">
+                                <table class="table table-hover table-striped mb-0">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th style="width: 60px;">Ordine</th>
+                                            <th>Nome</th>
+                                            <th style="width: 80px;">Attivo</th>
+                                            <th style="width: 80px;">Base</th>
+                                            <th style="width: 80px;">Azioni</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (tipi.Any())
+                                        {
+                                            @foreach (var tipo in tipi)
+                                            {
+                                                <tr @onclick="() => SelezionaTipo(tipo)"
+                                                    class="@(tipoCorrente.Id == tipo.Id ? "table-active" : "")"
+                                                    style="cursor: pointer;">
+                                                    <td class="text-muted">@tipo.Ordine</td>
+                                                    <td class="@(!tipo.Attivo ? "text-muted text-decoration-line-through" : "fw-bold")">
+                                                        @tipo.Nome
+                                                    </td>
+                                                    <td>
+                                                        @if (tipo.Attivo)
+                                                        {
+                                                            <span class="badge bg-success">Sì</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-secondary">No</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (IsTipoBase(tipo.Nome))
+                                                        {
+                                                            <span class="badge bg-primary">Base</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (!IsTipoBase(tipo.Nome) && tipo.Attivo)
+                                                        {
+                                                            <button class="btn btn-sm btn-outline-danger"
+                                                                    @onclick="() => DisattivaTipo(tipo.Id)"
+                                                                    @onclick:stopPropagation="true"
+                                                                    title="Disattiva tipo attività">
+                                                                🗑️
+                                                            </button>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="5" class="text-center text-muted py-4">
+                                                    Nessun tipo attività presente.
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== FORM DETTAGLIO/INSERIMENTO ===== *@
+                    <div class="card">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <strong>@(IsModifica ? "📝 Modifica Tipo" : "➕ Nuovo Tipo")</strong>
+                            @if (tipoCorrente.Id > 0)
+                            {
+                                <span class="badge bg-primary">ID: @tipoCorrente.Id</span>
+                            }
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label">Nome <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control"
+                                           @bind="tipoCorrente.Nome"
+                                           placeholder="Es: Formazione, Riunione..."
+                                           disabled="@IsTipoBase(tipoCorrente.Nome)" />
+                                    @if (IsTipoBase(tipoCorrente.Nome))
+                                    {
+                                        <small class="text-muted">Il nome dei tipi base non può essere modificato.</small>
+                                    }
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Ordine</label>
+                                    <input type="number" class="form-control"
+                                           @bind="tipoCorrente.Ordine" min="1" max="99" />
+                                    <small class="text-muted">Posizione nel dropdown (1 = primo)</small>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Attivo</label>
+                                    <div class="form-check mt-2">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="tipoAttivo"
+                                               @bind="tipoCorrente.Attivo"
+                                               disabled="@IsTipoBase(tipoCorrente.Nome)" />
+                                        <label class="form-check-label" for="tipoAttivo">
+                                            Attivo
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer d-flex gap-2">
+                            <button class="btn btn-success btn-sm" @onclick="SalvaTipo" disabled="@isSaving">
+                                @if (isSaving)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                💾 Salva
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="NuovoTipo">
+                                ➕ Nuovo
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                @* ===== FOOTER ===== *@
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="Chiudi">Chiudi</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnChiudi { get; set; }
+    [Parameter] public EventCallback OnTipiChanged { get; set; }
+
+    private List<TipoAttivitaItem> tipi = new();
+    private TipoAttivitaItem tipoCorrente = new();
+    private bool isLoading = false;
+    private bool isSaving = false;
+    private string messaggio = string.Empty;
+    private bool isErrore = false;
+
+    private bool IsModifica => tipoCorrente.Id > 0;
+
+    private static bool IsTipoBase(string nome) =>
+        nome == TipiAttivita.Lavoro || nome == TipiAttivita.Permesso || nome == TipiAttivita.Ferie;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && !tipi.Any())
+            await CaricaTipi();
+    }
+
+    private async Task CaricaTipi()
+    {
+        isLoading = true;
+        try
+        {
+            tipi = await TipiAttivitaService.GetTuttiAsync();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel caricamento: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SelezionaTipo(TipoAttivitaItem tipo)
+    {
+        tipoCorrente = new TipoAttivitaItem
+        {
+            Id = tipo.Id,
+            Nome = tipo.Nome,
+            Ordine = tipo.Ordine,
+            Attivo = tipo.Attivo
+        };
+    }
+
+    private void NuovoTipo()
+    {
+        tipoCorrente = new TipoAttivitaItem { Ordine = 99, Attivo = true };
+        messaggio = string.Empty;
+    }
+
+    private async Task SalvaTipo()
+    {
+        if (string.IsNullOrWhiteSpace(tipoCorrente.Nome))
+        {
+            MostraMessaggio("Il nome è obbligatorio", true);
+            return;
+        }
+
+        isSaving = true;
+        try
+        {
+            if (IsModifica)
+            {
+                await TipiAttivitaService.UpdateTipoAsync(tipoCorrente);
+                MostraMessaggio("Tipo aggiornato con successo!", false);
+            }
+            else
+            {
+                await TipiAttivitaService.AddTipoAsync(tipoCorrente);
+                MostraMessaggio("Tipo aggiunto con successo!", false);
+            }
+
+            await CaricaTipi();
+            await OnTipiChanged.InvokeAsync();
+            NuovoTipo();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore: {ex.Message}", true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task DisattivaTipo(int id)
+    {
+        try
+        {
+            await TipiAttivitaService.DisattivaTipoAsync(id);
+            await CaricaTipi();
+            await OnTipiChanged.InvokeAsync();
+            MostraMessaggio("Tipo disattivato.", false);
+            if (tipoCorrente.Id == id)
+                NuovoTipo();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore: {ex.Message}", true);
+        }
+    }
+
+    private async Task Chiudi()
+    {
+        tipi.Clear();
+        NuovoTipo();
+        await OnChiudi.InvokeAsync();
+    }
+
+    private void MostraMessaggio(string testo, bool errore)
+    {
+        messaggio = testo;
+        isErrore = errore;
+    }
+}

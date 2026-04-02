@@ -1,0 +1,387 @@
+@using WorkActivityTracker.Models
+@using WorkActivityTracker.Services
+@inject AmbienteService AmbienteService
+
+@* 
+    Componente modale per la gestione dei congelati/ambienti.
+    Permette di aggiungere, modificare ed eliminare ambienti con logging.
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg" style="max-width: 80%;">
+            <div class="modal-content" style="height: 80vh;">
+                
+                @* ===== HEADER ===== *@
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">🧊 Gestione Congelati</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Chiudi"></button>
+                </div>
+                
+                @* ===== BODY ===== *@
+                <div class="modal-body" style="overflow-y: auto;">
+                    
+                    @* ===== GRIGLIA CONGELATI ===== *@
+                    <div class="card mb-3">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <strong>Elenco Congelati (@ambienti.Count elementi)</strong>
+                            @if (isLoading)
+                            {
+                                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                    <span class="visually-hidden">Caricamento...</span>
+                                </div>
+                            }
+                        </div>
+                        <div class="card-body p-0">
+                            <div style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-hover table-striped mb-0">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th style="width: 200px;">Codice</th>
+                                            <th style="width: 150px;">Versione</th>
+                                            <th style="width: 140px;">Data Congelamento</th>
+                                            <th style="width: 140px;">Data Dismissione</th>
+                                            <th style="width: 80px;">Attivo</th>
+                                            <th style="width: 80px;">Azioni</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (ambienti.Any())
+                                        {
+                                            @foreach (var ambiente in ambienti)
+                                            {
+                                                <tr @onclick="() => SelezionaAmbiente(ambiente)" 
+                                                    class="@(ambienteCorrente.Id == ambiente.Id ? "table-active" : "")"
+                                                    style="cursor: pointer;">
+                                                    <td class="@(!ambiente.Attivo ? "text-muted text-decoration-line-through" : "fw-bold")">
+                                                        @ambiente.Codice
+                                                    </td>
+                                                    <td class="@(!ambiente.Attivo ? "text-muted" : "")">
+                                                        @(ambiente.Descrizione ?? "-")
+                                                    </td>
+                                                    <td>
+                                                        @if (ambiente.DataCongelamento.HasValue)
+                                                        {
+                                                            @ambiente.DataCongelamento.Value.ToString("dd/MM/yyyy")
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">-</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (ambiente.DataDismissione.HasValue)
+                                                        {
+                                                            @ambiente.DataDismissione.Value.ToString("dd/MM/yyyy")
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">-</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (ambiente.Attivo)
+                                                        {
+                                                            <span class="badge bg-success">Sì</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-secondary">No</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        <button class="btn btn-sm btn-outline-danger" 
+                                                                @onclick="() => EliminaAmbiente(ambiente.Id)"
+                                                                @onclick:stopPropagation="true"
+                                                                title="Elimina (disattiva)">
+                                                            🗑️
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="5" class="text-center text-muted py-4">
+                                                    Nessun congelato presente. Clicca "Nuovo" per aggiungerne uno!
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== FORM DETTAGLIO/INSERIMENTO ===== *@
+                    <div class="card">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <strong>@(IsModifica ? "📝 Modifica Congelato" : "➕ Nuovo Congelato")</strong>
+                            @if (ambienteCorrente.Id > 0)
+                            {
+                                <span class="badge bg-primary">ID: @ambienteCorrente.Id</span>
+                            }
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                @* Codice *@
+                                <div class="col-md-4">
+                                    <label class="form-label">Codice <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" @bind="ambienteCorrente.Codice" 
+                                           maxlength="50" placeholder="es: VirtualXL3260" />
+                                </div>
+                                
+                                @* Versione *@
+                                <div class="col-md-3">
+                                    <label class="form-label">Versione</label>
+                                    <input type="text" class="form-control" @bind="ambienteCorrente.Descrizione" 
+                                           maxlength="100" placeholder="es: 3.2.60" />
+                                </div>
+                                
+                                @* Data Congelamento *@
+                                <div class="col-md-3">
+                                    <label class="form-label">Data Congelamento</label>
+                                    <input type="date" class="form-control" @bind="ambienteCorrente.DataCongelamento" />
+                                </div>
+
+                                @* Data Dismissione (solo in modifica) *@
+                                @if (IsModifica)
+                                {
+                                    <div class="col-md-3">
+                                        <label class="form-label">
+                                            Data Dismissione
+                                            @if (!ambienteCorrente.Attivo)
+                                            {
+                                                <span class="text-danger">*</span>
+                                            }
+                                        </label>
+                                        <input type="date" class="form-control @(!ambienteCorrente.Attivo && !ambienteCorrente.DataDismissione.HasValue ? "is-invalid" : "")"
+                                               @bind="ambienteCorrente.DataDismissione" />
+                                        @if (!ambienteCorrente.Attivo && !ambienteCorrente.DataDismissione.HasValue)
+                                        {
+                                            <div class="invalid-feedback">Obbligatoria quando il congelato è disattivato.</div>
+                                        }
+                                    </div>
+                                }
+
+                                @* Attivo (solo in modifica) *@
+                                @if (IsModifica)
+                                {
+                                    <div class="col-md-2 d-flex align-items-end">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkAttivo" 
+                                                   @bind="ambienteCorrente.Attivo" />
+                                            <label class="form-check-label" for="chkAttivo">
+                                                Attivo
+                                            </label>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== MESSAGGI ===== *@
+                    @if (!string.IsNullOrEmpty(messaggio))
+                    {
+                        <div class="alert @(isErrore ? "alert-danger" : "alert-success") alert-dismissible fade show mt-3" role="alert">
+                            @messaggio
+                            <button type="button" class="btn-close" @onclick="() => messaggio = string.Empty"></button>
+                        </div>
+                    }
+                    
+                    @* ===== NOTA LOGGING ===== *@
+                    <div class="alert alert-info mt-3 small">
+                        <strong>📝 Nota:</strong> Tutte le modifiche vengono registrate nella tabella di log per tracciabilità.
+                        L'eliminazione non rimuove fisicamente il record, ma lo disattiva per preservare le associazioni esistenti.
+                    </div>
+                </div>
+                
+                @* ===== FOOTER ===== *@
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Chiudi">
+                        ❌ Chiudi
+                    </button>
+                    <button type="button" class="btn btn-success" @onclick="NuovoAmbiente" disabled="@isSaving">
+                        ➕ Nuovo
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="SalvaAmbiente" disabled="@isSaving">
+                        💾 Salva
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    #region Parameters
+
+    /// <summary>Controlla la visibilità della modale</summary>
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    /// <summary>Evento quando la modale viene chiusa</summary>
+    [Parameter]
+    public EventCallback OnChiudi { get; set; }
+
+    /// <summary>Evento quando un ambiente viene modificato (per aggiornare la lista nel form principale)</summary>
+    [Parameter]
+    public EventCallback OnAmbientiChanged { get; set; }
+
+    #endregion
+
+    #region Private Fields
+
+    private List<AmbienteDto> ambienti = new();
+    private AmbienteDto ambienteCorrente = new() { Attivo = true };
+    private bool isLoading = false;
+    private bool isSaving = false;
+    private string messaggio = string.Empty;
+    private bool isErrore = false;
+
+    private bool IsModifica => ambienteCorrente.Id > 0;
+
+    #endregion
+
+    #region Lifecycle
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible)
+        {
+            await CaricaAmbienti();
+        }
+    }
+
+    #endregion
+
+    #region Data Loading
+
+    private async Task CaricaAmbienti()
+    {
+        isLoading = true;
+        try
+        {
+            ambienti = await AmbienteService.GetAllAmbientiAsync();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel caricamento: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    #endregion
+
+    #region CRUD Operations
+
+    private void NuovoAmbiente()
+    {
+        ambienteCorrente = new AmbienteDto { Attivo = true };
+        messaggio = string.Empty;
+    }
+
+    private void SelezionaAmbiente(AmbienteDto ambiente)
+    {
+        ambienteCorrente = new AmbienteDto
+        {
+            Id = ambiente.Id,
+            Codice = ambiente.Codice,
+            Descrizione = ambiente.Descrizione,
+            DataCongelamento = ambiente.DataCongelamento,
+            DataDismissione = ambiente.DataDismissione,
+            Attivo = ambiente.Attivo
+        };
+        messaggio = string.Empty;
+    }
+
+    private async Task SalvaAmbiente()
+    {
+        // Validazione
+        if (string.IsNullOrWhiteSpace(ambienteCorrente.Codice))
+        {
+            MostraMessaggio("Il codice è obbligatorio", true);
+            return;
+        }
+
+        if (!ambienteCorrente.Attivo && !ambienteCorrente.DataDismissione.HasValue)
+        {
+            MostraMessaggio("La data di dismissione è obbligatoria quando il congelato è disattivato.", true);
+            return;
+        }
+
+        try
+        {
+            isSaving = true;
+
+            if (IsModifica)
+            {
+                await AmbienteService.UpdateAmbienteAsync(ambienteCorrente);
+                MostraMessaggio("Congelato aggiornato con successo!", false);
+            }
+            else
+            {
+                await AmbienteService.AddAmbienteAsync(ambienteCorrente);
+                MostraMessaggio("Congelato aggiunto con successo!", false);
+            }
+
+            await CaricaAmbienti();
+            await OnAmbientiChanged.InvokeAsync();
+            NuovoAmbiente();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel salvataggio: {ex.Message}", true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task EliminaAmbiente(int id)
+    {
+        try
+        {
+            await AmbienteService.DeleteAmbienteAsync(id);
+            await CaricaAmbienti();
+            await OnAmbientiChanged.InvokeAsync();
+
+            if (ambienteCorrente.Id == id)
+            {
+                NuovoAmbiente();
+            }
+
+            MostraMessaggio("Congelato disattivato", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nell'eliminazione: {ex.Message}", true);
+        }
+    }
+
+    #endregion
+
+    #region UI Helpers
+
+    private async Task Chiudi()
+    {
+        ambienteCorrente = new AmbienteDto { Attivo = true };
+        messaggio = string.Empty;
+        await OnChiudi.InvokeAsync();
+    }
+
+    private void MostraMessaggio(string msg, bool errore)
+    {
+        messaggio = msg;
+        isErrore = errore;
+    }
+
+    #endregion
+}

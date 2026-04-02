@@ -1,0 +1,3151 @@
+@page "/"
+@using WorkActivityTracker.Models
+@using WorkActivityTracker.Services
+@using CommunityToolkit.Maui.Storage
+@using System.Diagnostics
+@inject ActivityService ActivityService
+@inject UserService UserService
+@inject TodoService TodoService
+@inject AmbienteService AmbienteService
+@inject AppuntiService AppuntiService
+@inject AppConfigService AppConfig
+@inject IJSRuntime JS
+@inject UnsavedChangesService UnsavedChanges
+@inject ClienteService ClienteService
+@inject SegnalazioneService SegnalazioneService
+@inject AmbientiRilascioService AmbientiRilascioService
+@inject TipiAttivitaService TipiAttivitaService
+@inject CalendarioService CalendarioService
+@implements IDisposable
+
+@* 
+    Pagina principale dell'applicazione Work Activity Tracker.
+    Permette di visualizzare, creare, modificare ed eliminare attività lavorative.
+    Supporta filtri per data, ricerca testuale e modalità admin.
+*@
+
+<div class="container-fluid p-3 main-content">
+    
+    @* ===== BARRA SUPERIORE: Utente, TODO e Modalità Admin ===== *@
+    <div class="alert alert-info d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <strong>👤 Utente connesso:</strong> @utenteConnesso
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            @* Pulsante Segnala (sempre visibile, indipendente dalla modalità admin) *@
+            <button class="btn btn-danger btn-sm position-relative" @onclick="ApriSegnalazioni"
+                    title="Segnala un bug nel programma o una richiesta di modifica">
+                🐛 Segnala
+                @if (segnalazioniCount > 0)
+                {
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark">
+                        @segnalazioniCount
+                        <span class="visually-hidden">segnalazioni aperte</span>
+                    </span>
+                }
+            </button>
+            @* Pulsante TODO List *@
+            <button class="btn btn-warning btn-sm position-relative" @onclick="ApriTodoList">
+                📋 TODO List
+                @if (todoCount > 0)
+                {
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                        @todoCount
+                        <span class="visually-hidden">TODO da completare</span>
+                    </span>
+                }
+            </button>
+            @* Pulsante Appunti *@
+            <button class="btn btn-success btn-sm position-relative" @onclick="ApriAppunti">
+                📌 Appunti
+                @if (appuntiCount > 0)
+                {
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-info">
+                        @appuntiCount
+                        <span class="visually-hidden">Appunti salvati</span>
+                    </span>
+                }
+            </button>
+            @* Checkbox modalità admin (configurabile da appsettings.json) *@
+            @if (AppConfig.MostraModalitaAdmin)
+            {
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="adminMode" 
+                           @bind="isAdminMode" @bind:after="OnAdminModeChanged" />
+                    <label class="form-check-label" for="adminMode">
+                        <strong>🔐 Modalità Admin</strong>
+                    </label>
+                </div>
+            }
+            <div class="d-flex align-items-center gap-2">
+                <div class="text-muted small">
+                    @DateTime.Now.ToString("dddd, dd MMMM yyyy")
+                </div>
+                <button class="btn btn-outline-primary btn-sm py-0 px-2" @onclick="ApriCalendario"
+                        title="Calendario eventi e promemoria">
+                    📅
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @* ===== BARRA AVVISI CALENDARIO ===== *@
+    @if (eventiImminenti.Any())
+    {
+        var eventoUrgente = eventiImminenti.OrderBy(e => e.GiorniRimanenti).First();
+        var gg = eventoUrgente.GiorniRimanenti;
+        string barraCss, barraIcona, barraTestoGiorni;
+        if (gg < 0)
+        {
+            barraCss = "alert-secondary";
+            barraIcona = "⏰";
+            barraTestoGiorni = $"{(int)Math.Abs(gg)} giorni fa è scaduto";
+        }
+        else if (gg < 1)
+        {
+            barraCss = "alert-danger";
+            barraIcona = "🔴";
+            barraTestoGiorni = "oggi";
+        }
+        else if (gg <= 2)
+        {
+            barraCss = "alert-danger";
+            barraIcona = "🔴";
+            barraTestoGiorni = $"fra {(int)gg} giorni";
+        }
+        else if (gg <= 5)
+        {
+            barraCss = "alert-warning";
+            barraIcona = "🟠";
+            barraTestoGiorni = $"fra {(int)gg} giorni";
+        }
+        else
+        {
+            barraCss = "alert-success";
+            barraIcona = "🟢";
+            barraTestoGiorni = $"fra {(int)gg} giorni";
+        }
+        var tutteLeDescrizioni = string.Join(", ", eventiImminenti.Select(e => $"\"{e.Descrizione}\""));
+        <div class="alert @barraCss py-2 mb-2 d-flex justify-content-between align-items-center" role="alert">
+            <span>
+                @barraIcona
+                @if (gg < 1 && gg >= 0)
+                {
+                    <strong>@barraTestoGiorni: @tutteLeDescrizioni</strong>
+                }
+                else if (gg < 0)
+                {
+                    <span>@barraTestoGiorni: @tutteLeDescrizioni — <em>rimuoverlo dal calendario</em></span>
+                }
+                else
+                {
+                    <span>@tutteLeDescrizioni @barraTestoGiorni</span>
+                }
+            </span>
+            <button class="btn btn-sm btn-outline-secondary py-0" @onclick="ApriCalendario" title="Apri calendario per gestire gli eventi">
+                📅
+            </button>
+        </div>
+    }
+
+    @* ===== MESSAGGI DI FEEDBACK ===== *@
+    @if (!string.IsNullOrEmpty(messaggio))
+    {
+        <div class="alert @(isErrore ? "alert-danger" : "alert-success") alert-dismissible fade show" role="alert">
+            @messaggio
+            <button type="button" class="btn-close" @onclick="() => messaggio = string.Empty"></button>
+        </div>
+    }
+
+    @* ===== SEZIONE FILTRI ===== *@
+    <div class="row mb-3">
+        @* Filtro Anno *@
+        <div class="col-md-2">
+            <label class="form-label">Anno</label>
+            <div class="d-flex gap-1">
+                <select class="form-select" @bind="FiltroAnno" @bind:after="CaricaAttivita">
+                    <option value="">Tutti</option>
+                    @foreach (var anno in anniDisponibili)
+                    {
+                        <option value="@anno">@anno</option>
+                    }
+                </select>
+                <button class="btn btn-outline-primary btn-sm" @onclick="ImpostaAnnoCorrente"
+                        title="Seleziona l'anno corrente e azzera mese e giorno"
+                        style="white-space: nowrap; min-width: 46px;">
+                    @DateTime.Now.Year
+                </button>
+            </div>
+        </div>
+
+        @* Filtro Mese *@
+        <div class="col-md-2">
+            <label class="form-label">Mese</label>
+            <div class="d-flex gap-1">
+                <select class="form-select" @bind="FiltroMese" @bind:after="CaricaAttivita">
+                    <option value="">Tutti</option>
+                    @for (int mese = 1; mese <= 12; mese++)
+                    {
+                        <option value="@mese">@(new DateTime(2000, mese, 1).ToString("MMMM"))</option>
+                    }
+                </select>
+                <button class="btn btn-outline-success btn-sm" @onclick="ImpostaMeseCorrente"
+                        title="Seleziona anno e mese correnti, azzera il giorno"
+                        style="white-space: nowrap; min-width: 60px;">
+                    @(new DateTime(2000, DateTime.Now.Month, 1).ToString("MMM"))
+                </button>
+            </div>
+        </div>
+        
+        @* Filtro Giorno + bottone Oggi *@
+        <div class="col-md-2">
+            <label class="form-label">Giorno</label>
+            <div class="d-flex gap-1">
+                <select class="form-select" @bind="FiltroGiorno" @bind:after="CaricaAttivita">
+                    <option value="">Tutti</option>
+                    @for (int giorno = 1; giorno <= 31; giorno++)
+                    {
+                        bool hasContext = FiltroAnno.HasValue && FiltroMese.HasValue;
+                        bool dayExists = hasContext && giorno <= DateTime.DaysInMonth(FiltroAnno!.Value, FiltroMese!.Value);
+                        if (!hasContext || dayExists)
+                        {
+                            string prefix = "";
+                            if (dayExists)
+                            {
+                                var dt = new DateTime(FiltroAnno!.Value, FiltroMese!.Value, giorno);
+                                bool isToday = dt.Date == DateTime.Today;
+                                bool isWeekend = dt.DayOfWeek == DayOfWeek.Saturday || dt.DayOfWeek == DayOfWeek.Sunday;
+                                prefix = isToday ? "🟢 " : isWeekend ? "🟠 " : "";
+                            }
+                            string label = dayExists
+                                ? $"{prefix}{giorno} - {new DateTime(FiltroAnno!.Value, FiltroMese!.Value, giorno).ToString("ddd", new System.Globalization.CultureInfo("it-IT"))}"
+                                : giorno.ToString();
+                            <option value="@giorno">@label</option>
+                        }
+                    }
+                </select>
+                <button class="btn btn-outline-primary btn-sm" @onclick="ImpostaOggi"
+                        title="Premi per selezionare in automatico la data di oggi"
+                        style="white-space: nowrap; min-width: 46px;">
+                    📅 Oggi
+                </button>
+            </div>
+        </div>
+        
+        @* Campo Ricerca *@
+        <div class="col-md-4">
+            <label class="form-label">Ricerca</label>
+            <div class="input-group">
+                <input type="text" class="form-control" @bind="TestoRicerca" @bind:event="oninput" 
+                       @onkeypress="OnSearchKeyPress" placeholder="Cerca in descrizione, ticket, note..." />
+                <button class="btn btn-primary" @onclick="EseguiRicercaEAbilita">
+                    🔍 Cerca
+                </button>
+                <button class="btn btn-info" 
+                        @onclick="ApriDettagliRicerca"
+                        title="Apri ricerca avanzata">
+                    🔍 Ricerca avanzata
+                </button>
+            </div>
+        </div>
+        
+        @* Bottone Reset Filtri *@
+        <div class="col-md-2 d-flex align-items-end">
+            <button class="btn btn-outline-secondary w-100" @onclick="ResetFiltri">
+                🔄 Reset Filtri
+            </button>
+        </div>
+    </div>
+    
+    @* ===== FILTRO SOLO TODO ===== *@
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="chkSoloTodo" 
+                       @bind="filtroSoloTodo" @bind:after="CaricaAttivita" 
+                       style="transform: scale(1.3);" />
+                <label class="form-check-label fw-bold text-danger" for="chkSoloTodo" style="font-size: 1.1em;">
+                    📌 Visualizza solo TODO
+                </label>
+                @if (filtroSoloTodo)
+                {
+                    <span class="badge bg-danger ms-2">Filtro attivo</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ===== GRIGLIA ATTIVITÀ ===== *@
+    <div class="row">
+        <div class="col-md-12 mb-3">
+            @if (isLoading)
+            {
+                <div class="text-center p-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Caricamento...</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-striped table-hover table-sm">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                @if (isAdminMode)
+                                {
+                                    <th>Utente</th>
+                                }
+                                <th>Data</th>
+                                <th>Tipo</th>
+                                <th>N° Ticket</th>
+                                <th>Descrizione</th>
+                                <th>Cliente</th>
+                                <th>Ore</th>
+                                <th>Versione</th>
+                                <th>Ambienti</th>
+                                <th>Patch</th>
+                                <th>Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Attivita.Any())
+                            {
+                                @foreach (var att in Attivita)
+                                {
+                                    <tr @onclick="() => SelezionaAttivita(att)"
+                                        class="@GetRowClass(att)"
+                                        style="cursor: pointer;">
+                                        @if (isAdminMode)
+                                        {
+                                            <td><span class="badge bg-secondary">@att.UtenteUsername</span></td>
+                                        }
+                                        <td>@att.Data.ToString("dd/MM/yyyy")</td>
+                                        <td>@GetTipoBadge(att.TipoAttivita)</td>
+                                        <td>@TruncateText(att.NumeroTicket, 20)</td>
+                                        <td>
+                                            @TruncateText(att.Descrizione, 50)
+                                            @if (ContieneTodo(att))
+                                            {
+                                                <span class="todo-badge">TODO</span>
+                                            }
+                                        </td>
+                                        <td>@(att.ClienteNome ?? "-")</td>
+                                        <td>@att.OreLavorate</td>
+                                        <td>@TruncateText(att.Versione, 20)</td>
+                                        <td style="white-space: nowrap; font-size: 0.8em;">@(att.AmbientiRilascioNomi ?? "")</td>
+                                        <td class="text-center">
+                                            @if (!string.IsNullOrWhiteSpace(att.UrlPatchRilasci))
+                                            {
+                                                <span style="color: green; font-weight: bold;">✔</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-secondary me-1"
+                                                    @onclick="() => CopiaAttivitaComeTesto(att)"
+                                                    @onclick:stopPropagation="true"
+                                                    title="Copia attività come testo negli appunti">
+                                                📄
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary me-1"
+                                                    @onclick="() => EsportaAttivitaComeTxt(att)"
+                                                    @onclick:stopPropagation="true"
+                                                    title="Esporta attività come testo su file txt">
+                                                💾
+                                            </button>
+                                            <button class="btn btn-sm btn-info me-1"
+                                                    @onclick="() => DuplicaAttivita(att)"
+                                                    @onclick:stopPropagation="true"
+                                                    title="Duplica attività (copia tutti i campi tranne la data)">
+                                                📋
+                                            </button>
+                                            <button class="btn btn-sm btn-danger"
+                                                    @onclick="() => ConfermaEliminaAttivita(att)"
+                                                    @onclick:stopPropagation="true"
+                                                    disabled="@(isAdminMode && att.UtenteUsername != UserService.WindowsUsername)"
+                                                    title="Elimina attività del @att.Data.ToString("dd/MM/yyyy"): @att.Descrizione">
+                                                🗑️
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="@(isAdminMode ? 10 : 9)" class="text-center text-muted">
+                                        Nessuna attività trovata
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                        @if (Attivita.Any())
+                        {
+                            <tfoot class="table-secondary fw-bold">
+                                <tr>
+                                    <td colspan="@(isAdminMode ? 5 : 4)" class="text-end">Totale ore visualizzate:</td>
+                                    <td>@Attivita.Sum(a => a.OreLavorate).ToString("N2")</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tfoot>
+                        }
+                    </table>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-1 flex-wrap gap-1">
+                    <div class="text-muted small">
+                        Totale: @Attivita.Count attività
+                        @if (isAdminMode)
+                        {
+                            <span class="ms-2 badge bg-warning text-dark">👁️ Visualizzazione Admin</span>
+                        }
+                    </div>
+                    @if (Attivita.Any())
+                    {
+                        <div class="d-flex gap-1 flex-wrap">
+                            <button class="btn btn-outline-success btn-sm" @onclick="EsportaGrigliaXlsx"
+                                    title="Esporta la griglia visualizzata in formato Excel (.xlsx)">
+                                📊 Esporta XLSX
+                            </button>
+                            <button class="btn btn-outline-primary btn-sm" @onclick="EsportaDettagliTxt"
+                                    title="Esporta il dettaglio di tutte le attività visualizzate in un file TXT">
+                                📄 Esporta dettagli TXT
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="ApriCartellaExport"
+                                    title="Apri la cartella Export del programma">
+                                📁 Apri Export
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ===== FORM DETTAGLIO ATTIVITÀ ===== *@
+    <div class="card">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <strong>@(IsModifica ? "✏️ Modifica Attività" : "➕ Nuova Attività")</strong>
+            <div class="d-flex align-items-center gap-2">
+                @if (isAdminMode && IsModifica && !string.IsNullOrEmpty(AttivitaCorrente.UtenteUsername))
+                {
+                    <span class="badge bg-warning text-dark">
+                        👤 @AttivitaCorrente.UtenteUsername
+                    </span>
+                }
+                @if (IsModifica)
+                {
+                    <span class="badge bg-light text-dark">ID: @AttivitaCorrente.Id</span>
+                }
+                @* Bottoni rapidi in cima *@
+                <button class="btn btn-success btn-sm py-0 px-2" @onclick="NuovaAttivita" disabled="@isSaving" title="Nuova attività">
+                    ➕ Nuova
+                </button>
+                <button class="btn btn-light btn-sm py-0 px-2" @onclick="SalvaAttivita"
+                        disabled="@(isSaving || (isAdminMode && IsModifica && AttivitaCorrente.UtenteUsername != UserService.WindowsUsername))"
+                        title="Salva attività (Ctrl+S)">
+                    💾 Salva
+                </button>
+                <button class="btn btn-secondary btn-sm py-0 px-2" @onclick="AnnullaModifica" disabled="@isSaving" title="Annulla modifiche">
+                    ❌ Annulla
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                
+                @* ===== PRIMA RIGA: Tipo Attività, Data, Cliente, Ore, Versione ===== *@
+                <div class="col-md-2">
+                    <label class="form-label">Tipo Attività</label>
+                    <div class="input-group">
+                        <select class="form-select @(AttivitaCorrente.TipoAttivita != TipiAttivita.Lavoro ? "border-warning fw-bold" : "")"
+                                @bind="AttivitaCorrente.TipoAttivita">
+                            @foreach (var tipo in tipiAttivitaLista)
+                            {
+                                var emoji = tipo.Nome == TipiAttivita.Lavoro ? "💼" :
+                                            tipo.Nome == TipiAttivita.Permesso ? "🕐" :
+                                            tipo.Nome == TipiAttivita.Ferie ? "🏖️" : "📌";
+                                <option value="@tipo.Nome">@emoji @tipo.Nome</option>
+                            }
+                        </select>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="ApriEditorTipiAttivita"
+                                title="Gestisci tipi attività">
+                            ✏️
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Data <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" @bind="AttivitaCorrente.Data" />
+                </div>
+                @if (AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro)
+                {
+                    <div class="col-md-3">
+                        <label class="form-label">Cliente</label>
+                        <div class="input-group">
+                            <select class="form-select" @bind="AttivitaCorrente.ClienteId">
+                                @foreach (var cliente in clientiOrdinati)
+                                {
+                                    <option value="@cliente.Id">@cliente.Nome</option>
+                                }
+                            </select>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ApriEditorClienti"
+                                    title="Gestisci lista clienti">
+                                ✏️
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Ore Lavorate <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" @bind="AttivitaCorrente.OreLavorate" min="0" max="24" step="0.5" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Versione di sviluppo</label>
+                        <input type="text" class="form-control" @bind="AttivitaCorrente.Versione" placeholder="@VersioneSviluppoPlaceholder" />
+                    </div>
+                }
+                else
+                {
+                    <div class="col-md-2">
+                        <label class="form-label">Ore @(AttivitaCorrente.TipoAttivita == TipiAttivita.Ferie ? "(0 = giorno intero)" : "")</label>
+                        <input type="number" class="form-control" @bind="AttivitaCorrente.OreLavorate" min="0" max="24" step="0.5" />
+                    </div>
+                    <div class="col-md-6">
+                        @if (AttivitaCorrente.TipoAttivita == TipiAttivita.Permesso ||
+                             AttivitaCorrente.TipoAttivita == TipiAttivita.Ferie)
+                        {
+                            <label class="form-label text-muted small">I campi Cliente, Versione, Ticket e Congelati non si applicano per @AttivitaCorrente.TipoAttivita.</label>
+                        }
+                        else
+                        {
+                            <label class="form-label text-muted small">I campi Cliente, Versione e Congelati non si applicano per @AttivitaCorrente.TipoAttivita.</label>
+                        }
+                    </div>
+                }
+
+                @* ===== RIGA AMBIENTI DI RILASCIO (solo Lavoro + cliente != Sviluppo) ===== *@
+                @if (AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro && AttivitaCorrente.ClienteId != clienteSviluppoId)
+                {
+                    <div class="col-md-12">
+                        <label class="form-label">Ambienti di rilascio</label>
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            @for (int i = 0; i < 3; i++)
+                            {
+                                var idx = i;
+                                var coppia = AttivitaCorrente.AmbientiRilascio[idx];
+                                var listIdTipo = $"tipi-rilascio-list-{idx}";
+                                var listIdVer = $"versioni-rilascio-list-{idx}";
+                                <div class="d-flex gap-1 align-items-center">
+                                    <input list="@listIdTipo"
+                                           class="form-control form-control-sm"
+                                           style="width: 160px;"
+                                           placeholder="Selezionare"
+                                           @bind="coppia.TipoAmbiente"
+                                           title="Tipo ambiente (es: Test, Qualità, Pre-produzione, Produzione)" />
+                                    <datalist id="@listIdTipo">
+                                        @foreach (var tipo in tipiAmbientiRilascio)
+                                        {
+                                            <option value="@tipo.Nome" />
+                                        }
+                                    </datalist>
+                                    <input list="@listIdVer"
+                                           class="form-control form-control-sm"
+                                           style="width: 190px;"
+                                           placeholder="Selezionare"
+                                           @bind="coppia.Versione"
+                                           title="Versione di rilascio (es: 3.2.50, 4.1.10 (3.2.60))" />
+                                    <datalist id="@listIdVer">
+                                        @foreach (var ver in versioniRilascio)
+                                        {
+                                            <option value="@ver.Versione" />
+                                        }
+                                    </datalist>
+                                    @if (idx < 2)
+                                    {
+                                        <span class="text-muted px-1">─</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        <small class="text-muted">I valori inseriti verranno aggiunti automaticamente alla lista per i prossimi utilizzi.</small>
+                    </div>
+                }
+
+                @* ===== SECONDA RIGA: Descrizione ===== *@
+                <div class="col-md-12">
+                    <label class="form-label">Descrizione <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control fw-bold @(CampoHaTodo(AttivitaCorrente.Descrizione) ? "campo-con-todo" : "")"
+                           @bind="AttivitaCorrente.Descrizione"
+                           placeholder="@(AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro ? "Descrizione breve dell'attività" : $"Es: {AttivitaCorrente.TipoAttivita} dal ... al ...")" />
+                </div>
+
+                @* ===== TERZA RIGA: URL Ticket + Numero Ticket (visibile per Lavoro e tipi personalizzati) ===== *@
+                @if (AttivitaCorrente.TipoAttivita != TipiAttivita.Permesso &&
+                     AttivitaCorrente.TipoAttivita != TipiAttivita.Ferie)
+                {
+                    <div class="col-md-8">
+                        <label class="form-label">URL Ticket / CR / Backlog, etc...</label>
+                        <textarea class="form-control @(CampoHaTodo(AttivitaCorrente.UrlTicket) ? "campo-con-todo" : "")"
+                                  @bind="AttivitaCorrente.UrlTicket" rows="2"
+                                  placeholder="Inserisci URL, numeri CR, backlog item, etc..."></textarea>
+                        @* Anteprima URL cliccabili: gli http(s):// vengono convertiti in link *@
+                        @if (!string.IsNullOrWhiteSpace(AttivitaCorrente.UrlTicket) && ContienUrl(AttivitaCorrente.UrlTicket))
+                        {
+                            <div class="mt-1 small" style="line-height: 1.8;">
+                                @foreach (var seg in ParseUrlSegmenti(AttivitaCorrente.UrlTicket))
+                                {
+                                    @if (seg.IsUrl)
+                                    {
+                                        var urlCapt = seg.Testo;
+                                        <a href="#" @onclick="() => ApriUrl(urlCapt)" @onclick:preventDefault
+                                           class="text-primary me-1" style="word-break: break-all; cursor: pointer;"
+                                           title="Apri URL nel browser">@seg.Testo</a>
+                                    }
+                                    else
+                                    {
+                                        <span style="white-space: pre-wrap;">@seg.Testo</span>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Numero del ticket</label>
+                        <input type="text" class="form-control"
+                               @bind="AttivitaCorrente.NumeroTicket"
+                               placeholder="Es: 12345"
+                               title="Inserire il numero del ticket, usare la virgola se sono più di uno" />
+                    </div>
+                }
+
+                @* ===== QUARTA RIGA: Cartella Documentazione e Vedere (Lavoro e tipi personalizzati) ===== *@
+                @if (AttivitaCorrente.TipoAttivita != TipiAttivita.Permesso &&
+                     AttivitaCorrente.TipoAttivita != TipiAttivita.Ferie)
+                {
+                    <div class="col-md-6">
+                        <label class="form-label">Cartella Documentazione</label>
+                        <div class="input-group">
+                            <button class="btn btn-outline-secondary" type="button" @onclick="SelezionaCartella">
+                                📁 Sfoglia...
+                            </button>
+                            <input type="text" class="form-control" @bind="AttivitaCorrente.CartellaDocumentazione"
+                                   placeholder="Seleziona una cartella..." readonly />
+                            @if (!string.IsNullOrEmpty(AttivitaCorrente.CartellaDocumentazione) && Directory.Exists(AttivitaCorrente.CartellaDocumentazione))
+                            {
+                                <button class="btn btn-success" type="button" @onclick="ApriCartella">
+                                    📂 Apri cartella
+                                </button>
+                            }
+                            @if (!string.IsNullOrEmpty(AttivitaCorrente.CartellaDocumentazione))
+                            {
+                                <button class="btn btn-outline-danger" type="button" @onclick="() => AttivitaCorrente.CartellaDocumentazione = null">
+                                    ✕
+                                </button>
+                            }
+                        </div>
+                        @if (!string.IsNullOrEmpty(AttivitaCorrente.CartellaDocumentazione) && !Directory.Exists(AttivitaCorrente.CartellaDocumentazione))
+                        {
+                            <small class="text-danger">⚠️ La cartella non esiste</small>
+                        }
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Vedere (riferimenti)</label>
+                        <input type="text" class="form-control" @bind="AttivitaCorrente.Vedere"
+                               placeholder="Es: vedere email, vedere chat Teams..." />
+                    </div>
+                }
+
+                @* ===== QUINTA RIGA: Descrizione dettagliata lavoro svolto (contenteditable con indent+bold) ===== *@
+                <div class="col-12">
+                    <label class="form-label">Descrizione dettagliata @(AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro ? "lavoro svolto" : "/ Note")</label>
+                    @* Toolbar pulsanti editor Note *@
+                    <div class="editor-toolbar">
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteIndentaLeft"
+                                title="Indenta a sinistra il testo selezionato" @onmousedown:preventDefault>
+                            ⇤ ←
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteIndentaRight"
+                                title="Indenta a destra il testo selezionato" @onmousedown:preventDefault>
+                            ⇥ →
+                        </button>
+                        <div class="separator"></div>
+                        <button class="btn btn-outline-dark btn-sm fw-bold" type="button"
+                                @onclick="NoteBold"
+                                title="Applica/rimuovi grassetto al testo selezionato">
+                            G
+                        </button>
+                        <button class="btn btn-sm" type="button"
+                                @onclick="NoteHighlightGiallo"
+                                title="Evidenzia in giallo il testo selezionato"
+                                style="background-color: yellow; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                            A
+                        </button>
+                        <button class="btn btn-sm" type="button"
+                                @onclick="NoteHighlightArancione"
+                                title="Evidenzia in arancione il testo selezionato"
+                                style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                            A
+                        </button>
+                        <div class="separator"></div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteBarrato"
+                                title="Applica/rimuovi barrato al testo selezionato"
+                                style="text-decoration: line-through;">
+                            S
+                        </button>
+                        <button class="btn btn-sm" type="button"
+                                @onclick="NoteColoreTessoRosso"
+                                title="Colora in rosso il testo selezionato"
+                                style="color: red; font-weight: bold; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                            A
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteRimuoviFormattazione"
+                                title="Rimuovi tutta la formattazione dal testo selezionato">
+                            ✕
+                        </button>
+                        <div class="separator"></div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteInserisciTimestamp"
+                                title="Inserisci l'ora corrente (HH:mm:ss) nel punto del cursore">
+                            🕐
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteInserisciSeparatore"
+                                title="Inserisci una linea sottile di separazione nel punto del cursore">
+                            ─
+                        </button>
+                        <button class="btn btn-outline-dark btn-sm" type="button"
+                                @onclick="NoteInserisciSeparatoreSpesso"
+                                title="Inserisci una linea spessa di separazione nel punto del cursore"
+                                style="font-weight: 900;">
+                            █
+                        </button>
+                        <button class="btn btn-sm" type="button"
+                                @onclick="NoteInserisciSeparatoreRosso"
+                                title="Inserisci una linea spessa ROSSA di separazione nel punto del cursore"
+                                style="color: red; font-weight: 900; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                            █
+                        </button>
+                        <div class="separator"></div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteRimuoviRigheVuote"
+                                title="Rimuovi le righe vuote dal contenuto dell'editor"
+                                @onmousedown:preventDefault>
+                            ⊟
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" type="button"
+                                @onclick="NoteRimuoviTodo"
+                                title="Sostituisce TODO (parola isolata) con '--'"
+                                @onmousedown:preventDefault>
+                            TODO
+                        </button>
+                    </div>
+                    <div @ref="noteEditorRef"
+                         id="note-editor-div" onkeydown="noteEditorHelper.handleTab(event,this)"
+                         contenteditable="true"
+                         class="form-control note-editor @(CampoHaTodo(AttivitaCorrente.Note) ? "campo-con-todo" : "")"
+                         style="min-height: 120px; max-height: 300px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                         @onfocus="OnNoteFocus"
+                         @onblur="OnNoteBlur"
+                         placeholder="@(AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro ? "Inserisci qui una descrizione dettagliata del lavoro svolto..." : "Note aggiuntive...")">
+                    </div>
+                    @* Toolbar pulsanti editor Note — duplicata sotto l'editor *@
+                    <div class="editor-toolbar mt-1">
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteIndentaLeft"
+                                title="Indenta a sinistra il testo selezionato" @onmousedown:preventDefault>
+                            ⇤ ←
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteIndentaRight"
+                                title="Indenta a destra il testo selezionato" @onmousedown:preventDefault>
+                            ⇥ →
+                        </button>
+                        <div class="separator"></div>
+                        <button class="btn btn-outline-dark btn-sm fw-bold" type="button"
+                                @onclick="NoteBold"
+                                title="Applica/rimuovi grassetto al testo selezionato">
+                            G
+                        </button>
+                        <button class="btn btn-sm" type="button"
+                                @onclick="NoteHighlightGiallo"
+                                title="Evidenzia in giallo il testo selezionato"
+                                style="background-color: yellow; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                            A
+                        </button>
+                        <button class="btn btn-sm" type="button"
+                                @onclick="NoteHighlightArancione"
+                                title="Evidenzia in arancione il testo selezionato"
+                                style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                            A
+                        </button>
+                        <div class="separator"></div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteBarrato"
+                                title="Applica/rimuovi barrato al testo selezionato"
+                                style="text-decoration: line-through;">
+                            S
+                        </button>
+                        <button class="btn btn-sm" type="button"
+                                @onclick="NoteColoreTessoRosso"
+                                title="Colora in rosso il testo selezionato"
+                                style="color: red; font-weight: bold; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                            A
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteRimuoviFormattazione"
+                                title="Rimuovi tutta la formattazione dal testo selezionato">
+                            ✕
+                        </button>
+                        <div class="separator"></div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteInserisciTimestamp"
+                                title="Inserisci l'ora corrente (HH:mm:ss) nel punto del cursore">
+                            🕐
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteInserisciSeparatore"
+                                title="Inserisci una linea sottile di separazione nel punto del cursore">
+                            ─
+                        </button>
+                        <button class="btn btn-outline-dark btn-sm" type="button"
+                                @onclick="NoteInserisciSeparatoreSpesso"
+                                title="Inserisci una linea spessa di separazione nel punto del cursore"
+                                style="font-weight: 900;">
+                            █
+                        </button>
+                        <button class="btn btn-sm" type="button"
+                                @onclick="NoteInserisciSeparatoreRosso"
+                                title="Inserisci una linea spessa ROSSA di separazione nel punto del cursore"
+                                style="color: red; font-weight: 900; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                            █
+                        </button>
+                        <div class="separator"></div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteRimuoviRigheVuote"
+                                title="Rimuovi le righe vuote dal contenuto dell'editor"
+                                @onmousedown:preventDefault>
+                            ⊟
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" type="button"
+                                @onclick="NoteRimuoviTodo"
+                                title="Sostituisce TODO (parola isolata) con '--'"
+                                @onmousedown:preventDefault>
+                            TODO
+                        </button>
+                    </div>
+                </div>
+
+                @* ===== SESTA RIGA: Modifica riportata sui congelati (solo per Lavoro) ===== *@
+                @if (AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro)
+                {
+                    <div class="col-md-12">
+                        <label class="form-label">Modifica riportata sui congelati:</label>
+                        <div class="border rounded p-2" style="max-height: 180px; overflow-y: auto;">
+                            <table class="table table-sm table-borderless mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 30px;"></th>
+                                        <th>Nome</th>
+                                        <th>Versione</th>
+                                        <th style="width: 100px;">Data Cong.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @* ===== PRIMA RIGA: Sviluppo (virtuale, non nel DB) ===== *@
+                                    <tr class="table-info">
+                                        <td>
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="amb_sviluppo"
+                                                   checked="@isSviluppoSelezionato"
+                                                   @onchange="e => ToggleSviluppo((bool)e.Value!)" />
+                                        </td>
+                                        <td>
+                                            <label class="form-check-label fw-bold" for="amb_sviluppo">
+                                                Sviluppo
+                                            </label>
+                                        </td>
+                                        <td class="text-muted fw-bold">
+                                            @AttivitaCorrente.Versione
+                                        </td>
+                                        <td class="text-muted">-</td>
+                                    </tr>
+                                    @* ===== Ambienti dal database ===== *@
+                                    @foreach (var ambiente in ambienti)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <input class="form-check-input" type="checkbox"
+                                                       id="@($"amb_{ambiente.Id}")"
+                                                       checked="@AttivitaCorrente.AmbientiSelezionatiIds.Contains(ambiente.Id)"
+                                                       @onchange="e => ToggleAmbiente(ambiente.Id, (bool)e.Value!)" />
+                                            </td>
+                                            <td>
+                                                <label class="form-check-label" for="@($"amb_{ambiente.Id}")">
+                                                    @ambiente.Codice
+                                                </label>
+                                            </td>
+                                            <td class="text-muted">
+                                                @ambiente.Descrizione
+                                            </td>
+                                            <td class="text-muted small">
+                                                @(ambiente.DataCongelamento?.ToString("dd/MM/yy") ?? "-")
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @* Pulsante Edit congelati *@
+                        <div class="d-flex justify-content-end mt-1">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="ApriEditorCongelati" title="Gestisci congelati">
+                                ✏️ Modifica lista
+                            </button>
+                        </div>
+                    </div>
+
+                    @* ===== SETTIMA RIGA: Testo del check-in ===== *@
+                    <div class="col-12">
+                        <label class="form-label">Testo del check-in</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control fw-bold" @bind="AttivitaCorrente.TestoCheckIn"
+                                   @bind:event="oninput"
+                                   @onchange="OnTestoCheckInChanged"
+                                   placeholder="Inserisci il testo descrittivo del check-in..." />
+                            <button class="btn btn-outline-secondary" type="button"
+                                    @onclick="CopiaCheckInInDescrizione"
+                                    title="Copia questo testo nel campo descrizione">
+                                ⬇️📋
+                            </button>
+                        </div>
+                        <small class="text-muted">Il pulsante ⬇️📋 copia il testo nel campo "Descrizione"</small>
+                    </div>
+
+                    @* ===== OTTAVA RIGA: Elenco Changeset e lista files coinvolti ===== *@
+                    <div class="col-12">
+                        <label class="form-label">Elenco Changeset e lista files coinvolti</label>
+                        @* Toolbar pulsanti editor Changeset *@
+                        <div class="editor-toolbar">
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetIndentaLeft"
+                                    title="Indenta a sinistra il testo selezionato" @onmousedown:preventDefault>
+                                ⇤ ←
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetIndentaRight"
+                                    title="Indenta a destra il testo selezionato" @onmousedown:preventDefault>
+                                ⇥ →
+                            </button>
+                            <div class="separator"></div>
+                            <button class="btn btn-outline-dark btn-sm fw-bold" type="button"
+                                    @onclick="ChangesetBold"
+                                    title="Applica/rimuovi grassetto al testo selezionato">
+                                G
+                            </button>
+                            <button class="btn btn-sm" type="button"
+                                    @onclick="ChangesetHighlightGiallo"
+                                    title="Evidenzia in giallo il testo selezionato"
+                                    style="background-color: yellow; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                A
+                            </button>
+                            <button class="btn btn-sm" type="button"
+                                    @onclick="ChangesetHighlightArancione"
+                                    title="Evidenzia in arancione il testo selezionato"
+                                    style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                A
+                            </button>
+                            <div class="separator"></div>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetBarrato"
+                                    title="Applica/rimuovi barrato al testo selezionato"
+                                    style="text-decoration: line-through;">
+                                S
+                            </button>
+                            <button class="btn btn-sm" type="button"
+                                    @onclick="ChangesetColoreTessoRosso"
+                                    title="Colora in rosso il testo selezionato"
+                                    style="color: red; font-weight: bold; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                A
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetRimuoviFormattazione"
+                                    title="Rimuovi tutta la formattazione dal testo selezionato">
+                                ✕
+                            </button>
+                            <div class="separator"></div>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetInserisciTimestamp"
+                                    title="Inserisci l'ora corrente (HH:mm:ss) nel punto del cursore">
+                                🕐
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetInserisciSeparatore"
+                                    title="Inserisci una linea sottile di separazione nel punto del cursore">
+                                ─
+                            </button>
+                            <button class="btn btn-outline-dark btn-sm" type="button"
+                                    @onclick="ChangesetInserisciSeparatoreSpesso"
+                                    title="Inserisci una linea spessa di separazione nel punto del cursore"
+                                    style="font-weight: 900;">
+                                █
+                            </button>
+                            <button class="btn btn-sm" type="button"
+                                    @onclick="ChangesetInserisciSeparatoreRosso"
+                                    title="Inserisci una linea spessa ROSSA di separazione nel punto del cursore"
+                                    style="color: red; font-weight: 900; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                █
+                            </button>
+                            <div class="separator"></div>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetRimuoviRigheVuote"
+                                    title="Rimuovi le righe vuote dal contenuto dell'editor"
+                                    @onmousedown:preventDefault>
+                                ⊟
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" type="button"
+                                    @onclick="ChangesetRimuoviTodo"
+                                    title="Sostituisce TODO (parola isolata) con '--'"
+                                    @onmousedown:preventDefault>
+                                TODO
+                            </button>
+                        </div>
+                        <div @ref="changesetEditorRef"
+                             id="changeset-editor-div" onkeydown="changesetEditorHelper.handleTab(event,this)"
+                             contenteditable="true"
+                             class="form-control changeset-editor @(CampoHaTodo(AttivitaCorrente.ChangesetCoinvolti) ? "campo-con-todo" : "")"
+                             style="min-height: 200px; max-height: 350px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                             @onfocus="OnChangesetFocus"
+                             @onblur="OnChangesetBlur"
+                             placeholder="Inserisci i changeset/commit coinvolti...">
+                        </div>
+                        @* Toolbar pulsanti editor Changeset — duplicata sotto l'editor *@
+                        <div class="editor-toolbar mt-1">
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetIndentaLeft"
+                                    title="Indenta a sinistra il testo selezionato" @onmousedown:preventDefault>
+                                ⇤ ←
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetIndentaRight"
+                                    title="Indenta a destra il testo selezionato" @onmousedown:preventDefault>
+                                ⇥ →
+                            </button>
+                            <div class="separator"></div>
+                            <button class="btn btn-outline-dark btn-sm fw-bold" type="button"
+                                    @onclick="ChangesetBold"
+                                    title="Applica/rimuovi grassetto al testo selezionato">
+                                G
+                            </button>
+                            <button class="btn btn-sm" type="button"
+                                    @onclick="ChangesetHighlightGiallo"
+                                    title="Evidenzia in giallo il testo selezionato"
+                                    style="background-color: yellow; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                A
+                            </button>
+                            <button class="btn btn-sm" type="button"
+                                    @onclick="ChangesetHighlightArancione"
+                                    title="Evidenzia in arancione il testo selezionato"
+                                    style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                A
+                            </button>
+                            <div class="separator"></div>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetBarrato"
+                                    title="Applica/rimuovi barrato al testo selezionato"
+                                    style="text-decoration: line-through;">
+                                S
+                            </button>
+                            <button class="btn btn-sm" type="button"
+                                    @onclick="ChangesetColoreTessoRosso"
+                                    title="Colora in rosso il testo selezionato"
+                                    style="color: red; font-weight: bold; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                A
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetRimuoviFormattazione"
+                                    title="Rimuovi tutta la formattazione dal testo selezionato">
+                                ✕
+                            </button>
+                            <div class="separator"></div>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetInserisciTimestamp"
+                                    title="Inserisci l'ora corrente (HH:mm:ss) nel punto del cursore">
+                                🕐
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetInserisciSeparatore"
+                                    title="Inserisci una linea sottile di separazione nel punto del cursore">
+                                ─
+                            </button>
+                            <button class="btn btn-outline-dark btn-sm" type="button"
+                                    @onclick="ChangesetInserisciSeparatoreSpesso"
+                                    title="Inserisci una linea spessa di separazione nel punto del cursore"
+                                    style="font-weight: 900;">
+                                █
+                            </button>
+                            <button class="btn btn-sm" type="button"
+                                    @onclick="ChangesetInserisciSeparatoreRosso"
+                                    title="Inserisci una linea spessa ROSSA di separazione nel punto del cursore"
+                                    style="color: red; font-weight: 900; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                █
+                            </button>
+                            <div class="separator"></div>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetRimuoviRigheVuote"
+                                    title="Rimuovi le righe vuote dal contenuto dell'editor"
+                                    @onmousedown:preventDefault>
+                                ⊟
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" type="button"
+                                    @onclick="ChangesetRimuoviTodo"
+                                    title="Sostituisce TODO (parola isolata) con '--'"
+                                    @onmousedown:preventDefault>
+                                TODO
+                            </button>
+                        </div>
+                    </div>
+
+                    @* ===== NONA RIGA: URL Patch/Pacchetto nei rilasci ===== *@
+                    <div class="col-12">
+                        <label class="form-label">📦 URL Patch/Pacchetto nei rilasci</label>
+                        <textarea class="form-control" @bind="AttivitaCorrente.UrlPatchRilasci" rows="3"
+                                  style="max-height: 100px; overflow-y: auto;"
+                                  placeholder="Inserisci gli URL della patch o del pacchetto nei rilasci..."></textarea>
+                    </div>
+                }
+            </div>
+        </div>
+        
+        @* ===== BOTTONI AZIONE ===== *@
+        <div class="card-footer">
+            <div class="d-flex gap-2">
+                <button class="btn btn-success" @onclick="NuovaAttivita" disabled="@isSaving">
+                    ➕ Nuova
+                </button>
+                <button class="btn btn-primary" @onclick="SalvaAttivita"
+                        disabled="@(isSaving || (isAdminMode && IsModifica && AttivitaCorrente.UtenteUsername != UserService.WindowsUsername))"
+                        title="Salva attività (Ctrl+S)">
+                    @if (isSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    💾 Salva
+                </button>
+                <button class="btn btn-secondary" @onclick="AnnullaModifica" disabled="@isSaving">
+                    ❌ Annulla
+                </button>
+            </div>
+            @if (isAdminMode && IsModifica && AttivitaCorrente.UtenteUsername != UserService.WindowsUsername)
+            {
+                <small class="text-warning mt-2 d-block">
+                    ⚠️ Non puoi modificare attività di altri utenti
+                </small>
+            }
+        </div>
+    </div>
+</div>
+
+@* ===== MODALE DETTAGLI RICERCA ===== *@
+<SearchModal 
+    IsVisible="@mostraModaleRicerca"
+    TestoRicercaIniziale="@TestoRicerca"
+    AttivitaTutte="@attivitaTuttePerRicerca"
+    IsAdminMode="@isAdminMode"
+    OnChiudi="@ChiudiModaleRicerca"
+    OnSeleziona="@OnAttivitaSelezionataDaModale" />
+
+@* ===== MODALE TODO LIST ===== *@
+<TodoListModal 
+    IsVisible="@mostraTodoList"
+    OnChiudi="@ChiudiTodoList"
+    OnTodoCountChanged="@OnTodoCountChanged" />
+
+@* ===== MODALE APPUNTI ===== *@
+<AppuntiModal 
+    IsVisible="@mostraAppunti"
+    IsAdminMode="@isAdminMode"
+    OnChiudi="@ChiudiAppunti"
+    OnAppuntiCountChanged="@OnAppuntiCountChanged" />
+
+@* ===== MODALE EDITOR CONGELATI ===== *@
+<CongelatiEditorModal
+    IsVisible="@mostraEditorCongelati"
+    OnChiudi="@ChiudiEditorCongelati"
+    OnAmbientiChanged="@OnAmbientiChanged" />
+
+@* ===== MODALE EDITOR CLIENTI ===== *@
+<ClientiEditorModal
+    IsVisible="@mostraEditorClienti"
+    OnChiudi="@ChiudiEditorClienti"
+    OnClientiChanged="@OnClientiChanged" />
+
+@* ===== MODALE SEGNALAZIONI ===== *@
+<SegnalazioniModal
+    IsVisible="@mostraSegnalazioni"
+    OnChiudi="@ChiudiSegnalazioni" />
+
+@* ===== MODALE EDITOR TIPI ATTIVITÀ ===== *@
+<TipiAttivitaEditorModal
+    IsVisible="@mostraEditorTipiAttivita"
+    OnChiudi="@ChiudiEditorTipiAttivita"
+    OnTipiChanged="@OnTipiAttivitaChanged" />
+
+@* ===== MODALE CALENDARIO ===== *@
+<CalendarioModal
+    IsVisible="@mostraCalendario"
+    OnChiudi="@ChiudiCalendario"
+    OnEventiChanged="@OnEventiCalendarioChanged" />
+
+@* ===== MODALE CONFERMA ELIMINAZIONE ===== *@
+@if (mostraConfermaElimina && attivitaDaEliminare != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 2000;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">🗑️ Conferma Eliminazione</h5>
+                </div>
+                <div class="modal-body">
+                    <p>Sei sicuro di voler eliminare questa attività?</p>
+                    <table class="table table-sm table-borderless mb-0">
+                        <tr>
+                            <td class="fw-bold text-muted" style="width: 80px;">Data:</td>
+                            <td>@attivitaDaEliminare.Data.ToString("dd/MM/yyyy")</td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold text-muted">Titolo:</td>
+                            <td>@TruncateText(attivitaDaEliminare.Descrizione, 80)</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="AnnullaElimina">❌ Annulla</button>
+                    <button class="btn btn-danger" @onclick="ConfermaElimina">🗑️ Sì, elimina</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===== POPUP ERRORE DATABASE ===== *@
+@if (mostraPopupErroreDb)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.6); z-index: 3000;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-danger">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">⚠️ Errore Database</h5>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-1 fw-bold text-danger">Si è verificato un errore durante l'operazione:</p>
+                    <p class="mb-0" style="white-space: pre-wrap; word-break: break-word;">@messaggioPopupErroreDb</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-danger" @onclick="() => mostraPopupErroreDb = false">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===== BARRA DI STATO IN BASSO ===== *@
+<div class="status-bar">
+    @if (ultimoSalvataggio.HasValue)
+    {
+        <span>💾 Ultimo salvataggio: @ultimoSalvataggio.Value.ToString("HH:mm:ss")</span>
+    }
+    else
+    {
+        <span class="text-secondary">💾 Nessun salvataggio in questa sessione</span>
+    }
+    @if (!string.IsNullOrEmpty(ultimoExport))
+    {
+        <span title="@ultimoExport">📤 Export: @System.IO.Path.GetFileName(ultimoExport)</span>
+    }
+    @if (isAdminMode)
+    {
+        <span class="badge bg-warning text-dark">🔐 Modalità Admin attiva</span>
+    }
+    @if (AppConfig.PrivacyMode)
+    {
+        <span class="badge bg-info text-dark">🔒 Privacy attiva</span>
+    }
+    <span class="ms-auto text-secondary">v@(AppConfig.Version)</span>
+</div>
+
+@code {
+    #region Proprietà e Campi
+
+    /// <summary>Lista delle attività visualizzate nella griglia</summary>
+    private List<WorkActivityDto> Attivita { get; set; } = new();
+    
+    /// <summary>Attività attualmente selezionata/in modifica nel form</summary>
+    private WorkActivityDto AttivitaCorrente { get; set; } = new();
+    
+    /// <summary>True se si sta modificando un'attività esistente (ID > 0)</summary>
+    private bool IsModifica => AttivitaCorrente.Id > 0;
+
+    // Dati di lookup caricati dal database
+    private List<Cliente> clienti = new();
+    private List<Ambiente> ambienti = new();
+    private List<int> anniDisponibili = new();
+    private string utenteConnesso = "Caricamento...";
+    
+    /// <summary>
+    /// Clienti ordinati con "Sviluppo" come prima scelta
+    /// </summary>
+    private IEnumerable<Cliente> clientiOrdinati => 
+        clienti.OrderByDescending(c => c.Nome == "Sviluppo").ThenBy(c => c.Nome);
+    
+    /// <summary>
+    /// ID del cliente "Sviluppo" (cached per performance)
+    /// </summary>
+    private int? clienteSviluppoId => clienti.FirstOrDefault(c => c.Nome == "Sviluppo")?.Id;
+    
+    /// <summary>
+    /// Flag per tracciare se "Sviluppo" è selezionato nella tabella congelati
+    /// </summary>
+    private bool isSviluppoSelezionato = false;
+
+    /// <summary>
+    /// Riferimento all'elemento DOM del changeset editor (contenteditable div)
+    /// </summary>
+    private ElementReference changesetEditorRef;
+
+    /// <summary>
+    /// True se l'utente ha il focus sull'editor changeset (per evitare sovrascritture)
+    /// </summary>
+    private bool changesetEditorFocused = false;
+
+    /// <summary>
+    /// Flag per forzare l'aggiornamento del contenteditable editor al prossimo render
+    /// </summary>
+    private bool changesetEditorNeedsUpdate = false;
+
+    /// <summary>Riferimento all'elemento DOM dell'editor Note (contenteditable div)</summary>
+    private ElementReference noteEditorRef;
+
+    /// <summary>True se l'utente ha il focus sull'editor Note</summary>
+    private bool noteEditorFocused = false;
+
+    /// <summary>Flag per forzare l'aggiornamento dell'editor Note al prossimo render</summary>
+    private bool noteEditorNeedsUpdate = false;
+
+    /// <summary>Riferimento .NET per il callback Ctrl+S da JavaScript</summary>
+    private DotNetObjectReference<Home>? dotNetRef;
+
+    /// <summary>Visibilità della modale editor clienti</summary>
+    private bool mostraEditorClienti = false;
+
+    /// <summary>Visibilità della modale segnalazioni</summary>
+    private bool mostraSegnalazioni = false;
+
+    /// <summary>Contatore delle segnalazioni non risolte (per il badge)</summary>
+    private int segnalazioniCount = 0;
+
+    /// <summary>Percorso dell'ultimo file esportato (mostrato nella barra di stato)</summary>
+    private string ultimoExport = string.Empty;
+
+    // Filtri di ricerca
+    private int? FiltroAnno { get; set; }
+    private int? FiltroMese { get; set; }
+    private int? FiltroGiorno { get; set; }
+    private string TestoRicerca { get; set; } = string.Empty;
+
+    // Stati dell'interfaccia
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string messaggio = string.Empty;
+    private bool isErrore = false;
+    
+    /// <summary>Modalità admin: permette di visualizzare le attività di tutti gli utenti</summary>
+    private bool isAdminMode = false;
+    
+    /// <summary>Indica se è stata eseguita una ricerca (abilita il tasto Dettagli ricerca)</summary>
+    private bool ricercaEseguita = false;
+    
+    /// <summary>Controlla la visibilità della modale di ricerca avanzata</summary>
+    private bool mostraModaleRicerca = false;
+    
+    /// <summary>Filtro per visualizzare solo le attività che contengono TODO</summary>
+    private bool filtroSoloTodo = false;
+    
+    /// <summary>Lista completa delle attività per la ricerca nella modale</summary>
+    private List<WorkActivityDto> attivitaTuttePerRicerca = new();
+    
+    /// <summary>Controlla la visibilità della modale TODO List</summary>
+    private bool mostraTodoList = false;
+    
+    /// <summary>Contatore dei TODO non completati (per il badge)</summary>
+    private int todoCount = 0;
+    
+    /// <summary>Controlla la visibilità della modale editor congelati</summary>
+    private bool mostraEditorCongelati = false;
+
+    /// <summary>Controlla la visibilità della modale Appunti</summary>
+    private bool mostraAppunti = false;
+
+    /// <summary>Contatore degli Appunti (per il badge)</summary>
+    private int appuntiCount = 0;
+
+    // ===== Conferma eliminazione (modale custom) =====
+    /// <summary>Controlla la visibilità della modale di conferma eliminazione</summary>
+    private bool mostraConfermaElimina = false;
+    /// <summary>Attività da eliminare (in attesa di conferma)</summary>
+    private WorkActivityDto? attivitaDaEliminare = null;
+
+    // ===== Barra di stato =====
+    /// <summary>Timestamp dell'ultimo salvataggio riuscito</summary>
+    private DateTime? ultimoSalvataggio = null;
+
+    /// <summary>Lista dei tipi ambienti di rilascio (per datalist)</summary>
+    private List<TipoAmbienteRilascio> tipiAmbientiRilascio = new();
+
+    /// <summary>Lista delle versioni di rilascio (per datalist)</summary>
+    private List<VersioneRilascio> versioniRilascio = new();
+
+    /// <summary>Lista dei tipi attività (caricata dal DB, usata nel dropdown)</summary>
+    private List<TipoAttivitaItem> tipiAttivitaLista = new();
+
+    /// <summary>Controlla la visibilità della modale editor tipi attività</summary>
+    private bool mostraEditorTipiAttivita = false;
+
+    /// <summary>Controlla la visibilità della modale calendario</summary>
+    private bool mostraCalendario = false;
+
+    /// <summary>Lista eventi imminenti (non risolti, entro finestra di avviso)</summary>
+    private List<EventoCalendarioDto> eventiImminenti = new();
+
+    // ===== Popup errore database =====
+    /// <summary>Controlla la visibilità del popup di errore database</summary>
+    private bool mostraPopupErroreDb = false;
+    /// <summary>Messaggio da mostrare nel popup errore</summary>
+    private string messaggioPopupErroreDb = string.Empty;
+
+    // ===== Regex TODO con word boundary =====
+    /// <summary>
+    /// Regex per trovare TODO come parola isolata (non preceduta/seguita da lettera).
+    /// Esclude occorrenze come "metodo" (che contiene "odo" ma non TODO come parola).
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex TodoRegex =
+        new(@"(?<![a-zA-Z])TODO(?![a-zA-Z])",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    #endregion
+
+    #region Lifecycle Methods
+
+    /// <summary>
+    /// Aggiorna i contenteditable div (changeset + note) dopo ogni render.
+    /// Registra anche il callback Ctrl+S al primo render.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Registra il callback Ctrl+S
+            dotNetRef = DotNetObjectReference.Create(this);
+            try { await JS.InvokeVoidAsync("registraCtrlS", dotNetRef); }
+            catch { /* Ignora se JS non ancora pronto */ }
+        }
+
+        if (changesetEditorNeedsUpdate && !changesetEditorFocused)
+        {
+            changesetEditorNeedsUpdate = false;
+            try
+            {
+                await JS.InvokeVoidAsync("changesetEditorHelper.setContent",
+                    changesetEditorRef,
+                    AttivitaCorrente.ChangesetCoinvolti ?? "");
+            }
+            catch { /* Ignora errori JS (es: elemento non ancora presente) */ }
+        }
+
+        if (noteEditorNeedsUpdate && !noteEditorFocused)
+        {
+            noteEditorNeedsUpdate = false;
+            try
+            {
+                await JS.InvokeVoidAsync("noteEditorHelper.setContent",
+                    noteEditorRef,
+                    AttivitaCorrente.Note ?? "");
+            }
+            catch { /* Ignora errori JS */ }
+        }
+    }
+
+    /// <summary>
+    /// Inizializzazione del componente.
+    /// Carica l'utente corrente, i dati di lookup e imposta i filtri alla data odierna.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Carica utente corrente
+            var utente = await UserService.GetOrCreateCurrentUserAsync();
+            utenteConnesso = string.IsNullOrEmpty(utente.NomeCompleto) 
+                ? utente.WindowsUsername 
+                : $"{utente.NomeCompleto} ({utente.WindowsUsername})";
+
+            // Carica dati lookup
+            clienti = await ActivityService.GetClientiAsync();
+            ambienti = await ActivityService.GetAmbientiAsync();
+            anniDisponibili = await ActivityService.GetAnniDisponibiliAsync(isAdminMode);
+            tipiAmbientiRilascio = await AmbientiRilascioService.GetTipiAsync();
+            versioniRilascio = await AmbientiRilascioService.GetVersioniAsync();
+
+            // Assicura che i tipi base esistano e carica la lista
+            await TipiAttivitaService.EnsureTipiBaseAsync();
+            tipiAttivitaLista = await TipiAttivitaService.GetTipiAsync();
+
+            // Carica eventi imminenti per la barra di avviso
+            eventiImminenti = await CalendarioService.GetEventiImminentiAsync();
+
+            // Carica conteggio TODO
+            todoCount = await TodoService.GetTodoCountAsync();
+            
+            // Carica conteggio Appunti
+            appuntiCount = await AppuntiService.GetAppuntiCountAsync();
+
+            // Carica conteggio segnalazioni non risolte
+            segnalazioniCount = await SegnalazioneService.GetSegnalazioniNonRisolteCountAsync();
+
+            // Imposta Anno e Mese al mese corrente; Giorno rimane "Tutti"
+            // così si visualizzano subito le attività del mese in corso
+            var oggi = DateTime.Today;
+            FiltroAnno = oggi.Year;
+            FiltroMese = oggi.Month;
+            // FiltroGiorno = null (default) → mostra tutte le attività del mese
+
+            // Carica attività del mese corrente
+            await CaricaAttivita();
+
+            // Inizializza il form con i valori di default corretti (Sviluppo auto-selezionato)
+            // Va chiamato dopo il caricamento dei dati per avere clienteSviluppoId valorizzato
+            NuovaAttivita();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggioConPopup($"Errore di connessione al database: {ex.Message}", true);
+            isLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Chiamato da JavaScript quando l'utente preme Ctrl+S.
+    /// </summary>
+    [Microsoft.JSInterop.JSInvokable]
+    public async Task SalvaViaShortcut()
+    {
+        await SalvaAttivita();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Rilascia le risorse al termine della vita del componente.
+    /// </summary>
+    public void Dispose()
+    {
+        dotNetRef?.Dispose();
+    }
+
+    #endregion
+
+    #region Caricamento Dati
+
+    /// <summary>
+    /// Carica le attività dal database applicando i filtri correnti.
+    /// In modalità admin, carica le attività di tutti gli utenti.
+    /// </summary>
+    private async Task CaricaAttivita()
+    {
+        try
+        {
+            isLoading = true;
+            Attivita = await ActivityService.GetActivitiesAsync(
+                FiltroAnno, 
+                FiltroMese, 
+                FiltroGiorno, 
+                string.IsNullOrWhiteSpace(TestoRicerca) ? null : TestoRicerca,
+                isAdminMode);
+            
+            // Applica filtro "Solo TODO" se attivo
+            if (filtroSoloTodo)
+            {
+                Attivita = Attivita.Where(a => ContieneTodo(a)).ToList();
+            }
+            
+            anniDisponibili = await ActivityService.GetAnniDisponibiliAsync(isAdminMode);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel caricamento: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Gestisce il cambio della modalità admin.
+    /// Ricarica le attività per mostrare/nascondere quelle di altri utenti.
+    /// </summary>
+    private async Task OnAdminModeChanged()
+    {
+        await CaricaAttivita();
+    }
+
+    #endregion
+
+    #region Gestione Selezione e Form
+
+    /// <summary>
+    /// Seleziona un'attività dalla griglia e popola il form con i suoi dati.
+    /// Crea una copia per evitare modifiche dirette alla lista.
+    /// </summary>
+    private async Task SelezionaAttivita(WorkActivityDto attivita)
+    {
+        AttivitaCorrente = new WorkActivityDto
+        {
+            Id = attivita.Id,
+            Data = attivita.Data,
+            TipoAttivita = attivita.TipoAttivita ?? TipiAttivita.Lavoro,
+            Descrizione = attivita.Descrizione,
+            UrlTicket = attivita.UrlTicket,
+            NumeroTicket = attivita.NumeroTicket,
+            ClienteId = attivita.ClienteId,
+            ClienteNome = attivita.ClienteNome,
+            OreLavorate = attivita.OreLavorate,
+            Versione = attivita.Versione,
+            AmbientiSelezionatiIds = new List<int>(attivita.AmbientiSelezionatiIds),
+            Vedere = attivita.Vedere,
+            Note = attivita.Note,
+            ChangesetCoinvolti = attivita.ChangesetCoinvolti,
+            UrlPatchRilasci = attivita.UrlPatchRilasci,
+            TestoCheckIn = attivita.TestoCheckIn,
+            CartellaDocumentazione = attivita.CartellaDocumentazione,
+            UtenteId = attivita.UtenteId,
+            UtenteUsername = attivita.UtenteUsername
+        };
+
+        // Carica le coppie ambiente/versione di rilascio (solo per attività esistenti)
+        if (attivita.Id > 0)
+        {
+            try
+            {
+                AttivitaCorrente.AmbientiRilascio = await AmbientiRilascioService.GetAmbientiRilascioAsync(attivita.Id);
+            }
+            catch { /* Ignora errori: le coppie restano vuote */ }
+        }
+
+        // Reset della selezione "Sviluppo" nella tabella congelati
+        // (Sviluppo non è salvato nel DB, quindi va sempre resettato)
+        isSviluppoSelezionato = false;
+
+        // Segnala che i due editor contenteditable devono essere aggiornati
+        changesetEditorNeedsUpdate = true;
+        noteEditorNeedsUpdate = true;
+    }
+
+    /// <summary>
+    /// Resetta il form per inserire una nuova attività.
+    /// Imposta la data odierna, la versione di sviluppo successiva e il cliente "Sviluppo" come default.
+    /// </summary>
+    private void NuovaAttivita()
+    {
+        var versioneSviluppo = CalcolaVersioneSviluppoSuccessiva();
+
+        AttivitaCorrente = new WorkActivityDto
+        {
+            Data = DateTime.Today,
+            TipoAttivita = TipiAttivita.Lavoro,
+            Versione = versioneSviluppo,
+            ClienteId = clienteSviluppoId  // Auto-seleziona "Sviluppo"
+        };
+
+        // Reset della selezione "Sviluppo" nella tabella congelati
+        isSviluppoSelezionato = false;
+
+        // Segnala aggiornamento editor changeset e note (svuota i div)
+        changesetEditorNeedsUpdate = true;
+        noteEditorNeedsUpdate = true;
+
+        messaggio = string.Empty;
+    }
+
+    /// <summary>
+    /// Placeholder dinamico per il campo "Versione di sviluppo": mostra la versione calcolata
+    /// come suggerimento, oppure un esempio statico se non ci sono congelati.
+    /// </summary>
+    private string VersioneSviluppoPlaceholder
+    {
+        get
+        {
+            var v = CalcolaVersioneSviluppoSuccessiva();
+            return string.IsNullOrEmpty(v) ? "Es: 3.2.61" : v;
+        }
+    }
+
+    /// <summary>
+    /// Calcola la versione di sviluppo successiva basandosi sulla prima versione dei congelati.
+    /// Es: se la prima versione è 3.2.60, restituisce 3.2.61
+    /// </summary>
+    private string CalcolaVersioneSviluppoSuccessiva()
+    {
+        try
+        {
+            // Prende il primo ambiente (che ha la versione più alta grazie all'ordinamento)
+            var primoAmbiente = ambienti.FirstOrDefault();
+            if (primoAmbiente == null || string.IsNullOrEmpty(primoAmbiente.Descrizione))
+                return string.Empty;
+
+            // La descrizione è nel formato "X.Y.Z" (solo numeri)
+            var descrizione = primoAmbiente.Descrizione;
+            var match = System.Text.RegularExpressions.Regex.Match(descrizione, @"(\d+)\.(\d+)\.(\d+)");
+            
+            if (match.Success)
+            {
+                var major = int.Parse(match.Groups[1].Value);
+                var minor = int.Parse(match.Groups[2].Value);
+                var patch = int.Parse(match.Groups[3].Value);
+                
+                // Incrementa il patch di 1
+                return $"{major}.{minor}.{patch + 1}";
+            }
+        }
+        catch
+        {
+            // In caso di errore, restituisce stringa vuota
+        }
+        
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Annulla le modifiche correnti e resetta il form.
+    /// </summary>
+    private void AnnullaModifica()
+    {
+        NuovaAttivita();
+    }
+
+    /// <summary>
+    /// Duplica un'attività esistente copiando tutti i campi tranne la data.
+    /// Utile per inserire la stessa lavorazione per più giorni consecutivi.
+    /// </summary>
+    private void DuplicaAttivita(WorkActivityDto attivita)
+    {
+        AttivitaCorrente = new WorkActivityDto
+        {
+            // ID = 0 per creare una NUOVA attività
+            Id = 0,
+
+            // Data odierna (NON copiata dall'originale)
+            Data = DateTime.Today,
+
+            // Copia tutti gli altri campi
+            TipoAttivita = attivita.TipoAttivita ?? TipiAttivita.Lavoro,
+            Descrizione = attivita.Descrizione,
+            UrlTicket = attivita.UrlTicket,
+            NumeroTicket = attivita.NumeroTicket,
+            ClienteId = attivita.ClienteId,
+            ClienteNome = attivita.ClienteNome,
+            OreLavorate = attivita.OreLavorate,
+            Versione = attivita.Versione,
+            AmbientiSelezionatiIds = attivita.AmbientiSelezionatiIds?.ToList() ?? new List<int>(),
+            Vedere = attivita.Vedere,
+            Note = attivita.Note,
+            ChangesetCoinvolti = attivita.ChangesetCoinvolti,
+            UrlPatchRilasci = attivita.UrlPatchRilasci,
+            TestoCheckIn = attivita.TestoCheckIn,
+            CartellaDocumentazione = attivita.CartellaDocumentazione,
+            AmbientiRilascio = attivita.AmbientiRilascio.Select(a => new AmbienteRilascioDto
+            {
+                Posizione = a.Posizione,
+                TipoAmbiente = a.TipoAmbiente,
+                Versione = a.Versione
+            }).ToList()
+            // UtenteId e UtenteUsername NON copiati: verranno assegnati automaticamente al salvataggio
+        };
+
+        // Reset della selezione "Sviluppo" nella tabella congelati
+        isSviluppoSelezionato = false;
+
+        // Segnala aggiornamento editor changeset e note
+        changesetEditorNeedsUpdate = true;
+        noteEditorNeedsUpdate = true;
+
+        MostraMessaggio($"Attività duplicata! Modifica la data e salva.", false);
+    }
+
+    #endregion
+
+    #region Operazioni CRUD
+
+    /// <summary>
+    /// Salva l'attività corrente (nuova o modifica).
+    /// Esegue validazione prima del salvataggio.
+    /// </summary>
+    private async Task SalvaAttivita()
+    {
+        if (string.IsNullOrWhiteSpace(AttivitaCorrente.Descrizione))
+        {
+            MostraMessaggio("La descrizione è obbligatoria", true);
+            return;
+        }
+
+        // Legge HTML dal contenteditable Note prima di salvare
+        try
+        {
+            var htmlNote = await JS.InvokeAsync<string>("noteEditorHelper.getHtml", noteEditorRef);
+            AttivitaCorrente.Note = string.IsNullOrWhiteSpace(htmlNote) ? null : htmlNote;
+        }
+        catch { /* Usa il valore già presente se la lettura JS fallisce */ }
+
+        // Legge HTML dal contenteditable Changeset prima di salvare
+        if (AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro)
+        {
+            try
+            {
+                var htmlChangeset = await JS.InvokeAsync<string>("changesetEditorHelper.getHtml", changesetEditorRef);
+                AttivitaCorrente.ChangesetCoinvolti = string.IsNullOrWhiteSpace(htmlChangeset) ? null : htmlChangeset;
+            }
+            catch { /* Usa il valore già presente se la lettura JS fallisce */ }
+        }
+
+        try
+        {
+            isSaving = true;
+            int savedId;
+
+            if (IsModifica)
+            {
+                savedId = AttivitaCorrente.Id;
+                await ActivityService.UpdateActivityAsync(AttivitaCorrente);
+                MostraMessaggio("Attività aggiornata con successo!", false);
+            }
+            else
+            {
+                var saved = await ActivityService.AddActivityAsync(AttivitaCorrente);
+                savedId = saved.Id;
+                MostraMessaggio("Attività salvata con successo!", false);
+            }
+
+            // Registra l'orario dell'ultimo salvataggio (mostrato nella barra di stato)
+            ultimoSalvataggio = DateTime.Now;
+
+            // Ricarica i datalist ambienti/versioni (potrebbero essere stati aggiunti nuovi valori)
+            tipiAmbientiRilascio = await AmbientiRilascioService.GetTipiAsync();
+            versioniRilascio = await AmbientiRilascioService.GetVersioniAsync();
+
+            await CaricaAttivita();
+
+            // Dopo il salvataggio, riseleziona l'attività appena salvata
+            var attivitaSalvata = Attivita.FirstOrDefault(a => a.Id == savedId);
+            if (attivitaSalvata != null)
+            {
+                await SelezionaAttivita(attivitaSalvata);
+            }
+            else
+            {
+                // Se non è visibile con i filtri correnti, resetta il form
+                NuovaAttivita();
+            }
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggioConPopup($"Errore nel salvataggio: {ex.Message}", true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    /// <summary>
+    /// Elimina un'attività dal database.
+    /// </summary>
+    /// <summary>
+    /// Mostra la modale di conferma prima di eliminare l'attività.
+    /// </summary>
+    private void ConfermaEliminaAttivita(WorkActivityDto attivita)
+    {
+        attivitaDaEliminare = attivita;
+        mostraConfermaElimina = true;
+    }
+
+    /// <summary>
+    /// Eseguita quando l'utente conferma l'eliminazione nella modale.
+    /// </summary>
+    private async Task ConfermaElimina()
+    {
+        mostraConfermaElimina = false;
+        if (attivitaDaEliminare != null)
+        {
+            await EliminaAttivita(attivitaDaEliminare.Id);
+            attivitaDaEliminare = null;
+        }
+    }
+
+    /// <summary>
+    /// Eseguita quando l'utente annulla l'eliminazione nella modale.
+    /// </summary>
+    private void AnnullaElimina()
+    {
+        mostraConfermaElimina = false;
+        attivitaDaEliminare = null;
+    }
+
+    private async Task EliminaAttivita(int id)
+    {
+        try
+        {
+            await ActivityService.DeleteActivityAsync(id);
+            await CaricaAttivita();
+
+            if (AttivitaCorrente.Id == id)
+                NuovaAttivita();
+
+            MostraMessaggio("Attività eliminata", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nell'eliminazione: {ex.Message}", true);
+        }
+    }
+
+    #endregion
+
+    #region Gestione Ambienti/Congelati
+
+    /// <summary>
+    /// Aggiunge o rimuove un congelato dalla lista dei congelati selezionati.
+    /// In caso di spunta: aggiunge il blocco solo se non già presente nel testo.
+    /// In caso di dispunta: rimuove solo l'ID dalla lista (non modifica il testo manuale).
+    /// </summary>
+    private async Task ToggleAmbiente(int ambienteId, bool selezionato)
+    {
+        if (selezionato && !AttivitaCorrente.AmbientiSelezionatiIds.Contains(ambienteId))
+        {
+            AttivitaCorrente.AmbientiSelezionatiIds.Add(ambienteId);
+
+            // Legge il testo corrente dall'editor JS prima di modificarlo
+            await SincronizzaTestoEditorAsync();
+
+            // Aggiunge il blocco solo se la riga intestazione non è già presente
+            var ambiente = ambienti.FirstOrDefault(a => a.Id == ambienteId);
+            if (ambiente != null)
+            {
+                AggiungiBloccoCongelato($"{ambiente.Codice} ({FormattaVersioneCongelato(ambiente.Descrizione)}):");
+            }
+
+            // Aggiorna il DOM dell'editor con il nuovo contenuto
+            changesetEditorNeedsUpdate = true;
+        }
+        else if (!selezionato && AttivitaCorrente.AmbientiSelezionatiIds.Contains(ambienteId))
+        {
+            AttivitaCorrente.AmbientiSelezionatiIds.Remove(ambienteId);
+            // Non modifica il testo: l'utente potrebbe aver editato manualmente
+        }
+
+        changesetEditorNeedsUpdate = true;
+    }
+
+    /// <summary>
+    /// Gestisce la selezione/deselezione della voce "Sviluppo" nella tabella congelati.
+    /// Sviluppo non è un ambiente reale nel DB, ma una voce virtuale.
+    /// </summary>
+    private async Task ToggleSviluppo(bool selezionato)
+    {
+        isSviluppoSelezionato = selezionato;
+
+        if (selezionato)
+        {
+            await SincronizzaTestoEditorAsync();
+            AggiungiBloccoCongelato($"Sviluppo ({AttivitaCorrente.Versione}):");
+        }
+        // Se deselezionato: non rimuove il testo già scritto manualmente
+
+        changesetEditorNeedsUpdate = true;
+    }
+
+    /// <summary>
+    /// Legge il testo grezzo (plain text) dal contenteditable editor JS e aggiorna il campo C#.
+    /// Usato prima di AggiungiBloccoCongelato per confronti stringa senza HTML.
+    /// </summary>
+    private async Task SincronizzaTestoEditorAsync()
+    {
+        try
+        {
+            // Salva HTML (non plain text) per preservare la formattazione (bold, highlight, ecc.)
+            var html = await JS.InvokeAsync<string>("changesetEditorHelper.getHtml", changesetEditorRef);
+            AttivitaCorrente.ChangesetCoinvolti = string.IsNullOrWhiteSpace(html) ? null : html;
+        }
+        catch { /* Ignora errori JS */ }
+    }
+
+    /// <summary>
+    /// Aggiunge un blocco congelato al testo dei changeset solo se la riga intestazione non è già presente.
+    /// Formato aggiunto:
+    ///   NomeCongelato (Versione):
+    ///   Changeset XXX: [Testo del check-in]
+    ///   (riga vuota)
+    /// </summary>
+    /// <summary>
+    /// Formatta la versione del congelato aggiungendo la versione secondaria 4.1.X,
+    /// dove X = patch - 50 (es: 3.2.60 → 3.2.60-4.1.10).
+    /// Se la descrizione non ha formato X.Y.Z, la restituisce invariata.
+    /// </summary>
+    private static string FormattaVersioneCongelato(string? descrizione)
+    {
+        if (string.IsNullOrEmpty(descrizione)) return string.Empty;
+        var parts = descrizione.Trim().Split('.');
+        if (parts.Length == 3 && int.TryParse(parts[2], out int patch))
+            return $"{descrizione}-4.1.{patch - 50}";
+        return descrizione;
+    }
+
+    private void AggiungiBloccoCongelato(string rigaIntestazione)
+    {
+        // Il campo può contenere HTML: usa HtmlToPlainText per il confronto
+        var testoCorrente = HtmlToPlainText(AttivitaCorrente.ChangesetCoinvolti);
+        var testoCheckIn = AttivitaCorrente.TestoCheckIn ?? "";
+
+        // Verifica se la riga intestazione è già presente (ignora spazi/CR extra)
+        var linee = testoCorrente.Split('\n').Select(l => l.TrimEnd()).ToList();
+        bool giaPresente = linee.Any(l => l.Equals(rigaIntestazione.TrimEnd(), StringComparison.OrdinalIgnoreCase));
+
+        if (!giaPresente)
+        {
+            // Preserva l'HTML esistente e appende il nuovo blocco come HTML
+            var heading = System.Net.WebUtility.HtmlEncode(rigaIntestazione);
+            var checkIn = System.Net.WebUtility.HtmlEncode(testoCheckIn);
+            var nuovoBlocco = $"<strong>{heading}</strong><br>Changeset XXX: {checkIn}";
+
+            var htmlEsistente = AttivitaCorrente.ChangesetCoinvolti ?? "";
+            if (!string.IsNullOrWhiteSpace(htmlEsistente))
+            {
+                // Rimuove eventuali <br> finali prima di appendere
+                htmlEsistente = System.Text.RegularExpressions.Regex.Replace(
+                    htmlEsistente.TrimEnd(), @"(<br\s*/?>\s*)+$", "",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                AttivitaCorrente.ChangesetCoinvolti = htmlEsistente + "<br><br>" + nuovoBlocco;
+            }
+            else
+            {
+                AttivitaCorrente.ChangesetCoinvolti = nuovoBlocco;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Aggiorna il testo CheckIn: aggiorna le righe "Changeset XXX: ..." già presenti nel testo
+    /// per riflettere il nuovo testo del check-in (solo le righe generate automaticamente).
+    /// </summary>
+    private async Task OnTestoCheckInChanged()
+    {
+        // Non modifica il testo del changeset: l'utente ha già il testo nel div
+        // Se vuole aggiornare il check-in, dovrà farlo manualmente o ri-spuntare i congelati
+    }
+
+    #endregion
+
+    #region Gestione Changeset Editor
+
+    /// <summary>
+    /// Handler: l'utente ha messo il focus sull'editor changeset
+    /// </summary>
+    private void OnChangesetFocus()
+    {
+        changesetEditorFocused = true;
+    }
+
+    /// <summary>
+    /// Handler: l'utente ha tolto il focus dall'editor changeset.
+    /// Legge il testo grezzo e aggiorna il campo C#.
+    /// </summary>
+    private async Task OnChangesetBlur()
+    {
+        changesetEditorFocused = false;
+        await SincronizzaTestoEditorAsync();
+    }
+
+    /// <summary>
+    /// Indenta a destra le righe selezionate nell'editor changeset.
+    /// </summary>
+    private async Task IndentaRight()
+    {
+        try { await JS.InvokeAsync<string>("changesetEditorHelper.indent", changesetEditorRef, true); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    /// <summary>
+    /// Indenta a sinistra le righe selezionate nell'editor changeset.
+    /// </summary>
+    private async Task IndentaLeft()
+    {
+        try { await JS.InvokeAsync<string>("changesetEditorHelper.indent", changesetEditorRef, false); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    /// <summary>
+    /// Applica/rimuove grassetto al testo selezionato nell'editor changeset.
+    /// </summary>
+    private async Task ChangesetBold()
+    {
+        try { await JS.InvokeVoidAsync("eseguiBold", changesetEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    /// <summary>
+    /// Indenta a destra le righe selezionate nell'editor changeset.
+    /// </summary>
+    private async Task ChangesetIndentaRight()
+    {
+        try { await JS.InvokeVoidAsync("changesetEditorHelper.indent", changesetEditorRef, true); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    /// <summary>
+    /// Indenta a sinistra le righe selezionate nell'editor changeset.
+    /// </summary>
+    private async Task ChangesetIndentaLeft()
+    {
+        try { await JS.InvokeVoidAsync("changesetEditorHelper.indent", changesetEditorRef, false); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task ChangesetHighlightGiallo()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", changesetEditorRef, "yellow"); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task ChangesetHighlightArancione()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", changesetEditorRef, "orange"); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task ChangesetBarrato()
+    {
+        try { await JS.InvokeVoidAsync("eseguiBarrato", changesetEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task ChangesetColoreTessoRosso()
+    {
+        try { await JS.InvokeVoidAsync("eseguiColoreTesto", changesetEditorRef, "red"); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task ChangesetRimuoviFormattazione()
+    {
+        try { await JS.InvokeVoidAsync("rimuoviFormattazione", changesetEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task ChangesetInserisciTimestamp()
+    {
+        var ts = DateTime.Now.ToString("HH:mm:ss") + " ";
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", changesetEditorRef, ts); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task ChangesetInserisciSeparatore()
+    {
+        var sep = new string('─', 120);
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", changesetEditorRef, sep); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task ChangesetInserisciSeparatoreSpesso()
+    {
+        var sep = new string('█', 120);
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", changesetEditorRef, sep); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task ChangesetInserisciSeparatoreRosso()
+    {
+        var sep = "<span style=\"color:red\">" + new string('█', 120) + "</span>";
+        try { await JS.InvokeVoidAsync("inserisciHtmlACursore", changesetEditorRef, sep); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task ChangesetRimuoviRigheVuote()
+    {
+        try { await JS.InvokeVoidAsync("changesetEditorHelper.rimuoviRigheVuote", changesetEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    /// <summary>
+    /// Sostituisce le occorrenze di "TODO" (parola isolata) con "--" nel changeset editor,
+    /// preservando la formattazione HTML.
+    /// </summary>
+    private async Task ChangesetRimuoviTodo()
+    {
+        try { await JS.InvokeVoidAsync("sostituisciTodoNeiNodi", changesetEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    #endregion
+
+    #region Gestione Note Editor
+
+    /// <summary>
+    /// Handler: l'utente ha messo il focus sull'editor Note.
+    /// </summary>
+    private void OnNoteFocus()
+    {
+        noteEditorFocused = true;
+    }
+
+    /// <summary>
+    /// Handler: l'utente ha tolto il focus dall'editor Note.
+    /// Legge l'HTML e aggiorna il campo C#.
+    /// </summary>
+    private async Task OnNoteBlur()
+    {
+        noteEditorFocused = false;
+        try
+        {
+            var html = await JS.InvokeAsync<string>("noteEditorHelper.getHtml", noteEditorRef);
+            AttivitaCorrente.Note = string.IsNullOrWhiteSpace(html) ? null : html;
+        }
+        catch { /* Ignora errori JS */ }
+    }
+
+    /// <summary>
+    /// Applica/rimuove grassetto al testo selezionato nell'editor Note.
+    /// </summary>
+    private async Task NoteBold()
+    {
+        try { await JS.InvokeVoidAsync("eseguiBold", noteEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    /// <summary>
+    /// Indenta a destra le righe selezionate nell'editor Note.
+    /// </summary>
+    private async Task NoteIndentaRight()
+    {
+        try { await JS.InvokeVoidAsync("noteEditorHelper.indent", noteEditorRef, true); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    /// <summary>
+    /// Indenta a sinistra le righe selezionate nell'editor Note.
+    /// </summary>
+    private async Task NoteIndentaLeft()
+    {
+        try { await JS.InvokeVoidAsync("noteEditorHelper.indent", noteEditorRef, false); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteHighlightGiallo()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", noteEditorRef, "yellow"); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteHighlightArancione()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", noteEditorRef, "orange"); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteBarrato()
+    {
+        try { await JS.InvokeVoidAsync("eseguiBarrato", noteEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteColoreTessoRosso()
+    {
+        try { await JS.InvokeVoidAsync("eseguiColoreTesto", noteEditorRef, "red"); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteRimuoviFormattazione()
+    {
+        try { await JS.InvokeVoidAsync("rimuoviFormattazione", noteEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteInserisciTimestamp()
+    {
+        var ts = DateTime.Now.ToString("HH:mm:ss") + " ";
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", noteEditorRef, ts); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteInserisciSeparatore()
+    {
+        var sep = new string('─', 120);
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", noteEditorRef, sep); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteInserisciSeparatoreSpesso()
+    {
+        var sep = new string('█', 120);
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", noteEditorRef, sep); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteInserisciSeparatoreRosso()
+    {
+        var sep = "<span style=\"color:red\">" + new string('█', 120) + "</span>";
+        try { await JS.InvokeVoidAsync("inserisciHtmlACursore", noteEditorRef, sep); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteRimuoviRigheVuote()
+    {
+        try { await JS.InvokeVoidAsync("noteEditorHelper.rimuoviRigheVuote", noteEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    /// <summary>
+    /// Sostituisce le occorrenze di "TODO" (parola isolata) con "--" nel Note editor,
+    /// preservando la formattazione HTML.
+    /// </summary>
+    private async Task NoteRimuoviTodo()
+    {
+        try { await JS.InvokeVoidAsync("sostituisciTodoNeiNodi", noteEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    #endregion
+
+    #region Gestione Cartella Documentazione
+
+    /// <summary>
+    /// Apre il dialog per selezionare una cartella di documentazione.
+    /// Utilizza FolderPicker del CommunityToolkit.Maui.
+    /// </summary>
+    private async Task SelezionaCartella()
+    {
+        try
+        {
+            var result = await FolderPicker.Default.PickAsync(default);
+            
+            if (result.IsSuccessful && result.Folder != null)
+            {
+                AttivitaCorrente.CartellaDocumentazione = result.Folder.Path;
+            }
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nella selezione della cartella: {ex.Message}", true);
+        }
+    }
+
+    /// <summary>
+    /// Apre la cartella di documentazione selezionata in Esplora Risorse.
+    /// </summary>
+    private void ApriCartella()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(AttivitaCorrente.CartellaDocumentazione) && 
+                Directory.Exists(AttivitaCorrente.CartellaDocumentazione))
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = AttivitaCorrente.CartellaDocumentazione,
+                    UseShellExecute = true
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nell'apertura della cartella: {ex.Message}", true);
+        }
+    }
+
+    #endregion
+
+    #region Filtro Oggi
+
+    /// <summary>
+    /// Imposta i filtri Anno/Mese/Giorno alla data odierna e ricarica le attività.
+    /// </summary>
+    private async Task ImpostaOggi()
+    {
+        var oggi = DateTime.Today;
+        FiltroAnno = oggi.Year;
+        FiltroMese = oggi.Month;
+        FiltroGiorno = oggi.Day;
+        await CaricaAttivita();
+    }
+
+    /// <summary>
+    /// Imposta il filtro Anno all'anno corrente, azzera Mese e Giorno.
+    /// </summary>
+    private async Task ImpostaAnnoCorrente()
+    {
+        FiltroAnno = DateTime.Now.Year;
+        FiltroMese = null;
+        FiltroGiorno = null;
+        await CaricaAttivita();
+    }
+
+    /// <summary>
+    /// Imposta il filtro Anno e Mese al mese corrente, azzera il Giorno.
+    /// </summary>
+    private async Task ImpostaMeseCorrente()
+    {
+        var oggi = DateTime.Today;
+        FiltroAnno = oggi.Year;
+        FiltroMese = oggi.Month;
+        FiltroGiorno = null;
+        await CaricaAttivita();
+    }
+
+    #endregion
+
+    #region Gestione Filtri
+
+    /// <summary>
+    /// Resetta tutti i filtri e ricarica tutte le attività.
+    /// </summary>
+    private async Task ResetFiltri()
+    {
+        FiltroAnno = null;
+        FiltroMese = null;
+        FiltroGiorno = null;
+        TestoRicerca = string.Empty;
+        ricercaEseguita = false;
+        filtroSoloTodo = false;
+        await CaricaAttivita();
+    }
+
+    /// <summary>
+    /// Gestisce la pressione di Enter nel campo di ricerca.
+    /// </summary>
+    private async Task OnSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await EseguiRicercaEAbilita();
+        }
+    }
+
+    /// <summary>
+    /// Esegue la ricerca e abilita il tasto "Dettagli ricerca"
+    /// </summary>
+    private async Task EseguiRicercaEAbilita()
+    {
+        await CaricaAttivita();
+        
+        // Abilita il tasto "Dettagli ricerca" solo se c'è testo di ricerca
+        ricercaEseguita = !string.IsNullOrWhiteSpace(TestoRicerca);
+    }
+
+    #endregion
+
+    #region Gestione Modale Ricerca Avanzata
+
+    /// <summary>
+    /// Apre la modale di ricerca avanzata.
+    /// Carica tutte le attività (senza filtri data) per permettere una ricerca completa.
+    /// </summary>
+    private async Task ApriDettagliRicerca()
+    {
+        try
+        {
+            // Carica TUTTE le attività per la ricerca (senza filtri data)
+            attivitaTuttePerRicerca = await ActivityService.GetActivitiesAsync(
+                anno: null, 
+                mese: null, 
+                giorno: null, 
+                ricerca: null,  // Nessun filtro testo, la modale farà la ricerca
+                adminMode: isAdminMode);
+            
+            // Applica filtro "Solo TODO" se attivo
+            if (filtroSoloTodo)
+            {
+                attivitaTuttePerRicerca = attivitaTuttePerRicerca.Where(a => ContieneTodo(a)).ToList();
+            }
+            
+            mostraModaleRicerca = true;
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel caricamento: {ex.Message}", true);
+        }
+    }
+
+    /// <summary>
+    /// Chiude la modale di ricerca avanzata.
+    /// </summary>
+    private void ChiudiModaleRicerca()
+    {
+        mostraModaleRicerca = false;
+    }
+
+    /// <summary>
+    /// Gestisce la selezione di un'attività dalla modale di ricerca.
+    /// Popola il form principale con i dati dell'attività selezionata.
+    /// </summary>
+    private async Task OnAttivitaSelezionataDaModale(WorkActivityDto attivita)
+    {
+        // Popola il form con l'attività selezionata
+        await SelezionaAttivita(attivita);
+
+        // Chiudi la modale
+        mostraModaleRicerca = false;
+
+        // Messaggio di conferma
+        MostraMessaggio($"Attività ID {attivita.Id} del {attivita.Data:dd/MM/yyyy} selezionata", false);
+    }
+
+    #endregion
+
+    #region Gestione TODO List
+
+    /// <summary>
+    /// Apre la modale TODO List.
+    /// </summary>
+    private void ApriTodoList()
+    {
+        mostraTodoList = true;
+    }
+
+    /// <summary>
+    /// Chiude la modale TODO List.
+    /// </summary>
+    private void ChiudiTodoList()
+    {
+        mostraTodoList = false;
+    }
+
+    /// <summary>
+    /// Aggiorna il conteggio dei TODO quando cambia nella modale.
+    /// </summary>
+    private void OnTodoCountChanged(int count)
+    {
+        todoCount = count;
+    }
+
+    #endregion
+
+    #region Gestione Appunti
+
+    /// <summary>
+    /// Apre la modale Appunti.
+    /// </summary>
+    private void ApriAppunti()
+    {
+        mostraAppunti = true;
+    }
+
+    /// <summary>
+    /// Chiude la modale Appunti.
+    /// </summary>
+    private void ChiudiAppunti()
+    {
+        mostraAppunti = false;
+    }
+
+    /// <summary>
+    /// Aggiorna il conteggio degli Appunti quando cambia nella modale.
+    /// </summary>
+    private void OnAppuntiCountChanged(int count)
+    {
+        appuntiCount = count;
+    }
+
+    #endregion
+
+    #region Gestione Editor Congelati
+
+    /// <summary>
+    /// Apre la modale per la gestione dei congelati.
+    /// </summary>
+    private void ApriEditorCongelati()
+    {
+        mostraEditorCongelati = true;
+    }
+
+    /// <summary>
+    /// Chiude la modale editor congelati.
+    /// </summary>
+    private void ChiudiEditorCongelati()
+    {
+        mostraEditorCongelati = false;
+    }
+
+    /// <summary>
+    /// Callback quando gli ambienti vengono modificati nell'editor.
+    /// Ricarica la lista degli ambienti.
+    /// </summary>
+    private async Task OnAmbientiChanged()
+    {
+        ambienti = await ActivityService.GetAmbientiAsync();
+    }
+
+    #endregion
+
+    #region Gestione Editor Clienti
+
+    private void ApriEditorClienti()
+    {
+        mostraEditorClienti = true;
+    }
+
+    private void ChiudiEditorClienti()
+    {
+        mostraEditorClienti = false;
+    }
+
+    private async Task OnClientiChanged()
+    {
+        var dtos = await ClienteService.GetClientiAsync();
+        clienti = dtos.Select(d => new Cliente { Id = d.Id, Nome = d.Nome, Attivo = d.Attivo }).ToList();
+    }
+
+    #endregion
+
+    #region Gestione Segnalazioni
+
+    private void ApriSegnalazioni()
+    {
+        mostraSegnalazioni = true;
+    }
+
+    private async Task ChiudiSegnalazioni()
+    {
+        mostraSegnalazioni = false;
+        segnalazioniCount = await SegnalazioneService.GetSegnalazioniNonRisolteCountAsync();
+    }
+
+    #endregion
+
+    #region Gestione Tipi Attività
+
+    private void ApriEditorTipiAttivita()
+    {
+        mostraEditorTipiAttivita = true;
+    }
+
+    private void ChiudiEditorTipiAttivita()
+    {
+        mostraEditorTipiAttivita = false;
+    }
+
+    private async Task OnTipiAttivitaChanged()
+    {
+        tipiAttivitaLista = await TipiAttivitaService.GetTipiAsync();
+        // Se il tipo corrente non esiste più nella lista, torna a Lavoro
+        if (!tipiAttivitaLista.Any(t => t.Nome == AttivitaCorrente.TipoAttivita))
+            AttivitaCorrente.TipoAttivita = TipiAttivita.Lavoro;
+    }
+
+    #endregion
+
+    #region Gestione Calendario
+
+    private void ApriCalendario()
+    {
+        mostraCalendario = true;
+    }
+
+    private async Task ChiudiCalendario()
+    {
+        mostraCalendario = false;
+        eventiImminenti = await CalendarioService.GetEventiImminentiAsync();
+    }
+
+    private async Task OnEventiCalendarioChanged()
+    {
+        eventiImminenti = await CalendarioService.GetEventiImminentiAsync();
+    }
+
+    #endregion
+
+    #region Export
+
+    /// <summary>
+    /// Cartella di destinazione degli export (creata se non esiste).
+    /// </summary>
+    private string GetExportFolder()
+    {
+        var folder = System.IO.Path.Combine(AppContext.BaseDirectory, "Export");
+        System.IO.Directory.CreateDirectory(folder);
+        return folder;
+    }
+
+    /// <summary>
+    /// Esporta la griglia visualizzata in formato Excel (.xlsx).
+    /// </summary>
+    private async Task EsportaGrigliaXlsx()
+    {
+        try
+        {
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var nomeFile = $"ElencoAttivitàAl{timestamp}.xlsx";
+            var percorso = System.IO.Path.Combine(GetExportFolder(), nomeFile);
+
+            using var wb = new ClosedXML.Excel.XLWorkbook();
+            var ws = wb.Worksheets.Add("Attività");
+
+            // Intestazioni
+            int col = 1;
+            if (isAdminMode) ws.Cell(1, col++).Value = "Utente";
+            ws.Cell(1, col++).Value = "Data";
+            ws.Cell(1, col++).Value = "Tipo";
+            ws.Cell(1, col++).Value = "Descrizione";
+            ws.Cell(1, col++).Value = "Cliente";
+            ws.Cell(1, col++).Value = "Ore";
+            ws.Cell(1, col++).Value = "Versione";
+
+            // Stile intestazioni
+            var headerRow = ws.Row(1);
+            headerRow.Style.Font.Bold = true;
+            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.DarkGray;
+            headerRow.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+
+            // Dati
+            int row = 2;
+            foreach (var att in Attivita)
+            {
+                col = 1;
+                if (isAdminMode) ws.Cell(row, col++).Value = att.UtenteUsername;
+                ws.Cell(row, col).Style.NumberFormat.Format = "dd/MM/yyyy";
+                ws.Cell(row, col++).Value = att.Data;
+                ws.Cell(row, col++).Value = att.TipoAttivita;
+                ws.Cell(row, col++).Value = att.Descrizione;
+                ws.Cell(row, col++).Value = att.ClienteNome;
+                ws.Cell(row, col++).Value = att.OreLavorate;
+                ws.Cell(row, col++).Value = att.Versione;
+                row++;
+            }
+
+            ws.Columns().AdjustToContents();
+            wb.SaveAs(percorso);
+
+            ultimoExport = percorso;
+            MostraMessaggio($"Esportato: {nomeFile}", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore export XLSX: {ex.Message}", true);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Esporta il dettaglio di tutte le attività visualizzate in un file TXT.
+    /// </summary>
+    private async Task EsportaDettagliTxt()
+    {
+        try
+        {
+            var dal = Attivita.Any() ? Attivita.Min(a => a.Data).ToString("yyyyMMdd") : "n_a";
+            var al  = Attivita.Any() ? Attivita.Max(a => a.Data).ToString("yyyyMMdd") : "n_a";
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var nomeFile = $"DettaglioTutteLeAttività_{dal}_{al}_{timestamp}.txt";
+            var percorso = System.IO.Path.Combine(GetExportFolder(), nomeFile);
+
+            var sb = new System.Text.StringBuilder();
+            bool primo = true;
+            foreach (var att in Attivita)
+            {
+                if (!primo) sb.AppendLine(new string('=', 60));
+                sb.AppendLine(GeneraTestoAttivitaPlain(att));
+                primo = false;
+            }
+
+            System.IO.File.WriteAllText(percorso, sb.ToString(), System.Text.Encoding.UTF8);
+            ultimoExport = percorso;
+            MostraMessaggio($"Esportato: {nomeFile}", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore export TXT: {ex.Message}", true);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Esporta una singola attività come file TXT.
+    /// </summary>
+    private async Task EsportaAttivitaComeTxt(WorkActivityDto att)
+    {
+        try
+        {
+            var data = att.Data.ToString("yyyyMMdd");
+            var desc = string.Concat((att.Descrizione ?? "").Take(40)
+                .Where(c => !System.IO.Path.GetInvalidFileNameChars().Contains(c)));
+            var timestamp = DateTime.Now.ToString("HHmmss");
+            var nomeFile = $"DettaglioAttività_{data}_{desc}_{timestamp}.txt";
+            var percorso = System.IO.Path.Combine(GetExportFolder(), nomeFile);
+
+            System.IO.File.WriteAllText(percorso, GeneraTestoAttivitaPlain(att), System.Text.Encoding.UTF8);
+            ultimoExport = percorso;
+            MostraMessaggio($"Esportato: {nomeFile}", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore export TXT: {ex.Message}", true);
+        }
+
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Apre la cartella Export in Esplora Risorse.
+    /// </summary>
+    private void ApriCartellaExport()
+    {
+        try
+        {
+            var folder = GetExportFolder();
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = folder,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore apertura cartella: {ex.Message}", true);
+        }
+    }
+
+    /// <summary>
+    /// Genera il testo plain di un'attività (senza HTML) per export TXT.
+    /// </summary>
+    private string GeneraTestoAttivitaPlain(WorkActivityDto att)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"📅 Data: {att.Data:dd/MM/yyyy}");
+        if (!string.IsNullOrEmpty(att.TipoAttivita) && att.TipoAttivita != TipiAttivita.Lavoro)
+            sb.AppendLine($"🏷️ Tipo: {att.TipoAttivita}");
+        sb.AppendLine($"📝 Descrizione: {att.Descrizione ?? "-"}");
+        if (!string.IsNullOrEmpty(att.UrlTicket))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"🔗 URL Ticket / CR / Backlog:");
+            sb.AppendLine(att.UrlTicket);
+        }
+        sb.AppendLine($"👤 Cliente: {att.ClienteNome ?? "-"}");
+        sb.AppendLine($"⏱️ Ore Lavorate: {att.OreLavorate}");
+        if (!string.IsNullOrEmpty(att.Versione))
+            sb.AppendLine($"🏷️ Versione: {att.Versione}");
+        if (!string.IsNullOrEmpty(att.Vedere))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"👀 Vedere:");
+            sb.AppendLine(att.Vedere);
+        }
+        if (!string.IsNullOrEmpty(att.CartellaDocumentazione))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"📁 Cartella Documentazione:");
+            sb.AppendLine(att.CartellaDocumentazione);
+        }
+        if (!string.IsNullOrEmpty(att.Note))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"📋 Descrizione dettagliata lavoro svolto:");
+            sb.AppendLine(HtmlToPlainText(att.Note));
+        }
+        if (!string.IsNullOrEmpty(att.TestoCheckIn))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"✏️ Testo del check-in:");
+            sb.AppendLine(att.TestoCheckIn);
+        }
+        if (!string.IsNullOrEmpty(att.ChangesetCoinvolti))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"🔢 Elenco Changeset e lista files coinvolti:");
+            sb.AppendLine(HtmlToPlainText(att.ChangesetCoinvolti));
+        }
+        if (!string.IsNullOrEmpty(att.UrlPatchRilasci))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"📦 URL Patch/Pacchetto nei rilasci:");
+            sb.AppendLine(att.UrlPatchRilasci);
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Rimuove i tag HTML da una stringa e decodifica le entità HTML di base.
+    /// Usato per la generazione di testi plain da campi che possono contenere HTML.
+    /// </summary>
+    private static string HtmlToPlainText(string? html)
+    {
+        if (string.IsNullOrEmpty(html)) return string.Empty;
+        // Sostituisce <br>, </p> e </div> con newline (i contenteditable usano <div> per gli a capo)
+        html = System.Text.RegularExpressions.Regex.Replace(html, @"<br\s*/?>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        html = System.Text.RegularExpressions.Regex.Replace(html, @"</p>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        html = System.Text.RegularExpressions.Regex.Replace(html, @"</div>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        // Rimuove tutti gli altri tag
+        html = System.Text.RegularExpressions.Regex.Replace(html, @"<[^>]+>", string.Empty);
+        // Decodifica entità HTML di base
+        html = html.Replace("&amp;", "&").Replace("&lt;", "<").Replace("&gt;", ">")
+                   .Replace("&nbsp;", " ").Replace("&quot;", "\"").Replace("&#39;", "'");
+        // Normalizza newline multipli consecutivi (max 2) per pulizia
+        html = System.Text.RegularExpressions.Regex.Replace(html, @"\n{3,}", "\n\n");
+        return html;
+    }
+
+    #endregion
+
+    #region Utility
+
+    /// <summary>
+    /// Mostra un messaggio di feedback all'utente.
+    /// </summary>
+    private void MostraMessaggio(string testo, bool errore)
+    {
+        messaggio = testo;
+        isErrore = errore;
+    }
+
+    /// <summary>
+    /// Mostra il messaggio e, per errori critici (salvataggio/connessione DB),
+    /// mostra anche una popup modale in modo da non passare inosservata.
+    /// </summary>
+    private void MostraMessaggioConPopup(string testo, bool errore)
+    {
+        MostraMessaggio(testo, errore);
+        if (errore)
+        {
+            messaggioPopupErroreDb = testo;
+            mostraPopupErroreDb = true;
+        }
+    }
+
+    /// <summary>
+    /// Tronca un testo alla lunghezza specificata, aggiungendo "..." se necessario.
+    /// </summary>
+    private string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text))
+            return "-";
+        return text.Length > maxLength ? text[..maxLength] + "..." : text;
+    }
+
+    /// <summary>
+    /// Verifica se un'attività contiene la parola TODO come parola isolata
+    /// (non come parte di un'altra parola, es: "metodo" non conta).
+    /// Usa regex con word boundary per maggiore precisione.
+    /// </summary>
+    private bool ContieneTodo(WorkActivityDto attivita)
+    {
+        return TodoRegex.IsMatch(attivita.Descrizione ?? "")
+            || TodoRegex.IsMatch(HtmlToPlainText(attivita.Note))
+            || TodoRegex.IsMatch(HtmlToPlainText(attivita.ChangesetCoinvolti))
+            || TodoRegex.IsMatch(attivita.UrlTicket ?? "");
+    }
+
+    /// <summary>
+    /// Verifica se uno specifico campo di testo contiene TODO come parola isolata.
+    /// Usato per evidenziare con bordo rosso il campo corrispondente nel form
+    /// quando l'attività selezionata contiene TODO.
+    /// </summary>
+    private bool CampoHaTodo(string? campo) =>
+        IsModifica && !string.IsNullOrEmpty(campo) && TodoRegex.IsMatch(HtmlToPlainText(campo));
+
+    // ===== Regex per rilevare URL nel campo UrlTicket =====
+    private static readonly System.Text.RegularExpressions.Regex UrlRegex =
+        new(@"https?://[^\s]+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Record che rappresenta un segmento di testo (URL o testo plain) per la visualizzazione cliccabile.
+    /// </summary>
+    private record UrlSegmento(string Testo, bool IsUrl);
+
+    /// <summary>
+    /// Verifica se il testo contiene almeno un URL http/https.
+    /// </summary>
+    private static bool ContienUrl(string? testo) =>
+        !string.IsNullOrEmpty(testo) && UrlRegex.IsMatch(testo);
+
+    /// <summary>
+    /// Divide il testo in segmenti URL e non-URL per la visualizzazione cliccabile.
+    /// </summary>
+    private static List<UrlSegmento> ParseUrlSegmenti(string? testo)
+    {
+        var result = new List<UrlSegmento>();
+        if (string.IsNullOrEmpty(testo)) return result;
+
+        var lastIndex = 0;
+        foreach (System.Text.RegularExpressions.Match m in UrlRegex.Matches(testo))
+        {
+            if (m.Index > lastIndex)
+                result.Add(new UrlSegmento(testo[lastIndex..m.Index], false));
+            result.Add(new UrlSegmento(m.Value, true));
+            lastIndex = m.Index + m.Length;
+        }
+        if (lastIndex < testo.Length)
+            result.Add(new UrlSegmento(testo[lastIndex..], false));
+
+        return result;
+    }
+
+    /// <summary>
+    /// Apre un URL nel browser predefinito del sistema.
+    /// </summary>
+    private void ApriUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch { /* Ignora errori di apertura URL */ }
+    }
+
+    /// <summary>
+    /// Aggiunge il metodo per copiare il TestoCheckIn nel campo Descrizione.
+    /// </summary>
+    private void CopiaCheckInInDescrizione()
+    {
+        if (!string.IsNullOrWhiteSpace(AttivitaCorrente.TestoCheckIn))
+            AttivitaCorrente.Descrizione = AttivitaCorrente.TestoCheckIn;
+    }
+
+    /// <summary>
+    /// Genera la rappresentazione testuale di un'attività (formato leggibile per incolla/email).
+    /// Simile al formato della Ricerca Avanzata, senza HTML.
+    /// </summary>
+    private string GeneraTestoAttivita(WorkActivityDto att)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"📅 Data: {att.Data:dd/MM/yyyy}");
+        if (!string.IsNullOrEmpty(att.TipoAttivita) && att.TipoAttivita != TipiAttivita.Lavoro)
+            sb.AppendLine($"🏷️ Tipo: {att.TipoAttivita}");
+        sb.AppendLine($"📝 Descrizione: {att.Descrizione ?? "-"}");
+        if (!string.IsNullOrEmpty(att.UrlTicket))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"🔗 URL Ticket / CR / Backlog:");
+            sb.AppendLine(att.UrlTicket);
+        }
+        sb.AppendLine($"👤 Cliente: {att.ClienteNome ?? "-"}");
+        sb.AppendLine($"⏱️ Ore Lavorate: {att.OreLavorate}");
+        if (!string.IsNullOrEmpty(att.Versione))
+            sb.AppendLine($"🏷️ Versione: {att.Versione}");
+        if (!string.IsNullOrEmpty(att.Vedere))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"👀 Vedere:");
+            sb.AppendLine(att.Vedere);
+        }
+        if (!string.IsNullOrEmpty(att.CartellaDocumentazione))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"📁 Cartella Documentazione:");
+            sb.AppendLine(att.CartellaDocumentazione);
+        }
+        if (!string.IsNullOrEmpty(att.Note))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"📋 Descrizione dettagliata lavoro svolto:");
+            sb.AppendLine(HtmlToPlainText(att.Note));
+        }
+        if (!string.IsNullOrEmpty(att.TestoCheckIn))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"✏️ Testo del check-in:");
+            sb.AppendLine(att.TestoCheckIn);
+        }
+        if (!string.IsNullOrEmpty(att.ChangesetCoinvolti))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"🔢 Elenco Changeset e lista files coinvolti:");
+            sb.AppendLine(HtmlToPlainText(att.ChangesetCoinvolti));
+        }
+        if (!string.IsNullOrEmpty(att.UrlPatchRilasci))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"📦 URL Patch/Pacchetto nei rilasci:");
+            sb.AppendLine(att.UrlPatchRilasci);
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Copia la rappresentazione testuale dell'attività negli appunti di sistema.
+    /// </summary>
+    private async Task CopiaAttivitaComeTesto(WorkActivityDto attivita)
+    {
+        try
+        {
+            var testo = GeneraTestoAttivita(attivita);
+            await JS.InvokeVoidAsync("copyToClipboard", testo);
+            MostraMessaggio("Attività copiata negli appunti!", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore durante la copia: {ex.Message}", true);
+        }
+    }
+
+    /// <summary>
+    /// Restituisce il markup HTML del badge per il tipo attività (da renderizzare come MarkupString).
+    /// </summary>
+    private MarkupString GetTipoBadge(string? tipo)
+    {
+        return (tipo ?? TipiAttivita.Lavoro) switch
+        {
+            TipiAttivita.Permesso => new MarkupString("<span class=\"badge bg-warning text-dark\">🕐 Permesso</span>"),
+            TipiAttivita.Ferie    => new MarkupString("<span class=\"badge bg-info text-dark\">🏖️ Ferie</span>"),
+            TipiAttivita.Lavoro   => new MarkupString("<span class=\"badge bg-light text-dark\">💼</span>"),
+            var t => new MarkupString($"<span class=\"badge bg-secondary text-white\">📌 {System.Net.WebUtility.HtmlEncode(t)}</span>")
+        };
+    }
+
+    /// <summary>
+    /// Determina la classe CSS per una riga della griglia.
+    /// Gestisce sia la selezione che l'evidenziazione TODO.
+    /// </summary>
+    private string GetRowClass(WorkActivityDto attivita)
+    {
+        var classes = new List<string>();
+
+        // Riga selezionata (colore giallo vivace per distinguerla facilmente)
+        if (AttivitaCorrente.Id == attivita.Id)
+        {
+            classes.Add("row-selected");
+        }
+
+        // Riga con TODO (sfondo rosso)
+        if (ContieneTodo(attivita))
+        {
+            classes.Add("todo-row");
+        }
+
+        // Riga con zero ore (testo grigio in corsivo)
+        if (attivita.OreLavorate == 0)
+        {
+            classes.Add("zero-ore-row");
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    #endregion
+}

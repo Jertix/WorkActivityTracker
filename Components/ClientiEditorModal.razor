@@ -1,0 +1,315 @@
+@using WorkActivityTracker.Models
+@using WorkActivityTracker.Services
+@inject ClienteService ClienteService
+
+@*
+    Componente modale per la gestione della lista clienti.
+    Permette di aggiungere, modificare ed eliminare clienti con logging.
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg" style="max-width: 80%;">
+            <div class="modal-content" style="height: 80vh;">
+
+                @* ===== HEADER ===== *@
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">🏢 Gestione Clienti</h5>
+                    <button type="button" class="btn-close" @onclick="Chiudi"></button>
+                </div>
+
+                @* ===== BODY ===== *@
+                <div class="modal-body" style="overflow-y: auto;">
+
+                    @* ===== GRIGLIA CLIENTI ===== *@
+                    <div class="card mb-3">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <strong>Elenco Clienti (@clienti.Count elementi)</strong>
+                            @if (isLoading)
+                            {
+                                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                    <span class="visually-hidden">Caricamento...</span>
+                                </div>
+                            }
+                        </div>
+                        <div class="card-body p-0">
+                            <div style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-hover table-striped mb-0">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th>Nome</th>
+                                            <th style="width: 80px;">Attivo</th>
+                                            <th style="width: 80px;">Azioni</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (clienti.Any())
+                                        {
+                                            @foreach (var cliente in clienti)
+                                            {
+                                                <tr @onclick="() => SelezionaCliente(cliente)"
+                                                    class="@(clienteCorrente.Id == cliente.Id ? "table-active" : "")"
+                                                    style="cursor: pointer;">
+                                                    <td class="@(!cliente.Attivo ? "text-muted text-decoration-line-through" : "fw-bold")">
+                                                        @cliente.Nome
+                                                    </td>
+                                                    <td>
+                                                        @if (cliente.Attivo)
+                                                        {
+                                                            <span class="badge bg-success">Sì</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="badge bg-secondary">No</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        <button class="btn btn-sm btn-outline-danger"
+                                                                @onclick="() => EliminaCliente(cliente.Id)"
+                                                                @onclick:stopPropagation="true"
+                                                                title="Disattiva cliente">
+                                                            🗑️
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="3" class="text-center text-muted py-4">
+                                                    Nessun cliente presente. Clicca "Nuovo" per aggiungerne uno!
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== FORM DETTAGLIO/INSERIMENTO ===== *@
+                    <div class="card">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <strong>@(IsModifica ? "📝 Modifica Cliente" : "➕ Nuovo Cliente")</strong>
+                            @if (clienteCorrente.Id > 0)
+                            {
+                                <span class="badge bg-primary">ID: @clienteCorrente.Id</span>
+                            }
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                @* Nome *@
+                                <div class="col-md-6">
+                                    <label class="form-label">Nome <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" @bind="clienteCorrente.Nome"
+                                           maxlength="100" placeholder="Es: Cattolica, Aviva, Axa..." />
+                                </div>
+
+                                @* Attivo (solo in modifica) *@
+                                @if (IsModifica)
+                                {
+                                    <div class="col-md-2 d-flex align-items-end">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkClienteAttivo"
+                                                   @bind="clienteCorrente.Attivo" />
+                                            <label class="form-check-label" for="chkClienteAttivo">
+                                                Attivo
+                                            </label>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== MESSAGGI ===== *@
+                    @if (!string.IsNullOrEmpty(messaggio))
+                    {
+                        <div class="alert @(isErrore ? "alert-danger" : "alert-success") alert-dismissible fade show mt-3" role="alert">
+                            @messaggio
+                            <button type="button" class="btn-close" @onclick="() => messaggio = string.Empty"></button>
+                        </div>
+                    }
+
+                    @* ===== NOTA LOGGING ===== *@
+                    <div class="alert alert-info mt-3 small">
+                        <strong>📝 Nota:</strong> Tutte le modifiche vengono registrate nella tabella di log per tracciabilità.
+                        L'eliminazione non rimuove fisicamente il record, ma lo disattiva per preservare le associazioni esistenti.
+                    </div>
+                </div>
+
+                @* ===== FOOTER ===== *@
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Chiudi">
+                        ❌ Chiudi
+                    </button>
+                    <button type="button" class="btn btn-success" @onclick="NuovoCliente" disabled="@isSaving">
+                        ➕ Nuovo
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="SalvaCliente" disabled="@isSaving">
+                        💾 Salva
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    #region Parameters
+
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public EventCallback OnChiudi { get; set; }
+
+    [Parameter]
+    public EventCallback OnClientiChanged { get; set; }
+
+    #endregion
+
+    #region Private Fields
+
+    private List<ClienteDto> clienti = new();
+    private ClienteDto clienteCorrente = new() { Attivo = true };
+    private bool isLoading = false;
+    private bool isSaving = false;
+    private string messaggio = string.Empty;
+    private bool isErrore = false;
+
+    private bool IsModifica => clienteCorrente.Id > 0;
+
+    #endregion
+
+    #region Lifecycle
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible)
+        {
+            await CaricaClienti();
+        }
+    }
+
+    #endregion
+
+    #region Data Loading
+
+    private async Task CaricaClienti()
+    {
+        isLoading = true;
+        try
+        {
+            clienti = await ClienteService.GetAllClientiAsync();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel caricamento: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    #endregion
+
+    #region CRUD Operations
+
+    private void NuovoCliente()
+    {
+        clienteCorrente = new ClienteDto { Attivo = true };
+        messaggio = string.Empty;
+    }
+
+    private void SelezionaCliente(ClienteDto cliente)
+    {
+        clienteCorrente = new ClienteDto
+        {
+            Id = cliente.Id,
+            Nome = cliente.Nome,
+            Attivo = cliente.Attivo
+        };
+        messaggio = string.Empty;
+    }
+
+    private async Task SalvaCliente()
+    {
+        if (string.IsNullOrWhiteSpace(clienteCorrente.Nome))
+        {
+            MostraMessaggio("Il nome è obbligatorio", true);
+            return;
+        }
+
+        try
+        {
+            isSaving = true;
+
+            if (IsModifica)
+            {
+                await ClienteService.UpdateClienteAsync(clienteCorrente);
+                MostraMessaggio("Cliente aggiornato con successo!", false);
+            }
+            else
+            {
+                await ClienteService.AddClienteAsync(clienteCorrente);
+                MostraMessaggio("Cliente aggiunto con successo!", false);
+            }
+
+            await CaricaClienti();
+            await OnClientiChanged.InvokeAsync();
+            NuovoCliente();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel salvataggio: {ex.Message}", true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task EliminaCliente(int id)
+    {
+        try
+        {
+            await ClienteService.DeleteClienteAsync(id);
+            await CaricaClienti();
+            await OnClientiChanged.InvokeAsync();
+
+            if (clienteCorrente.Id == id)
+            {
+                NuovoCliente();
+            }
+
+            MostraMessaggio("Cliente disattivato", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nell'eliminazione: {ex.Message}", true);
+        }
+    }
+
+    #endregion
+
+    #region UI Helpers
+
+    private async Task Chiudi()
+    {
+        clienteCorrente = new ClienteDto { Attivo = true };
+        messaggio = string.Empty;
+        await OnChiudi.InvokeAsync();
+    }
+
+    private void MostraMessaggio(string msg, bool errore)
+    {
+        messaggio = msg;
+        isErrore = errore;
+    }
+
+    #endregion
+}

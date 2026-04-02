@@ -1,0 +1,456 @@
+@using WorkActivityTracker.Models
+@using WorkActivityTracker.Services
+@inject CalendarioService CalendarioService
+
+@*
+    Componente modale per il calendario eventi con avvisi configurabili.
+    Mostra un calendario mensile con evidenziazione dei giorni con eventi.
+    Permette di aggiungere, modificare e risolvere eventi per data.
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1100;">
+        <div class="modal-dialog modal-dialog-scrollable modal-xl" style="max-width: 85%;">
+            <div class="modal-content" style="height: 85vh;">
+
+                @* ===== HEADER ===== *@
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">📅 Calendario Eventi</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Chiudi"></button>
+                </div>
+
+                @* ===== BODY ===== *@
+                <div class="modal-body p-0" style="overflow-y: auto;">
+
+                    @if (!string.IsNullOrEmpty(messaggio))
+                    {
+                        <div class="alert @(isErrore ? "alert-danger" : "alert-success") alert-dismissible py-2 m-2" role="alert">
+                            @messaggio
+                            <button type="button" class="btn-close" @onclick="() => messaggio = string.Empty"></button>
+                        </div>
+                    }
+
+                    <div class="row g-0 h-100">
+
+                        @* ===== COLONNA SINISTRA: Calendario ===== *@
+                        <div class="col-md-7 border-end p-3">
+
+                            @* Navigazione mese *@
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="MesePrecedente">◀</button>
+                                <h6 class="mb-0 fw-bold">
+                                    @meseCorrente.ToString("MMMM yyyy")
+                                </h6>
+                                <button class="btn btn-outline-secondary btn-sm" @onclick="MeseSuccessivo">▶</button>
+                            </div>
+
+                            @* Griglia calendario *@
+                            <table class="table table-bordered table-sm mb-0 calendario-table">
+                                <thead>
+                                    <tr class="table-dark text-center">
+                                        <th>Lun</th>
+                                        <th>Mar</th>
+                                        <th>Mer</th>
+                                        <th>Gio</th>
+                                        <th>Ven</th>
+                                        <th style="color: #ffd700;">Sab</th>
+                                        <th style="color: #ffa07a;">Dom</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{
+                                        var primoGiorno = new DateTime(meseCorrente.Year, meseCorrente.Month, 1);
+                                        var ultimoGiorno = new DateTime(meseCorrente.Year, meseCorrente.Month,
+                                            DateTime.DaysInMonth(meseCorrente.Year, meseCorrente.Month));
+                                        // DayOfWeek: Sunday=0, Monday=1 ... -> offset per lunedì come primo giorno
+                                        int offsetInizio = ((int)primoGiorno.DayOfWeek + 6) % 7;
+                                        var giornoCorrente = primoGiorno.AddDays(-offsetInizio);
+                                    }
+                                    @for (int riga = 0; riga < 6; riga++)
+                                    {
+                                        <tr>
+                                            @for (int col = 0; col < 7; col++)
+                                            {
+                                                var giorno = giornoCorrente;
+                                                var isDelMese = giorno.Month == meseCorrente.Month;
+                                                var isOggi = giorno == DateTime.Today;
+                                                var isSelezionato = giorno == giornoSelezionato;
+                                                var haEventi = giorniConEventi.Contains(giorno);
+
+                                                <td class="text-center p-0"
+                                                    style="cursor: @(isDelMese ? "pointer" : "default");
+                                                           min-width: 36px; height: 38px;
+                                                           background-color: @(isSelezionato ? "#cce5ff" : isOggi ? "#fff3cd" : "");
+                                                           opacity: @(isDelMese ? "1" : "0.35");"
+                                                    @onclick="() => SelezionaGiorno(giorno)">
+                                                    <span class="@(isOggi ? "fw-bold text-primary" : "") small">
+                                                        @giorno.Day
+                                                    </span>
+                                                    @if (haEventi && isDelMese)
+                                                    {
+                                                        <span class="d-block" style="width: 6px; height: 6px; border-radius: 50%; background: #0d6efd; margin: 0 auto; margin-top: -2px;"></span>
+                                                    }
+                                                </td>
+                                                giornoCorrente = giornoCorrente.AddDays(1);
+                                            }
+                                        </tr>
+                                        if (giornoCorrente > ultimoGiorno && riga >= 3)
+                                            break;
+                                    }
+                                </tbody>
+                            </table>
+
+                            @* ===== EVENTI DEL GIORNO SELEZIONATO ===== *@
+                            @if (giornoSelezionato.HasValue)
+                            {
+                                <div class="mt-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <strong class="small">
+                                            📋 Eventi del @giornoSelezionato.Value.ToString("dd/MM/yyyy")
+                                        </strong>
+                                        <button class="btn btn-primary btn-sm" @onclick="NuovoEvento">
+                                            ➕ Nuovo evento
+                                        </button>
+                                    </div>
+                                    @if (eventiGiorno.Any())
+                                    {
+                                        <div style="max-height: 200px; overflow-y: auto;">
+                                            @foreach (var evento in eventiGiorno)
+                                            {
+                                                <div class="card mb-1 @(eventoCorrente?.Id == evento.Id ? "border-primary" : "")"
+                                                     style="cursor: pointer; @(evento.Risolto ? "opacity: 0.6;" : "")"
+                                                     @onclick="() => SelezionaEvento(evento)">
+                                                    <div class="card-body py-1 px-2">
+                                                        <div class="d-flex justify-content-between align-items-start">
+                                                            <div>
+                                                                <span class="@(evento.Risolto ? "text-decoration-line-through text-muted" : "fw-bold") small">
+                                                                    @evento.Descrizione
+                                                                </span>
+                                                                <div class="text-muted" style="font-size: 0.7rem;">
+                                                                    🕐 @evento.DataEvento.ToString("HH:mm")
+                                                                    — avvisa @evento.GiorniPrimaAvviso gg prima
+                                                                </div>
+                                                            </div>
+                                                            @if (evento.Risolto)
+                                                            {
+                                                                <span class="badge bg-success ms-1">✓ Risolto</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="badge @GetBadgeClass(evento) ms-1">
+                                                                    @GetEtichettaGiorni(evento)
+                                                                </span>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <p class="text-muted small mt-2">Nessun evento per questo giorno.</p>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @* ===== COLONNA DESTRA: Form evento ===== *@
+                        <div class="col-md-5 p-3">
+                            <div class="card h-100">
+                                <div class="card-header bg-light">
+                                    <strong>@(eventoCorrente?.Id > 0 ? "📝 Modifica Evento" : "➕ Nuovo Evento")</strong>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-2">
+                                        <label class="form-label small fw-bold">Descrizione <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-sm"
+                                               @bind="formDescrizione"
+                                               placeholder="Es: Scadenza password, Riunione..." />
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label small fw-bold">Data evento <span class="text-danger">*</span></label>
+                                        <input type="date" class="form-control form-control-sm"
+                                               @bind="formData" />
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label small fw-bold">Ora evento</label>
+                                        <input type="time" class="form-control form-control-sm"
+                                               @bind="formOra" />
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label small fw-bold">Avvisa quanti giorni prima</label>
+                                        <select class="form-select form-select-sm" @bind="formGiorniPrima">
+                                            <option value="1">1 giorno prima</option>
+                                            <option value="2">2 giorni prima</option>
+                                            <option value="3">3 giorni prima</option>
+                                            <option value="5">5 giorni prima</option>
+                                            <option value="7">1 settimana prima</option>
+                                            <option value="10">10 giorni prima</option>
+                                            <option value="14">2 settimane prima</option>
+                                            <option value="30">1 mese prima</option>
+                                        </select>
+                                    </div>
+                                    @if (eventoCorrente?.Id > 0)
+                                    {
+                                        <div class="mb-2">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox"
+                                                       id="checkRisolto"
+                                                       @bind="formRisolto" />
+                                                <label class="form-check-label small" for="checkRisolto">
+                                                    ✅ Evento risolto / gestito
+                                                </label>
+                                            </div>
+                                            <small class="text-muted">
+                                                Spunta per rimuovere l'avviso dalla barra principale.
+                                            </small>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="card-footer d-flex gap-2 flex-wrap">
+                                    <button class="btn btn-success btn-sm" @onclick="SalvaEvento" disabled="@isSaving">
+                                        @if (isSaving)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-1"></span>
+                                        }
+                                        💾 Salva
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" @onclick="NuovoEvento">
+                                        ➕ Nuovo
+                                    </button>
+                                    @if (eventoCorrente?.Id > 0)
+                                    {
+                                        <button class="btn btn-outline-danger btn-sm" @onclick="EliminaEvento">
+                                            🗑️ Elimina
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                @* ===== FOOTER ===== *@
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="Chiudi">Chiudi</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnChiudi { get; set; }
+    [Parameter] public EventCallback OnEventiChanged { get; set; }
+
+    // Navigazione calendario
+    private DateTime meseCorrente = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? giornoSelezionato = DateTime.Today;
+    private HashSet<DateTime> giorniConEventi = new();
+
+    // Dati
+    private List<EventoCalendarioDto> eventiGiorno = new();
+    private EventoCalendarioDto? eventoCorrente = null;
+
+    // Form campi
+    private string formDescrizione = string.Empty;
+    private DateOnly formData = DateOnly.FromDateTime(DateTime.Today);
+    private TimeOnly formOra = new TimeOnly(9, 0);
+    private int formGiorniPrima = 5;
+    private bool formRisolto = false;
+
+    private bool isLoading = false;
+    private bool isSaving = false;
+    private string messaggio = string.Empty;
+    private bool isErrore = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible)
+        {
+            await CaricaGiorniConEventi();
+            if (giornoSelezionato.HasValue)
+                await CaricaEventiGiorno(giornoSelezionato.Value);
+        }
+    }
+
+    private async Task CaricaGiorniConEventi()
+    {
+        try
+        {
+            giorniConEventi = await CalendarioService.GetGiorniConEventiAsync(meseCorrente.Year, meseCorrente.Month);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore caricamento: {ex.Message}", true);
+        }
+    }
+
+    private async Task CaricaEventiGiorno(DateTime giorno)
+    {
+        try
+        {
+            eventiGiorno = await CalendarioService.GetEventiDelGiornoAsync(giorno);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore caricamento: {ex.Message}", true);
+        }
+    }
+
+    private async Task SelezionaGiorno(DateTime giorno)
+    {
+        if (giorno.Month != meseCorrente.Month) return;
+        giornoSelezionato = giorno;
+        await CaricaEventiGiorno(giorno);
+        NuovoEvento();
+        // Precompila la data nel form con il giorno selezionato
+        formData = DateOnly.FromDateTime(giorno);
+    }
+
+    private void SelezionaEvento(EventoCalendarioDto evento)
+    {
+        eventoCorrente = evento;
+        formDescrizione = evento.Descrizione;
+        formData = DateOnly.FromDateTime(evento.DataEvento);
+        formOra = TimeOnly.FromDateTime(evento.DataEvento);
+        formGiorniPrima = evento.GiorniPrimaAvviso;
+        formRisolto = evento.Risolto;
+    }
+
+    private void NuovoEvento()
+    {
+        eventoCorrente = null;
+        formDescrizione = string.Empty;
+        formData = DateOnly.FromDateTime(giornoSelezionato ?? DateTime.Today);
+        formOra = new TimeOnly(9, 0);
+        formGiorniPrima = 5;
+        formRisolto = false;
+        messaggio = string.Empty;
+    }
+
+    private async Task SalvaEvento()
+    {
+        if (string.IsNullOrWhiteSpace(formDescrizione))
+        {
+            MostraMessaggio("La descrizione è obbligatoria", true);
+            return;
+        }
+
+        var dataEvento = formData.ToDateTime(formOra);
+
+        isSaving = true;
+        try
+        {
+            if (eventoCorrente?.Id > 0)
+            {
+                eventoCorrente.Descrizione = formDescrizione;
+                eventoCorrente.DataEvento = dataEvento;
+                eventoCorrente.GiorniPrimaAvviso = formGiorniPrima;
+                eventoCorrente.Risolto = formRisolto;
+                await CalendarioService.UpdateEventoAsync(eventoCorrente);
+                MostraMessaggio("Evento aggiornato!", false);
+            }
+            else
+            {
+                var dto = new EventoCalendarioDto
+                {
+                    Descrizione = formDescrizione,
+                    DataEvento = dataEvento,
+                    GiorniPrimaAvviso = formGiorniPrima
+                };
+                await CalendarioService.AddEventoAsync(dto);
+                MostraMessaggio("Evento aggiunto!", false);
+            }
+
+            await CaricaGiorniConEventi();
+            if (giornoSelezionato.HasValue)
+                await CaricaEventiGiorno(giornoSelezionato.Value);
+            await OnEventiChanged.InvokeAsync();
+            NuovoEvento();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore: {ex.Message}", true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task EliminaEvento()
+    {
+        if (eventoCorrente?.Id > 0)
+        {
+            try
+            {
+                await CalendarioService.DeleteEventoAsync(eventoCorrente.Id);
+                await CaricaGiorniConEventi();
+                if (giornoSelezionato.HasValue)
+                    await CaricaEventiGiorno(giornoSelezionato.Value);
+                await OnEventiChanged.InvokeAsync();
+                NuovoEvento();
+                MostraMessaggio("Evento eliminato.", false);
+            }
+            catch (Exception ex)
+            {
+                MostraMessaggio($"Errore: {ex.Message}", true);
+            }
+        }
+    }
+
+    private async Task MesePrecedente()
+    {
+        meseCorrente = meseCorrente.AddMonths(-1);
+        giornoSelezionato = null;
+        eventiGiorno.Clear();
+        await CaricaGiorniConEventi();
+    }
+
+    private async Task MeseSuccessivo()
+    {
+        meseCorrente = meseCorrente.AddMonths(1);
+        giornoSelezionato = null;
+        eventiGiorno.Clear();
+        await CaricaGiorniConEventi();
+    }
+
+    private async Task Chiudi()
+    {
+        giorniConEventi.Clear();
+        eventiGiorno.Clear();
+        eventoCorrente = null;
+        await OnChiudi.InvokeAsync();
+    }
+
+    private string GetBadgeClass(EventoCalendarioDto e)
+    {
+        var gg = e.GiorniRimanenti;
+        if (gg < 0) return "bg-secondary";
+        if (gg <= 2) return "bg-danger";
+        if (gg <= 5) return "bg-warning text-dark";
+        return "bg-success";
+    }
+
+    private string GetEtichettaGiorni(EventoCalendarioDto e)
+    {
+        var gg = e.GiorniRimanenti;
+        if (gg < -1) return $"{(int)Math.Abs(gg)} gg fa";
+        if (gg < 0) return "ieri";
+        if (gg < 1) return "oggi";
+        if (gg < 2) return "domani";
+        return $"fra {(int)gg} gg";
+    }
+
+    private void MostraMessaggio(string testo, bool errore)
+    {
+        messaggio = testo;
+        isErrore = errore;
+    }
+}

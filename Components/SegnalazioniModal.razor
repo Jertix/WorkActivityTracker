@@ -1,0 +1,492 @@
+@using WorkActivityTracker.Models
+@using WorkActivityTracker.Services
+@inject SegnalazioneService SegnalazioneService
+@inject UserService UserService
+
+@*
+    Componente modale per la gestione delle segnalazioni bug e richieste di modifica.
+    Visibile a tutti gli utenti indipendentemente dalla modalità admin.
+    Permette di inviare nuove segnalazioni e rispondere a quelle degli altri utenti.
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 2100;">
+        <div class="modal-dialog modal-dialog-scrollable modal-xl" style="max-width: 90%;">
+            <div class="modal-content" style="height: 90vh;">
+
+                @* ===== HEADER ===== *@
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">🐛 Segnalazioni Bug / Richieste di Modifica</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Chiudi"></button>
+                </div>
+
+                @* ===== BODY ===== *@
+                <div class="modal-body" style="overflow-y: auto;">
+
+                    @* ===== NUOVA SEGNALAZIONE ===== *@
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <strong>➕ Nuova Segnalazione</strong>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-md-3">
+                                    <label class="form-label">Utente segnalante</label>
+                                    <input type="text" class="form-control" value="@nomeUtenteCorrente" readonly
+                                           title="L'utente segnalante è bloccato all'utente corrente" />
+                                </div>
+                                <div class="col-md-9">
+                                    <label class="form-label">Testo segnalazione <span class="text-danger">*</span></label>
+                                    <textarea class="form-control" @bind="nuovoTesto" rows="3"
+                                              placeholder="Descrivi il bug riscontrato o la modifica desiderata..."></textarea>
+                                </div>
+                                <div class="col-12 d-flex justify-content-end gap-2 align-items-center">
+                                    @if (!string.IsNullOrEmpty(messaggioNuova))
+                                    {
+                                        <span class="text-@(isErroreNuova ? "danger" : "success") small">@messaggioNuova</span>
+                                    }
+                                    <button class="btn btn-danger" @onclick="InviaSegnalazione" disabled="@isSaving">
+                                        📤 Invia Segnalazione
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== GRIGLIA SEGNALAZIONI ===== *@
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <div class="d-flex flex-wrap gap-2 align-items-center">
+                                <strong>Elenco Segnalazioni (@SegnalazioniFiltrate.Count() elementi) — ordinate per data decrescente</strong>
+                                @if (isLoading)
+                                {
+                                    <div class="spinner-border spinner-border-sm text-danger" role="status">
+                                        <span class="visually-hidden">Caricamento...</span>
+                                    </div>
+                                }
+                                <div class="ms-auto d-flex gap-2 align-items-center flex-wrap">
+                                    <select class="form-select form-select-sm" style="width: auto;" @bind="filtroStato" title="Filtra per stato">
+                                        <option value="">Tutti gli stati</option>
+                                        @foreach (var stato in StatiSegnalazione.Tutti)
+                                        {
+                                            <option value="@stato">@stato</option>
+                                        }
+                                    </select>
+                                    <select class="form-select form-select-sm" style="width: auto;" @bind="filtroUtente" title="Filtra per utente">
+                                        <option value="">Tutti gli utenti</option>
+                                        @foreach (var u in utenti)
+                                        {
+                                            <option value="@u.WindowsUsername">@u.WindowsUsername</option>
+                                        }
+                                    </select>
+                                    <div class="form-check form-check-inline mb-0" title="Mostra anche le segnalazioni con stato Risolto">
+                                        <input class="form-check-input" type="checkbox" id="chkMostraRisolte"
+                                               checked="@mostraRisolte"
+                                               @onchange="e => mostraRisolte = (bool)e.Value!" />
+                                        <label class="form-check-label small" for="chkMostraRisolte">Mostra risolte</label>
+                                    </div>
+                                    <button class="btn btn-outline-warning btn-sm" @onclick="ResetFiltri" title="Azzera i filtri">
+                                        ✖ Reset filtri
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" @onclick="CaricaSegnalazioni">
+                                        🔄 Aggiorna
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div style="max-height: 280px; overflow-y: auto;">
+                                <table class="table table-hover table-striped mb-0 table-sm">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th style="width: 130px;">Utente</th>
+                                            <th>Testo segnalazione</th>
+                                            <th style="width: 140px;">Data Richiesta</th>
+                                            <th style="width: 160px;">Stato</th>
+                                            <th style="width: 90px;">Azioni</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (SegnalazioniFiltrate.Any())
+                                        {
+                                            @foreach (var seg in SegnalazioniFiltrate)
+                                            {
+                                                var isRisolto = seg.Stato == StatiSegnalazione.Risolto;
+                                                <tr @onclick="() => SelezionaSegnalazione(seg)"
+                                                    class="@(segnalazioneSelezionata?.Id == seg.Id ? "table-warning" : "")"
+                                                    style="cursor: pointer; @(isRisolto ? "text-decoration: line-through; opacity: 0.55;" : "")">
+                                                    <td><span class="badge bg-secondary">@seg.UtenteUsername</span></td>
+                                                    <td>@TruncateText(seg.TestoSegnalazione, 80)</td>
+                                                    <td class="small">@seg.DataRichiesta.ToString("dd/MM/yyyy HH:mm")</td>
+                                                    <td>@GetStatoBadge(seg.Stato)</td>
+                                                    <td>
+                                                        <button class="btn btn-sm btn-outline-primary"
+                                                                @onclick="() => ApriRispondi(seg)"
+                                                                @onclick:stopPropagation="true"
+                                                                title="Rispondi a questa segnalazione">
+                                                            💬 Rispondi
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="5" class="text-center text-muted py-4">
+                                                    Nessuna segnalazione presente.
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== DETTAGLIO SEGNALAZIONE SELEZIONATA ===== *@
+                    @if (segnalazioneSelezionata != null)
+                    {
+                        <div class="card mb-3">
+                            <div class="card-header bg-warning text-dark">
+                                <strong>🔍 Dettaglio Segnalazione #@segnalazioneSelezionata.Id</strong>
+                            </div>
+                            <div class="card-body">
+                                @* Testo readonly come nella ricerca avanzata *@
+                                <div class="border rounded p-3 bg-light" style="font-family: Consolas, monospace; font-size: 0.82rem; white-space: pre-wrap; word-break: break-word;">
+                                    <div><strong>Utente:</strong> @segnalazioneSelezionata.UtenteUsername</div>
+                                    <div><strong>Data segnalazione:</strong> @segnalazioneSelezionata.DataRichiesta.ToString("dd-MM-yyyy HH:mm")</div>
+                                    <div><strong>Testo segnalazione:</strong></div>
+                                    <div style="padding-left: 1rem;">@segnalazioneSelezionata.TestoSegnalazione</div>
+                                    <div><strong>Stato:</strong> @segnalazioneSelezionata.Stato</div>
+                                    @if (segnalazioneSelezionata.Risposte.Any())
+                                    {
+                                        <div style="margin-top: 0.5rem; border-top: 1px solid #ccc; padding-top: 0.5rem;">
+                                            @foreach (var r in segnalazioneSelezionata.Risposte)
+                                            {
+                                                <div>[@r.NuovoStato] da [@r.UtenteUsername] il [@r.DataRisposta.ToString("dd-MM-yyyy HH:mm")]: @r.TestoRisposta</div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                @* Pulsante Rispondi nel dettaglio *@
+                                <div class="d-flex justify-content-end mt-2">
+                                    <button class="btn btn-primary btn-sm" @onclick="() => ApriRispondi(segnalazioneSelezionata)">
+                                        💬 Rispondi
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @* ===== FORM RISPOSTA ===== *@
+                    @if (mostraFormRisposta && segnalazionePerRisposta != null)
+                    {
+                        <div class="card border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <strong>💬 Risposta alla Segnalazione #@segnalazionePerRisposta.Id di @segnalazionePerRisposta.UtenteUsername</strong>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Nuovo Stato <span class="text-danger">*</span></label>
+                                        <select class="form-select" @bind="rispostaStato">
+                                            @foreach (var stato in StatiSegnalazione.Tutti)
+                                            {
+                                                <option value="@stato">@stato</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <label class="form-label">Testo risposta <span class="text-danger">*</span></label>
+                                        <textarea class="form-control" @bind="rispostaTesto" rows="3"
+                                                  placeholder="Inserisci la tua risposta..."></textarea>
+                                    </div>
+                                    <div class="col-12 d-flex justify-content-end gap-2 align-items-center">
+                                        @if (!string.IsNullOrEmpty(messaggioRisposta))
+                                        {
+                                            <span class="text-@(isErroreRisposta ? "danger" : "success") small">@messaggioRisposta</span>
+                                        }
+                                        <button class="btn btn-secondary btn-sm" @onclick="AnnullaRisposta">
+                                            ❌ Annulla
+                                        </button>
+                                        <button class="btn btn-primary btn-sm" @onclick="InviaRisposta" disabled="@isSaving">
+                                            📤 Invia Risposta
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                </div>
+
+                @* ===== FOOTER ===== *@
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Chiudi">
+                        ❌ Chiudi
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    #region Parameters
+
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public EventCallback OnChiudi { get; set; }
+
+    #endregion
+
+    #region Private Fields
+
+    private List<SegnalazioneDto> segnalazioni = new();
+    private List<Utente> utenti = new();
+    private SegnalazioneDto? segnalazioneSelezionata = null;
+
+    // Nuova segnalazione
+    private int nuovaUtenteId = 0;
+    private string nuovoTesto = string.Empty;
+    private string messaggioNuova = string.Empty;
+    private bool isErroreNuova = false;
+    private string nomeUtenteCorrente = string.Empty;
+
+    // Form risposta
+    private bool mostraFormRisposta = false;
+    private SegnalazioneDto? segnalazionePerRisposta = null;
+    private string rispostaTesto = string.Empty;
+    private string rispostaStato = StatiSegnalazione.Risposta;
+    private string messaggioRisposta = string.Empty;
+    private bool isErroreRisposta = false;
+
+    // Filtri griglia
+    private string filtroStato = string.Empty;
+    private string filtroUtente = string.Empty;
+    private bool mostraRisolte = false;
+
+    // Stati UI
+    private bool isLoading = false;
+    private bool isSaving = false;
+
+    #endregion
+
+    #region Lifecycle
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible)
+        {
+            await CaricaDati();
+        }
+    }
+
+    #endregion
+
+    #region Data Loading
+
+    private async Task CaricaDati()
+    {
+        isLoading = true;
+        try
+        {
+            var currentUser = await UserService.GetOrCreateCurrentUserAsync();
+            utenti = await SegnalazioneService.GetUtentiAsync();
+            nuovaUtenteId = currentUser.Id;
+            nomeUtenteCorrente = string.IsNullOrEmpty(currentUser.NomeCompleto)
+                ? currentUser.WindowsUsername
+                : $"{currentUser.WindowsUsername} ({currentUser.NomeCompleto})";
+            await CaricaSegnalazioni();
+        }
+        catch (Exception ex)
+        {
+            messaggioNuova = $"Errore nel caricamento: {ex.Message}";
+            isErroreNuova = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task CaricaSegnalazioni()
+    {
+        isLoading = true;
+        try
+        {
+            segnalazioni = await SegnalazioneService.GetSegnalazioniAsync();
+
+            // Aggiorna la segnalazione selezionata se ancora presente
+            if (segnalazioneSelezionata != null)
+            {
+                segnalazioneSelezionata = segnalazioni.FirstOrDefault(s => s.Id == segnalazioneSelezionata.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            messaggioNuova = $"Errore nel caricamento segnalazioni: {ex.Message}";
+            isErroreNuova = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    #endregion
+
+    #region Nuova Segnalazione
+
+    private async Task InviaSegnalazione()
+    {
+        if (string.IsNullOrWhiteSpace(nuovoTesto))
+        {
+            messaggioNuova = "Il testo della segnalazione è obbligatorio";
+            isErroreNuova = true;
+            return;
+        }
+        if (nuovaUtenteId <= 0)
+        {
+            messaggioNuova = "Seleziona un utente";
+            isErroreNuova = true;
+            return;
+        }
+
+        try
+        {
+            isSaving = true;
+            await SegnalazioneService.AddSegnalazioneAsync(nuovaUtenteId, nuovoTesto);
+            nuovoTesto = string.Empty;
+            messaggioNuova = "Segnalazione inviata con successo!";
+            isErroreNuova = false;
+            await CaricaSegnalazioni();
+        }
+        catch (Exception ex)
+        {
+            messaggioNuova = $"Errore: {ex.Message}";
+            isErroreNuova = true;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    #endregion
+
+    #region Selezione e Risposta
+
+    private void SelezionaSegnalazione(SegnalazioneDto seg)
+    {
+        segnalazioneSelezionata = seg;
+        mostraFormRisposta = false;
+        segnalazionePerRisposta = null;
+    }
+
+    private void ApriRispondi(SegnalazioneDto seg)
+    {
+        segnalazionePerRisposta = seg;
+        segnalazioneSelezionata = seg;
+        rispostaTesto = string.Empty;
+        rispostaStato = StatiSegnalazione.Risposta;
+        messaggioRisposta = string.Empty;
+        mostraFormRisposta = true;
+    }
+
+    private void AnnullaRisposta()
+    {
+        mostraFormRisposta = false;
+        segnalazionePerRisposta = null;
+        rispostaTesto = string.Empty;
+        messaggioRisposta = string.Empty;
+    }
+
+    private async Task InviaRisposta()
+    {
+        if (string.IsNullOrWhiteSpace(rispostaTesto))
+        {
+            messaggioRisposta = "Il testo della risposta è obbligatorio";
+            isErroreRisposta = true;
+            return;
+        }
+        if (segnalazionePerRisposta == null) return;
+
+        try
+        {
+            isSaving = true;
+            await SegnalazioneService.AddRispostaAsync(segnalazionePerRisposta.Id, rispostaTesto, rispostaStato);
+            messaggioRisposta = "Risposta inviata con successo!";
+            isErroreRisposta = false;
+            mostraFormRisposta = false;
+            await CaricaSegnalazioni();
+        }
+        catch (Exception ex)
+        {
+            messaggioRisposta = $"Errore: {ex.Message}";
+            isErroreRisposta = true;
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    #endregion
+
+    #region Filtri
+
+    private IEnumerable<SegnalazioneDto> SegnalazioniFiltrate =>
+        segnalazioni
+            .Where(s => mostraRisolte || s.Stato != StatiSegnalazione.Risolto)
+            .Where(s => string.IsNullOrEmpty(filtroStato) || s.Stato == filtroStato)
+            .Where(s => string.IsNullOrEmpty(filtroUtente) || s.UtenteUsername == filtroUtente);
+
+    private void ResetFiltri()
+    {
+        filtroStato = string.Empty;
+        filtroUtente = string.Empty;
+        mostraRisolte = false;
+    }
+
+    #endregion
+
+    #region UI Helpers
+
+    private async Task Chiudi()
+    {
+        segnalazioneSelezionata = null;
+        mostraFormRisposta = false;
+        nuovoTesto = string.Empty;
+        messaggioNuova = string.Empty;
+        await OnChiudi.InvokeAsync();
+    }
+
+    private string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text)) return "-";
+        return text.Length > maxLength ? text[..maxLength] + "..." : text;
+    }
+
+    private MarkupString GetStatoBadge(string stato)
+    {
+        var cls = stato switch
+        {
+            StatiSegnalazione.InAttesa => "bg-warning text-dark",
+            StatiSegnalazione.Risposta => "bg-info text-dark",
+            StatiSegnalazione.RichiestaAccettata => "bg-success",
+            StatiSegnalazione.RichiestaRifiutata => "bg-danger",
+            StatiSegnalazione.ModificaAccettata => "bg-primary",
+            StatiSegnalazione.Risolto => "bg-secondary",
+            _ => "bg-secondary"
+        };
+        return new MarkupString($"<span class=\"badge {cls}\">{stato}</span>");
+    }
+
+    #endregion
+}

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Work Activity Tracker</title>
+    <base href="/" />
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="css/app.css" rel="stylesheet" />
+</head>
+<body>
+    <div id="app">Caricamento...</div>
+
+    <div id="blazor-error-ui">
+        Si è verificato un errore. Ricarica la pagina.
+        <a href="" class="reload">Ricarica</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Copia negli appunti (fallback compatibile con MAUI WebView) -->
+    <script>
+        window.copyToClipboard = function (text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).catch(function () {
+                    window.copyToClipboardFallback(text);
+                });
+            } else {
+                window.copyToClipboardFallback(text);
+            }
+        };
+        window.copyToClipboardFallback = function (text) {
+            var textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.top = '0';
+            textArea.style.left = '0';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try { document.execCommand('copy'); } catch (e) { }
+            document.body.removeChild(textArea);
+        };
+    </script>
+
+    <!-- Ctrl+S globale: chiama il metodo Blazor registrato -->
+    <script>
+        window._ctrlSRef = null;
+
+        window.registraCtrlS = function (dotNetRef) {
+            window._ctrlSRef = dotNetRef;
+            document.addEventListener('keydown', function (e) {
+                if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
+                    e.preventDefault();
+                    if (window._ctrlSRef) {
+                        window._ctrlSRef.invokeMethodAsync('SalvaViaShortcut');
+                    }
+                }
+            });
+        };
+
+        window.deregistraCtrlS = function () {
+            window._ctrlSRef = null;
+        };
+    </script>
+
+    <!-- Traccia la posizione del cursore (riga/colonna interi) negli editor contenteditable.
+         Ogni volta che la selezione cambia, salva _savedLine e _savedEndLine sull'elemento.
+         Questo è più affidabile dell'oggetto Range che può diventare stale. -->
+    <script>
+        // Calcola l'indice di riga (0-based) dato un offset carattere nel testo plain
+        window._editorGetLines = function (el, range) {
+            var startOff = 0, endOff = 0;
+            var walker = document.createTreeWalker(el, NodeFilter.SHOW_ALL, null);
+            var n;
+            var countTo = function (targetNode, targetOffset) {
+                var count = 0;
+                var w2 = document.createTreeWalker(el, NodeFilter.SHOW_ALL, null);
+                var n2;
+                while ((n2 = w2.nextNode()) !== null) {
+                    if (n2 === targetNode) { count += targetOffset; return count; }
+                    if (n2.nodeType === Node.TEXT_NODE) {
+                        if (n2.parentNode === el || n2.parentNode.parentNode === el) count += n2.textContent.length;
+                    } else if (n2.nodeName === 'BR') {
+                        count += 1;
+                    }
+                }
+                return count;
+            };
+            startOff = countTo(range.startContainer, range.startOffset);
+            endOff = countTo(range.endContainer, range.endOffset);
+            var plainText = el.innerText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            var textBefore = plainText.substring(0, startOff);
+            var textSelected = plainText.substring(startOff, endOff);
+            var startLine = textBefore.split('\n').length - 1;
+            var endLine = startLine + (textBefore.split('\n').pop() + textSelected).split('\n').length - 1;
+            return { startLine: startLine, endLine: endLine };
+        };
+
+        // Aggiorna _savedLine/_savedEndLine ogni volta che il cursore si sposta
+        document.addEventListener('selectionchange', function () {
+            var activeEl = document.activeElement;
+            if (!activeEl || !activeEl.isContentEditable) return;
+            if (activeEl.id !== 'note-editor-div' && activeEl.id !== 'changeset-editor-div') return;
+            var sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return;
+            var lines = window._editorGetLines(activeEl, sel.getRangeAt(0));
+            activeEl._savedLine = lines.startLine;
+            activeEl._savedEndLine = lines.endLine;
+        });
+
+        // Previene che i bottoni della toolbar rubino il focus al contenteditable editor
+        document.addEventListener('mousedown', function (e) {
+            if (e.target.closest('.editor-toolbar')) {
+                e.preventDefault();
+            }
+        }, true);
+
+        // Indenta il Note editor. Chiamata da onclick nativo.
+        window.indentNote = function (right) {
+            var el = document.getElementById('note-editor-div');
+            if (!el) return;
+            window.noteEditorHelper.indent(el, right);
+        };
+
+        // Indenta il Changeset editor. Chiamata da onclick nativo.
+        window.indentChangeset = function (right) {
+            var el = document.getElementById('changeset-editor-div');
+            if (!el) return;
+            window.changesetEditorHelper.indent(el, right);
+        };
+    </script>
+
+    <!-- Inserisce testo al cursore nel contenteditable focalizzato -->
+    <script>
+        window.inserisciTestoACursore = function (el, text) {
+            if (!el) return;
+            el.focus();
+            document.execCommand('insertText', false, text);
+        };
+    </script>
+
+    <!-- Inserisce HTML al cursore nel contenteditable focalizzato (per separatori colorati) -->
+    <script>
+        window.inserisciHtmlACursore = function (el, html) {
+            if (!el) return;
+            el.focus();
+            document.execCommand('insertHTML', false, html);
+        };
+    </script>
+
+    <!-- Esegui grassetto (bold) sul contenteditable focalizzato -->
+    <script>
+        window.eseguiBold = function (el) {
+            if (!el) return;
+            el.focus();
+            document.execCommand('bold');
+        };
+
+        // Evidenzia la selezione con il colore specificato (es. 'yellow', 'orange')
+        window.eseguiHighlight = function (el, color) {
+            if (!el) return;
+            el.focus();
+            document.execCommand('hiliteColor', false, color);
+        };
+
+        // Applica/rimuove il barrato al testo selezionato
+        window.eseguiBarrato = function (el) {
+            if (!el) return;
+            el.focus();
+            document.execCommand('strikeThrough');
+        };
+
+        // Colora il testo selezionato con il colore specificato (es. 'red')
+        window.eseguiColoreTesto = function (el, color) {
+            if (!el) return;
+            el.focus();
+            document.execCommand('foreColor', false, color);
+        };
+
+        // Rimuove tutta la formattazione (bold, italic, underline, colore, highlight, ecc.)
+        window.rimuoviFormattazione = function (el) {
+            if (!el) return;
+            el.focus();
+            document.execCommand('removeFormat');
+        };
+    </script>
+
+    <!-- Changeset Editor Helper -->
+    <script>
+        window.changesetEditorHelper = {
+            escapeHtml: function (text) {
+                return text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+            },
+
+            // Imposta il contenuto del div con grassetto per le righe intestazione congelato.
+            // Se il contenuto è già HTML (contiene tag), lo imposta direttamente.
+            // Se è testo normale, applica la logica heading-bold e converte \n in <br>.
+            setContent: function (el, text) {
+                if (!el) return;
+                // Non sovrascrivere se l'utente sta editando
+                if (document.activeElement === el) return;
+
+                if (!text) { el.innerHTML = ''; return; }
+
+                // Controlla se il contenuto è già HTML (ha tag)
+                if (/<[^>]+>/.test(text)) {
+                    el.innerHTML = text;
+                    return;
+                }
+
+                // Testo normale: applica logica heading-bold e converte \n in <br>
+                const lines = text.split('\n');
+                const htmlParts = lines.map(line => {
+                    const escaped = this.escapeHtml(line);
+                    // Riga intestazione: formato "NomeQualcosa (x.y.z):" oppure "Sviluppo (x.y.z):"
+                    if (/^[^\s].+\([^)]+\):\s*$/.test(line.trim())) {
+                        return '<strong>' + escaped + '</strong>';
+                    }
+                    return escaped || '';
+                });
+                el.innerHTML = htmlParts.join('<br>');
+            },
+
+            // Legge il testo grezzo (plain text) normalizzando le newline.
+            // Usato per operazioni C# su stringhe (AggiungiBloccoCongelato, ecc.)
+            getText: function (el) {
+                if (!el) return '';
+                return el.innerText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            },
+
+            // Legge il contenuto HTML (per salvataggio nel DB).
+            // Preserva le tag <strong> per il grassetto manuale.
+            getHtml: function (el) {
+                if (!el) return '';
+                return el.innerHTML;
+            },
+
+            // Gestisce il tasto Tab per indentare/dedentare
+            handleTab: function (e, el) {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const right = !e.shiftKey;
+                    window.changesetEditorHelper.indent(el, right);
+                }
+            },
+
+            // Indenta o dedenta la riga corrente (aggiunge/rimuove 4 spazi non divisibili)
+            indent: function (editor, right) {
+                const sel = window.getSelection();
+                if (!sel.rangeCount) return;
+                const range = sel.getRangeAt(0);
+                const container = range.commonAncestorContainer;
+                let node = container.nodeType === 3 ? container.parentNode : container;
+                while (node && node !== editor) {
+                    if (node.tagName === 'DIV' || node.tagName === 'P') break;
+                    node = node.parentNode;
+                }
+                if (!node) node = editor;
+                const lines = [];
+                if (node === editor) {
+                    // Contenuto BR-based: considera solo nodi elemento (ignora text node e BR diretti)
+                    lines.push(...Array.from(editor.childNodes).filter(n => n.nodeType === Node.ELEMENT_NODE));
+                } else {
+                    lines.push(node);
+                }
+                lines.forEach(l => {
+                    if (right) {
+                        l.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;' + l.innerHTML;
+                    } else {
+                        if (l.innerHTML.startsWith('&nbsp;&nbsp;&nbsp;&nbsp;')) {
+                            l.innerHTML = l.innerHTML.substring(24);
+                        }
+                    }
+                });
+            },
+
+            // Rimuove le righe vuote nell'intero editor.
+            // Gestisce sia il formato <br>-based (da setContent) che il formato <div>-based
+            // che il browser crea dopo un incolla (WebView2/Chrome usa <div> per ogni riga).
+            rimuoviRigheVuote: function(el) {
+                if (!el) return;
+                el.querySelectorAll('div, p').forEach(function(node) {
+                    if (node.textContent.replace(/\u00a0/g, '').trim() === '') {
+                        node.remove();
+                    }
+                });
+                var html = el.innerHTML;
+                html = html.replace(/(<br\s*\/?>){2,}/gi, '<br>');
+                html = html.replace(/^(<br\s*\/?>)+/i, '');
+                html = html.replace(/(<br\s*\/?>)+$/i, '');
+                el.innerHTML = html;
+            }
+        };
+    </script>
+
+    <!-- Note Editor Helper: contenteditable per "Descrizione dettagliata lavoro svolto" -->
+    <script>
+        window.noteEditorHelper = {
+            // Imposta il contenuto del div note.
+            // Se è HTML (ha tag) lo imposta direttamente; se è testo normale converte \n in <br>.
+            setContent: function (el, html) {
+                if (!el) return;
+                if (document.activeElement === el) return;
+                if (!html) { el.innerHTML = ''; return; }
+
+                if (/<[^>]+>/.test(html)) {
+                    // Già HTML: imposta direttamente
+                    el.innerHTML = html;
+                } else {
+                    // Testo normale: converti \n in <br> e fai escape HTML
+                    var escaped = html
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/\n/g, '<br>');
+                    el.innerHTML = escaped;
+                }
+            },
+
+            // Legge il contenuto HTML (per salvataggio nel DB con bold preservato)
+            getHtml: function (el) {
+                if (!el) return '';
+                return el.innerHTML;
+            },
+
+            // Legge il testo plain (per export, ContieneTodo, ecc.)
+            getText: function (el) {
+                if (!el) return '';
+                return el.innerText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            },
+
+            // Gestisce il tasto Tab per indentare/dedentare
+            handleTab: function (e, el) {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const right = !e.shiftKey;
+                    window.noteEditorHelper.indent(el, right);
+                }
+            },
+
+            // Indenta o dedenta la riga corrente (aggiunge/rimuove 4 spazi non divisibili)
+            indent: function (editor, right) {
+                const sel = window.getSelection();
+                if (!sel.rangeCount) return;
+                const range = sel.getRangeAt(0);
+                const container = range.commonAncestorContainer;
+                let node = container.nodeType === 3 ? container.parentNode : container;
+                while (node && node !== editor) {
+                    if (node.tagName === 'DIV' || node.tagName === 'P') break;
+                    node = node.parentNode;
+                }
+                if (!node) node = editor;
+                const lines = [];
+                if (node === editor) {
+                    // Contenuto BR-based: considera solo nodi elemento (ignora text node e BR diretti)
+                    lines.push(...Array.from(editor.childNodes).filter(n => n.nodeType === Node.ELEMENT_NODE));
+                } else {
+                    lines.push(node);
+                }
+                lines.forEach(l => {
+                    if (right) {
+                        l.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;' + l.innerHTML;
+                    } else {
+                        if (l.innerHTML.startsWith('&nbsp;&nbsp;&nbsp;&nbsp;')) {
+                            l.innerHTML = l.innerHTML.substring(24);
+                        }
+                    }
+                });
+            },
+
+            // Rimuove le righe vuote nell'intero editor.
+            // Gestisce sia il formato <br>-based (da setContent) che il formato <div>-based
+            // che il browser crea dopo un incolla (WebView2/Chrome usa <div> per ogni riga).
+            rimuoviRigheVuote: function(el) {
+                if (!el) return;
+                el.querySelectorAll('div, p').forEach(function(node) {
+                    if (node.textContent.replace(/\u00a0/g, '').trim() === '') {
+                        node.remove();
+                    }
+                });
+                var html = el.innerHTML;
+                html = html.replace(/(<br\s*\/?>){2,}/gi, '<br>');
+                html = html.replace(/^(<br\s*\/?>)+/i, '');
+                html = html.replace(/(<br\s*\/?>)+$/i, '');
+                el.innerHTML = html;
+            }
+        };
+    </script>
+
+    <!-- Sostituisce le occorrenze di TODO (parola isolata) con '--' nei text node dell'editor,
+         preservando tutta la formattazione HTML (bold, highlight, colori). -->
+    <script>
+        window.sostituisciTodoNeiNodi = function (el) {
+            if (!el) return;
+            var regex = /(?<![a-zA-Z])TODO(?![a-zA-Z])/gi;
+            var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+            var nodes = [];
+            var node;
+            while ((node = walker.nextNode()) !== null) nodes.push(node);
+            nodes.forEach(function (n) {
+                if (regex.test(n.nodeValue)) {
+                    n.nodeValue = n.nodeValue.replace(regex, '--');
+                }
+            });
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>WorkActivityTracker</RootNamespace>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCssItems>false</EnableDefaultCssItems>
+    
+    <!-- Windows Package Configuration -->
+    <WindowsPackageType>None</WindowsPackageType>
+    
+    <!-- Entry Point -->
+    <EnableDefaultMauiItems>true</EnableDefaultMauiItems>
+    
+    <ApplicationTitle>Work Activity Tracker</ApplicationTitle>
+    <ApplicationId>com.tuaazienda.workactivitytracker</ApplicationId>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+    
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.50" />
+    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="10.0.50" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.50" />
+    
+    <!-- Community Toolkit per FolderPicker -->
+    <PackageReference Include="CommunityToolkit.Maui" Version="14.0.1" />
+    
+    <!-- Configuration -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.5" />
+    
+    <!-- ClosedXML per esportazione XLSX -->
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
+
+    <!-- Entity Framework Core SQL Server -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.5" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.5" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- File di configurazione copiato nell'output -->
+  <ItemGroup>
+    <Content Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,465 @@
+@using WorkActivityTracker.Models
+@using WorkActivityTracker.Services
+@inject TodoService TodoService
+
+@* 
+    Componente modale per la gestione della TODO List.
+    Permette di visualizzare, aggiungere, modificare e completare TODO.
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-scrollable modal-xl" style="max-width: 90%;">
+            <div class="modal-content" style="height: 90vh;">
+                
+                @* ===== HEADER ===== *@
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">📋 TODO List</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        @* Checkbox mostra completati *@
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" id="chkMostraCompletati" 
+                                   @bind="mostraCompletati" @bind:after="CaricaTodos" />
+                            <label class="form-check-label" for="chkMostraCompletati">
+                                Mostra anche i TODO completati
+                            </label>
+                        </div>
+                        <button type="button" class="btn-close" @onclick="Chiudi"></button>
+                    </div>
+                </div>
+                
+                @* ===== BODY ===== *@
+                <div class="modal-body" style="overflow-y: auto;">
+                    
+                    @* ===== GRIGLIA TODO ===== *@
+                    <div class="card mb-3">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <strong>Elenco TODO (@todos.Count elementi)</strong>
+                            @if (isLoading)
+                            {
+                                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                    <span class="visually-hidden">Caricamento...</span>
+                                </div>
+                            }
+                        </div>
+                        <div class="card-body p-0">
+                            <div style="max-height: 300px; overflow-y: auto;">
+                                <table class="table table-hover table-striped mb-0">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th style="width: 40px;">✓</th>
+                                            <th style="width: 70px;">Urgenza</th>
+                                            <th style="width: 90px;">Data Ins.</th>
+                                            <th style="min-width: 350px;">Titolo</th>
+                                            <th>Descrizione</th>
+                                            <th style="width: 110px;">Data Compl.</th>
+                                            <th style="width: 50px;">Azioni</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (todos.Any())
+                                        {
+                                            @foreach (var todo in todos)
+                                            {
+                                                <tr @onclick="() => SelezionaTodo(todo)" 
+                                                    class="@GetRowClass(todo)"
+                                                    style="cursor: pointer;">
+                                                    <td>
+                                                        <input class="form-check-input" type="checkbox" 
+                                                               checked="@todo.Completato"
+                                                               @onclick:stopPropagation="true"
+                                                               @onchange="() => ToggleCompletato(todo)" />
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge @GetUrgenzaBadgeClass(todo.LivelloUrgenza)">
+                                                            @GetUrgenzaLabel(todo.LivelloUrgenza)
+                                                        </span>
+                                                    </td>
+                                                    <td>@todo.DataInserimento.ToString("dd/MM/yyyy")</td>
+                                                    <td class="@(todo.Completato ? "text-decoration-line-through text-muted" : "fw-bold") todo-title-cell">
+                                                        @todo.Titolo
+                                                    </td>
+                                                    <td class="@(todo.Completato ? "text-decoration-line-through text-muted" : "")">
+                                                        @TruncateText(todo.Descrizione, 50)
+                                                    </td>
+                                                    <td>
+                                                        @if (todo.DataCompletamento.HasValue)
+                                                        {
+                                                            <span class="text-success">@todo.DataCompletamento.Value.ToString("dd/MM/yyyy HH:mm")</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-muted">-</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        <button class="btn btn-sm btn-outline-danger" 
+                                                                @onclick="() => EliminaTodo(todo.Id)"
+                                                                @onclick:stopPropagation="true"
+                                                                title="Elimina">
+                                                            🗑️
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="7" class="text-center text-muted py-4">
+                                                    @if (mostraCompletati)
+                                                    {
+                                                        <span>Nessun TODO presente. Clicca "Nuovo" per aggiungerne uno!</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>🎉 Nessun TODO da completare! Ottimo lavoro!</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== FORM DETTAGLIO/INSERIMENTO ===== *@
+                    <div class="card">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <strong>@(IsModifica ? "📝 Modifica TODO" : "➕ Nuovo TODO")</strong>
+                            @if (todoCorrente.Id > 0)
+                            {
+                                <span class="badge bg-primary">ID: @todoCorrente.Id</span>
+                            }
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                @* Data Inserimento *@
+                                <div class="col-md-2">
+                                    <label class="form-label">Data Inserimento <span class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" 
+                                           @bind="todoCorrente.DataInserimento" />
+                                </div>
+                                
+                                @* Livello Urgenza *@
+                                <div class="col-md-2">
+                                    <label class="form-label">Livello di Urgenza <span class="text-danger">*</span></label>
+                                    <select class="form-select" @bind="todoCorrente.LivelloUrgenza">
+                                        <option value="1">1 - Basso</option>
+                                        <option value="2">2 - Normale</option>
+                                        <option value="3">3 - Medio</option>
+                                        <option value="4">4 - Alto</option>
+                                        <option value="5">5 - Critico</option>
+                                    </select>
+                                </div>
+                                
+                                @* Stato Completato (solo in modifica) *@
+                                @if (IsModifica)
+                                {
+                                    <div class="col-md-2">
+                                        <label class="form-label">Stato</label>
+                                        <div class="form-check mt-2">
+                                            <input class="form-check-input" type="checkbox" id="chkCompletato" 
+                                                   @bind="todoCorrente.Completato" />
+                                            <label class="form-check-label" for="chkCompletato">
+                                                Completato
+                                            </label>
+                                        </div>
+                                    </div>
+                                }
+                                
+                                @* Titolo *@
+                                <div class="col-12">
+                                    <label class="form-label">Titolo <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" @bind="todoCorrente.Titolo" 
+                                           maxlength="200" placeholder="Inserisci un titolo breve..." />
+                                </div>
+
+                                @* Descrizione *@
+                                <div class="col-12">
+                                    <label class="form-label">Descrizione <span class="text-danger">*</span></label>
+                                    <textarea class="form-control" @bind="todoCorrente.Descrizione" rows="6" 
+                                              style="font-family: 'Consolas', 'Courier New', monospace;"
+                                              placeholder="Inserisci la descrizione dettagliata del TODO..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== MESSAGGI ===== *@
+                    @if (!string.IsNullOrEmpty(messaggio))
+                    {
+                        <div class="alert @(isErrore ? "alert-danger" : "alert-success") alert-dismissible fade show mt-3" role="alert">
+                            @messaggio
+                            <button type="button" class="btn-close" @onclick="() => messaggio = string.Empty"></button>
+                        </div>
+                    }
+                </div>
+                
+                @* ===== FOOTER ===== *@
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Chiudi">
+                        ❌ Chiudi
+                    </button>
+                    <button type="button" class="btn btn-success" @onclick="NuovoTodo" disabled="@isSaving">
+                        ➕ Nuovo
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="SalvaTodo" disabled="@isSaving">
+                        💾 Salva
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    #region Parameters
+
+    /// <summary>Controlla la visibilità della modale</summary>
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    /// <summary>Evento quando la modale viene chiusa</summary>
+    [Parameter]
+    public EventCallback OnChiudi { get; set; }
+
+    /// <summary>Evento quando il conteggio TODO cambia (per aggiornare badge)</summary>
+    [Parameter]
+    public EventCallback<int> OnTodoCountChanged { get; set; }
+
+    #endregion
+
+    #region Private Fields
+
+    private List<TodoItemDto> todos = new();
+    private TodoItemDto todoCorrente = new() { LivelloUrgenza = 3, DataInserimento = DateTime.Today };
+    private bool mostraCompletati = false;
+    private bool isLoading = false;
+    private bool isSaving = false;
+    private string messaggio = string.Empty;
+    private bool isErrore = false;
+
+    private bool IsModifica => todoCorrente.Id > 0;
+
+    #endregion
+
+    #region Lifecycle
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible)
+        {
+            await CaricaTodos();
+        }
+    }
+
+    #endregion
+
+    #region Data Loading
+
+    private async Task CaricaTodos()
+    {
+        isLoading = true;
+        try
+        {
+            todos = await TodoService.GetTodosAsync(mostraCompletati);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel caricamento: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    #endregion
+
+    #region CRUD Operations
+
+    private void NuovoTodo()
+    {
+        todoCorrente = new TodoItemDto 
+        { 
+            LivelloUrgenza = 3,
+            DataInserimento = DateTime.Today
+        };
+        messaggio = string.Empty;
+    }
+
+    private void SelezionaTodo(TodoItemDto todo)
+    {
+        todoCorrente = new TodoItemDto
+        {
+            Id = todo.Id,
+            Titolo = todo.Titolo,
+            DataInserimento = todo.DataInserimento,
+            Descrizione = todo.Descrizione,
+            DataCompletamento = todo.DataCompletamento,
+            LivelloUrgenza = todo.LivelloUrgenza,
+            Completato = todo.Completato,
+            UtenteId = todo.UtenteId
+        };
+        messaggio = string.Empty;
+    }
+
+    private async Task SalvaTodo()
+    {
+        // Validazione
+        if (string.IsNullOrWhiteSpace(todoCorrente.Titolo))
+        {
+            MostraMessaggio("Il titolo è obbligatorio", true);
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(todoCorrente.Descrizione))
+        {
+            MostraMessaggio("La descrizione è obbligatoria", true);
+            return;
+        }
+
+        try
+        {
+            isSaving = true;
+
+            if (IsModifica)
+            {
+                await TodoService.UpdateTodoAsync(todoCorrente);
+                MostraMessaggio("TODO aggiornato con successo!", false);
+            }
+            else
+            {
+                await TodoService.AddTodoAsync(todoCorrente);
+                MostraMessaggio("TODO salvato con successo!", false);
+            }
+
+            await CaricaTodos();
+            await NotifyTodoCountChanged();
+            NuovoTodo();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel salvataggio: {ex.Message}", true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ToggleCompletato(TodoItemDto todo)
+    {
+        try
+        {
+            await TodoService.ToggleCompletedAsync(todo.Id);
+            await CaricaTodos();
+            await NotifyTodoCountChanged();
+            
+            if (todoCorrente.Id == todo.Id)
+            {
+                todoCorrente.Completato = !todoCorrente.Completato;
+            }
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore: {ex.Message}", true);
+        }
+    }
+
+    private async Task EliminaTodo(int id)
+    {
+        try
+        {
+            await TodoService.DeleteTodoAsync(id);
+            await CaricaTodos();
+            await NotifyTodoCountChanged();
+
+            if (todoCorrente.Id == id)
+            {
+                NuovoTodo();
+            }
+
+            MostraMessaggio("TODO eliminato", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nell'eliminazione: {ex.Message}", true);
+        }
+    }
+
+    private async Task NotifyTodoCountChanged()
+    {
+        var count = await TodoService.GetTodoCountAsync();
+        await OnTodoCountChanged.InvokeAsync(count);
+    }
+
+    #endregion
+
+    #region UI Helpers
+
+    private async Task Chiudi()
+    {
+        todoCorrente = new TodoItemDto { LivelloUrgenza = 3, DataInserimento = DateTime.Today };
+        messaggio = string.Empty;
+        await OnChiudi.InvokeAsync();
+    }
+
+    private void MostraMessaggio(string msg, bool errore)
+    {
+        messaggio = msg;
+        isErrore = errore;
+    }
+
+    private string GetRowClass(TodoItemDto todo)
+    {
+        var classes = new List<string>();
+        
+        if (todo.Id == todoCorrente.Id)
+            classes.Add("table-active");
+        
+        if (todo.Completato)
+            classes.Add("table-success");
+        else if (todo.LivelloUrgenza >= 4)
+            classes.Add("table-danger");
+        else if (todo.LivelloUrgenza == 3)
+            classes.Add("table-warning");
+            
+        return string.Join(" ", classes);
+    }
+
+    private string GetUrgenzaBadgeClass(int livello) => livello switch
+    {
+        1 => "bg-secondary",
+        2 => "bg-info",
+        3 => "bg-warning text-dark",
+        4 => "bg-danger",
+        5 => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    private string GetUrgenzaLabel(int livello) => livello switch
+    {
+        1 => "Basso",
+        2 => "Normale",
+        3 => "Medio",
+        4 => "Alto",
+        5 => "CRITICO",
+        _ => "?"
+    };
+
+    private string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text))
+            return "-";
+        
+        // Rimuovi newline per la visualizzazione nella griglia
+        var singleLine = text.Replace("\r\n", " ").Replace("\n", " ");
+        return singleLine.Length > maxLength ? singleLine[..maxLength] + "..." : singleLine;
+    }
+
+    #endregion
+}

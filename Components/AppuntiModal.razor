@@ -1,0 +1,698 @@
+@using WorkActivityTracker.Models
+@using WorkActivityTracker.Services
+@using System.Text.RegularExpressions
+@inject AppuntiService AppuntiService
+@inject UserService UserService
+
+@* 
+    Componente modale per la gestione degli Appunti (Knowledge Base).
+    Permette di creare, modificare, cercare e filtrare appunti con sistema di tag.
+    In modalità admin mostra anche gli appunti degli altri utenti.
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-scrollable @modalSizeClass" style="@modalCustomStyle">
+            <div class="modal-content" style="@modalContentStyle">
+                
+                @* ===== HEADER ===== *@
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">📌 Appunti</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        @* Bottoni ridimensionamento *@
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn @(modalSize == ModalSize.Normal ? "btn-light" : "btn-outline-light")" 
+                                    @onclick="() => SetModalSize(ModalSize.Normal)" title="Normale">
+                                🗗
+                            </button>
+                            <button type="button" class="btn @(modalSize == ModalSize.Large ? "btn-light" : "btn-outline-light")" 
+                                    @onclick="() => SetModalSize(ModalSize.Large)" title="Grande">
+                                🗖
+                            </button>
+                            <button type="button" class="btn @(modalSize == ModalSize.FullScreen ? "btn-light" : "btn-outline-light")" 
+                                    @onclick="() => SetModalSize(ModalSize.FullScreen)" title="Schermo intero">
+                                ⛶
+                            </button>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white ms-2" @onclick="Chiudi"></button>
+                    </div>
+                </div>
+                
+                @* ===== BODY ===== *@
+                <div class="modal-body" style="overflow-y: auto;">
+                    
+                    @* ===== BARRA DI RICERCA E FILTRI TAG ===== *@
+                    <div class="row mb-3 g-2">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <input type="text" class="form-control" 
+                                       @bind="testoRicerca" @bind:event="oninput"
+                                       @onkeypress="OnSearchKeyPress"
+                                       placeholder="Cerca in titolo, descrizione, tag..." />
+                                <button class="btn btn-primary" @onclick="EseguiRicerca">
+                                    🔍 Cerca
+                                </button>
+                                <button class="btn btn-outline-secondary" @onclick="ResetRicerca" title="Reset filtri">
+                                    🔄
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="input-group">
+                                <span class="input-group-text">🏷️ Tag</span>
+                                <select class="form-select" @bind="tagFiltro" @bind:after="EseguiRicerca">
+                                    <option value="">-- Tutti i tag --</option>
+                                    @foreach (var tag in tuttiITag)
+                                    {
+                                        <option value="@tag">@tag</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-center justify-content-end">
+                            <span class="text-muted small">
+                                @if (appunti.Any())
+                                {
+                                    <strong>@appunti.Count</strong> <span>risultat@(appunti.Count == 1 ? "o" : "i")</span>
+                                }
+                            </span>
+                        </div>
+                    </div>
+
+                    @* ===== GRIGLIA APPUNTI CON NAVIGAZIONE ===== *@
+                    <div class="d-flex">
+                        <div class="flex-grow-1">
+                            <div class="table-responsive" style="max-height: @gridHeight; overflow-y: auto;">
+                                <table class="table table-striped table-hover table-sm">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th style="width: 40px;">#</th>
+                                            <th style="width: 100px;">Data</th>
+                                            @if (IsAdminMode)
+                                            {
+                                                <th style="width: 120px;">Utente</th>
+                                            }
+                                            <th style="min-width: 200px;">Titolo</th>
+                                            <th>Descrizione</th>
+                                            <th style="width: 200px;">Tag</th>
+                                            <th style="width: 50px;">Azioni</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (appunti.Any())
+                                        {
+                                            @for (int i = 0; i < appunti.Count; i++)
+                                            {
+                                                var idx = i;
+                                                var app = appunti[i];
+                                                <tr @onclick="() => SelezionaAppunto(idx)" 
+                                                    class="@(indiceSelezionato == idx ? "table-primary" : "")"
+                                                    style="cursor: pointer;">
+                                                    <td><span class="badge bg-secondary">@(idx + 1)</span></td>
+                                                    <td>@app.DataModifica.ToString("dd/MM/yyyy")</td>
+                                                    @if (IsAdminMode)
+                                                    {
+                                                        <td>@(app.UtenteUsername ?? "-")</td>
+                                                    }
+                                                    <td class="fw-bold">@TruncateText(app.Titolo, 40)</td>
+                                                    <td>@TruncateText(app.Descrizione, 50)</td>
+                                                    <td>
+                                                        @foreach (var tag in app.Tags.Take(3))
+                                                        {
+                                                            <span class="badge bg-info text-dark me-1" style="font-size: 0.75em;">@tag</span>
+                                                        }
+                                                        @if (app.Tags.Count > 3)
+                                                        {
+                                                            <span class="badge bg-secondary" style="font-size: 0.75em;">+@(app.Tags.Count - 3)</span>
+                                                        }
+                                                    </td>
+                                                    <td>
+                                                        @if (!IsAdminMode || app.UtenteId == currentUserId)
+                                                        {
+                                                            <button class="btn btn-sm btn-outline-danger" 
+                                                                    @onclick="() => EliminaAppunto(app.Id)"
+                                                                    @onclick:stopPropagation="true"
+                                                                    title="Elimina">
+                                                                🗑️
+                                                            </button>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="@(IsAdminMode ? 7 : 6)" class="text-center text-muted py-4">
+                                                    @if (ricercaEseguita)
+                                                    {
+                                                        <span>Nessun appunto trovato.</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>Nessun appunto presente. Clicca "Nuovo" per aggiungerne uno!</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        @* ===== FRECCE NAVIGAZIONE ===== *@
+                        <div class="d-flex flex-column justify-content-center align-items-center ms-2" style="width: 50px;">
+                            <button class="btn btn-outline-primary btn-lg mb-2" 
+                                    @onclick="VaiPrecedente" 
+                                    disabled="@(!appunti.Any() || indiceSelezionato <= 0)"
+                                    title="Appunto precedente (↑)">
+                                ⬆️
+                            </button>
+                            <button class="btn btn-outline-primary btn-lg" 
+                                    @onclick="VaiSuccessivo"
+                                    disabled="@(!appunti.Any() || indiceSelezionato >= appunti.Count - 1)"
+                                    title="Appunto successivo (↓)">
+                                ⬇️
+                            </button>
+                        </div>
+                    </div>
+
+                    @* ===== DETTAGLIO ELEMENTO SELEZIONATO ===== *@
+                    @if (indiceSelezionato >= 0 && indiceSelezionato < appunti.Count)
+                    {
+                        var appSelezionato = appunti[indiceSelezionato];
+                        <div class="card mt-3">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                <strong>📄 Dettaglio appunto selezionato</strong>
+                                <span class="badge bg-primary">ID: @appSelezionato.Id</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="border rounded p-3 bg-light" 
+                                     style="max-height: @detailHeight; overflow-y: auto; font-family: 'Consolas', 'Courier New', monospace; white-space: pre-wrap;">
+                                    @((MarkupString)GeneraDettaglioFormattato(appSelezionato))
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @* ===== FORM INSERIMENTO/MODIFICA ===== *@
+                    <div class="card mt-3">
+                        <div class="card-header d-flex justify-content-between align-items-center"
+                             style="background-color: @(IsModificaAppunto ? "#fff3cd" : "#d1e7dd");">
+                            <strong>@(IsModificaAppunto ? "📝 Modifica Appunto" : "➕ Nuovo Appunto")</strong>
+                            @if (appuntoCorrente.Id > 0)
+                            {
+                                <span class="badge bg-primary">ID: @appuntoCorrente.Id</span>
+                            }
+                        </div>
+                        <div class="card-body">
+                            @* Mostra avviso se l'appunto è di un altro utente *@
+                            @if (IsAdminMode && indiceSelezionato >= 0 && indiceSelezionato < appunti.Count 
+                                 && appunti[indiceSelezionato].UtenteId != currentUserId && IsModificaAppunto)
+                            {
+                                <div class="alert alert-warning py-2 mb-3">
+                                    ⚠️ Non puoi modificare gli appunti di altri utenti. Puoi solo visualizzarli.
+                                </div>
+                            }
+                            <div class="row g-3">
+                                @* Titolo *@
+                                <div class="col-12">
+                                    <label class="form-label">Titolo <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" @bind="appuntoCorrente.Titolo" 
+                                           maxlength="300" placeholder="Es: Configurazione IIS per deploy..." />
+                                </div>
+
+                                @* Descrizione *@
+                                <div class="col-12">
+                                    <label class="form-label">Descrizione <span class="text-danger">*</span></label>
+                                    <textarea class="form-control" @bind="appuntoCorrente.Descrizione" 
+                                              rows="5" placeholder="Descrivi l'appunto nel dettaglio..."></textarea>
+                                </div>
+
+                                @* Tags *@
+                                <div class="col-12">
+                                    <label class="form-label">🏷️ Tag <span class="text-muted small">(separati da virgola)</span></label>
+                                    <input type="text" class="form-control" @bind="appuntoCorrente.TagsInput" 
+                                           placeholder="Es: IIS, deploy, web.config, produzione" />
+                                    <div class="form-text">
+                                        Inserisci i tag separati da virgola. I tag aiutano a trovare rapidamente gli appunti.
+                                        @if (tuttiITag.Any())
+                                        {
+                                            <span class="ms-2">Tag esistenti: 
+                                                @foreach (var tag in tuttiITag.Take(10))
+                                                {
+                                                    <span class="badge bg-outline-info border border-info text-info me-1" 
+                                                          style="cursor: pointer; font-size: 0.75em;"
+                                                          @onclick="() => AggiungiTagEsistente(tag)">
+                                                        + @tag
+                                                    </span>
+                                                }
+                                                @if (tuttiITag.Count > 10)
+                                                {
+                                                    <span class="text-muted">... e altri @(tuttiITag.Count - 10)</span>
+                                                }
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            @* ===== PULSANTI AZIONE ===== *@
+                            <div class="d-flex gap-2 mt-3">
+                                @{
+                                    var isAltroUtente = IsAdminMode && IsModificaAppunto 
+                                        && indiceSelezionato >= 0 && indiceSelezionato < appunti.Count 
+                                        && appunti[indiceSelezionato].UtenteId != currentUserId;
+                                }
+                                <button class="btn btn-success" @onclick="SalvaAppunto" 
+                                        disabled="@(isSaving || isAltroUtente)">
+                                    @if (isSaving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    💾 @(IsModificaAppunto ? "Aggiorna" : "Salva")
+                                </button>
+                                <button class="btn btn-outline-secondary" @onclick="NuovoAppunto">
+                                    📄 Nuovo
+                                </button>
+                            </div>
+
+                            @* ===== MESSAGGIO FEEDBACK ===== *@
+                            @if (!string.IsNullOrEmpty(messaggio))
+                            {
+                                <div class="alert @(isErrore ? "alert-danger" : "alert-success") mt-3 py-2 mb-0">
+                                    @messaggio
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+                
+                @* ===== FOOTER ===== *@
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Chiudi">
+                        ❌ Chiudi
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    #region Parameters
+
+    /// <summary>Indica se la modale è visibile</summary>
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    /// <summary>Modalità admin: mostra appunti di tutti gli utenti</summary>
+    [Parameter]
+    public bool IsAdminMode { get; set; }
+
+    /// <summary>Evento quando la modale viene chiusa</summary>
+    [Parameter]
+    public EventCallback OnChiudi { get; set; }
+
+    /// <summary>Evento quando il conteggio appunti cambia</summary>
+    [Parameter]
+    public EventCallback<int> OnAppuntiCountChanged { get; set; }
+
+    #endregion
+
+    #region State
+
+    private List<AppuntoItemDto> appunti = new();
+    private List<string> tuttiITag = new();
+    private AppuntoItemDto appuntoCorrente = new();
+    private int indiceSelezionato = -1;
+    private string testoRicerca = string.Empty;
+    private string tagFiltro = string.Empty;
+    private bool ricercaEseguita = false;
+    private bool isLoading = false;
+    private bool isSaving = false;
+    private string messaggio = string.Empty;
+    private bool isErrore = false;
+    private int currentUserId = 0;
+    
+    private bool IsModificaAppunto => appuntoCorrente.Id > 0;
+    
+    // Gestione dimensioni modale
+    private enum ModalSize { Normal, Large, FullScreen }
+    private ModalSize modalSize = ModalSize.Large;
+
+    private string modalSizeClass => modalSize switch
+    {
+        ModalSize.FullScreen => "modal-fullscreen",
+        _ => "modal-xl"
+    };
+
+    private string modalCustomStyle => modalSize switch
+    {
+        ModalSize.Normal => "max-width: 70%; width: 70%;",
+        ModalSize.Large => "max-width: 90%; width: 90%;",
+        ModalSize.FullScreen => "",
+        _ => "max-width: 90%; width: 90%;"
+    };
+
+    private string modalContentStyle => modalSize switch
+    {
+        ModalSize.FullScreen => "",
+        _ => "height: 90vh;"
+    };
+
+    private string gridHeight => modalSize switch
+    {
+        ModalSize.FullScreen => "30vh",
+        ModalSize.Large => "25vh",
+        _ => "20vh"
+    };
+
+    private string detailHeight => modalSize switch
+    {
+        ModalSize.FullScreen => "25vh",
+        ModalSize.Large => "20vh",
+        _ => "15vh"
+    };
+
+    private bool previousIsVisible = false;
+
+    #endregion
+
+    #region Lifecycle
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && !previousIsVisible)
+        {
+            await CaricaDati();
+        }
+        previousIsVisible = IsVisible;
+    }
+
+    private async Task CaricaDati()
+    {
+        try
+        {
+            isLoading = true;
+            
+            // Recupera l'ID utente corrente
+            var currentUser = await UserService.GetOrCreateCurrentUserAsync();
+            currentUserId = currentUser.Id;
+            
+            appunti = await AppuntiService.GetAppuntiAsync(IsAdminMode, 
+                string.IsNullOrWhiteSpace(testoRicerca) ? null : testoRicerca, 
+                string.IsNullOrEmpty(tagFiltro) ? null : tagFiltro);
+            tuttiITag = await AppuntiService.GetAllTagsAsync(IsAdminMode);
+
+            indiceSelezionato = -1;
+            NuovoAppunto();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel caricamento: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    #endregion
+
+    #region Ricerca
+
+    private async Task EseguiRicerca()
+    {
+        try
+        {
+            isLoading = true;
+            ricercaEseguita = true;
+            
+            appunti = await AppuntiService.GetAppuntiAsync(
+                IsAdminMode, 
+                string.IsNullOrWhiteSpace(testoRicerca) ? null : testoRicerca,
+                string.IsNullOrEmpty(tagFiltro) ? null : tagFiltro);
+            
+            tuttiITag = await AppuntiService.GetAllTagsAsync(IsAdminMode);
+            indiceSelezionato = appunti.Any() ? 0 : -1;
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nella ricerca: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ResetRicerca()
+    {
+        testoRicerca = string.Empty;
+        tagFiltro = string.Empty;
+        ricercaEseguita = false;
+        await CaricaDati();
+    }
+
+    private async Task OnSearchKeyPress(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await EseguiRicerca();
+        }
+    }
+
+    #endregion
+
+    #region CRUD
+
+    private void NuovoAppunto()
+    {
+        appuntoCorrente = new AppuntoItemDto();
+        messaggio = string.Empty;
+    }
+
+    private void SelezionaAppunto(int indice)
+    {
+        indiceSelezionato = indice;
+        var app = appunti[indice];
+        
+        appuntoCorrente = new AppuntoItemDto
+        {
+            Id = app.Id,
+            UtenteId = app.UtenteId,
+            UtenteUsername = app.UtenteUsername,
+            Titolo = app.Titolo,
+            Descrizione = app.Descrizione,
+            Tags = new List<string>(app.Tags),
+            TagsInput = app.TagsInput,
+            DataCreazione = app.DataCreazione,
+            DataModifica = app.DataModifica
+        };
+        messaggio = string.Empty;
+    }
+
+    private async Task SalvaAppunto()
+    {
+        // Validazione
+        if (string.IsNullOrWhiteSpace(appuntoCorrente.Titolo))
+        {
+            MostraMessaggio("Il titolo è obbligatorio", true);
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(appuntoCorrente.Descrizione))
+        {
+            MostraMessaggio("La descrizione è obbligatoria", true);
+            return;
+        }
+
+        try
+        {
+            isSaving = true;
+
+            if (IsModificaAppunto)
+            {
+                await AppuntiService.UpdateAppuntoAsync(appuntoCorrente);
+                MostraMessaggio("Appunto aggiornato con successo!", false);
+            }
+            else
+            {
+                await AppuntiService.AddAppuntoAsync(appuntoCorrente);
+                MostraMessaggio("Appunto salvato con successo!", false);
+            }
+
+            await EseguiRicerca(); // Ricarica con filtri correnti
+            await NotifyCountChanged();
+            NuovoAppunto();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel salvataggio: {ex.Message}", true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task EliminaAppunto(int id)
+    {
+        try
+        {
+            await AppuntiService.DeleteAppuntoAsync(id);
+            
+            if (appuntoCorrente.Id == id)
+            {
+                NuovoAppunto();
+            }
+
+            await EseguiRicerca();
+            await NotifyCountChanged();
+            MostraMessaggio("Appunto eliminato", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nell'eliminazione: {ex.Message}", true);
+        }
+    }
+
+    private async Task NotifyCountChanged()
+    {
+        var count = await AppuntiService.GetAppuntiCountAsync();
+        await OnAppuntiCountChanged.InvokeAsync(count);
+    }
+
+    #endregion
+
+    #region Navigazione
+
+    private void VaiPrecedente()
+    {
+        if (indiceSelezionato > 0)
+        {
+            SelezionaAppunto(indiceSelezionato - 1);
+        }
+    }
+
+    private void VaiSuccessivo()
+    {
+        if (indiceSelezionato < appunti.Count - 1)
+        {
+            SelezionaAppunto(indiceSelezionato + 1);
+        }
+    }
+
+    #endregion
+
+    #region UI Helpers
+
+    private void SetModalSize(ModalSize size)
+    {
+        modalSize = size;
+    }
+
+    private async Task Chiudi()
+    {
+        NuovoAppunto();
+        messaggio = string.Empty;
+        indiceSelezionato = -1;
+        await OnChiudi.InvokeAsync();
+    }
+
+    private void MostraMessaggio(string msg, bool errore)
+    {
+        messaggio = msg;
+        isErrore = errore;
+    }
+
+    private void AggiungiTagEsistente(string tag)
+    {
+        if (string.IsNullOrWhiteSpace(appuntoCorrente.TagsInput))
+        {
+            appuntoCorrente.TagsInput = tag;
+        }
+        else
+        {
+            // Verifica che il tag non sia già presente
+            var tagsAttuali = appuntoCorrente.TagsInput
+                .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim())
+                .ToList();
+            
+            if (!tagsAttuali.Any(t => t.Equals(tag, StringComparison.OrdinalIgnoreCase)))
+            {
+                appuntoCorrente.TagsInput += ", " + tag;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Genera il dettaglio formattato con evidenziazione del testo cercato.
+    /// </summary>
+    private string GeneraDettaglioFormattato(AppuntoItemDto app)
+    {
+        var sb = new System.Text.StringBuilder();
+
+        // Utente (solo in admin mode)
+        if (IsAdminMode && !string.IsNullOrEmpty(app.UtenteUsername))
+        {
+            sb.AppendLine($"<strong>👤 Utente:</strong> {System.Net.WebUtility.HtmlEncode(app.UtenteUsername)}");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine($"<strong>📅 Creato:</strong> {app.DataCreazione:dd/MM/yyyy HH:mm}    <strong>📅 Modificato:</strong> {app.DataModifica:dd/MM/yyyy HH:mm}");
+        sb.AppendLine();
+
+        sb.AppendLine($"<strong>📌 Titolo:</strong>");
+        sb.AppendLine(EvidenziaTestoHtml(app.Titolo));
+        sb.AppendLine();
+
+        sb.AppendLine($"<strong>📋 Descrizione:</strong>");
+        sb.AppendLine(EvidenziaTestoHtml(app.Descrizione));
+        sb.AppendLine();
+
+        if (app.Tags.Any())
+        {
+            sb.AppendLine($"<strong>🏷️ Tag:</strong>");
+            sb.AppendLine(string.Join("  ", app.Tags.Select(t => 
+                $"<span style=\"background-color: #17a2b8; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.85em;\">{EvidenziaTestoHtml(t)}</span>")));
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Evidenzia il testo cercato in rosso (HTML).
+    /// </summary>
+    private string EvidenziaTestoHtml(string? testo)
+    {
+        if (string.IsNullOrEmpty(testo) || string.IsNullOrWhiteSpace(testoRicerca))
+            return System.Net.WebUtility.HtmlEncode(testo ?? "");
+
+        var testoEscaped = System.Net.WebUtility.HtmlEncode(testo);
+        var searchEscaped = System.Net.WebUtility.HtmlEncode(testoRicerca);
+
+        var pattern = Regex.Escape(searchEscaped);
+        var result = Regex.Replace(
+            testoEscaped, 
+            pattern, 
+            match => $"<span style=\"background-color: #ff6b6b; color: white; padding: 1px 3px; border-radius: 3px; font-weight: bold;\">{match.Value}</span>",
+            RegexOptions.IgnoreCase
+        );
+
+        return result;
+    }
+
+    private string TruncateText(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text))
+            return "-";
+        var singleLine = text.Replace("\r\n", " ").Replace("\n", " ");
+        return singleLine.Length > maxLength ? singleLine[..maxLength] + "..." : singleLine;
+    }
+
+    #endregion
+}

@@ -19,35 +19,35 @@ Designed for software teams: log work sessions, associate them with clients and 
 ### Interfaccia principale
 Griglia delle attività con filtri per anno/mese/giorno e form di inserimento/modifica con editor Note, Changeset, congelati e barra di stato in fondo.
 
-![Interfaccia principale](images/00_MainForm.png)
+![Interfaccia principale](Images/00_MainForm.png)
 
 ---
 
 ### Segnalazioni Bug / Richieste di Modifica
 Modale per inviare segnalazioni agli altri utenti, con griglia riepilogativa, filtri per stato e utente, e funzionalità di risposta.
 
-![Segnalazioni](images/01_Segnalazioni.png)
+![Segnalazioni](Images/01_Segnalazioni.png)
 
 ---
 
 ### Appunti / Knowledge Base
 Modale per gestire una base di conoscenza personale: lista appunti con tag, editor ricco con toolbar di formattazione e filtro per tag.
 
-![Appunti](images/02_Appunti.png)
+![Appunti](Images/02_Appunti.png)
 
 ---
 
 ### TODO List
 Modale per la gestione dei TODO: griglia con stato, priorità e scadenza, form per aggiungere nuovi elementi e integrazione con il rilevamento TODO nelle attività.
 
-![TODO List](images/03_TODOList.png)
+![TODO List](Images/03_TODOList.png)
 
 ---
 
 ### Ricerca Avanzata
 Modale di ricerca full-text su tutti i campi delle attività, con anteprima del dettaglio e possibilità di selezionare direttamente l'attività trovata.
 
-![Ricerca Avanzata](images/04_RicercaAvanzata.png)
+![Ricerca Avanzata](Images/04_RicercaAvanzata.png)
 
 ---
 

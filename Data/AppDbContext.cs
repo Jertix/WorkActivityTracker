@@ -73,6 +73,9 @@ public class AppDbContext : DbContext
     /// <summary>Tabella eventi del calendario con avviso</summary>
     public DbSet<EventoCalendario> EventiCalendario { get; set; }
 
+    /// <summary>Tabella storico versioni dei campi Note e ChangesetCoinvolti</summary>
+    public DbSet<EditorHistoryEntry> EditorHistory { get; set; }
+
     /// <summary>
     /// Configura il modello EF Core: chiavi, indici, relazioni.
     /// </summary>
@@ -151,5 +154,10 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(e => e.UtenteId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // EditorHistory: default SQL per DataSalvataggio
+        modelBuilder.Entity<EditorHistoryEntry>()
+            .Property(e => e.DataSalvataggio)
+            .HasDefaultValueSql("GETDATE()");
     }
 }

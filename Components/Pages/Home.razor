@@ -16,6 +16,7 @@
 @inject AmbientiRilascioService AmbientiRilascioService
 @inject TipiAttivitaService TipiAttivitaService
 @inject CalendarioService CalendarioService
+@inject EditorHistoryService EditorHistoryService
 @implements IDisposable
 
 @* 
@@ -305,6 +306,7 @@
                                 <th>Versione</th>
                                 <th>Ambienti</th>
                                 <th>Patch</th>
+                                <th title="Cartella documentazione">Cart. Doc.</th>
                                 <th>Azioni</th>
                             </tr>
                         </thead>
@@ -340,6 +342,12 @@
                                                 <span style="color: green; font-weight: bold;">✔</span>
                                             }
                                         </td>
+                                        <td class="text-center">
+                                            @if (!string.IsNullOrWhiteSpace(att.CartellaDocumentazione))
+                                            {
+                                                <span style="color: green;" title="@att.CartellaDocumentazione">📁</span>
+                                            }
+                                        </td>
                                         <td>
                                             <button class="btn btn-sm btn-secondary me-1"
                                                     @onclick="() => CopiaAttivitaComeTesto(att)"
@@ -373,7 +381,7 @@
                             else
                             {
                                 <tr>
-                                    <td colspan="@(isAdminMode ? 10 : 9)" class="text-center text-muted">
+                                    <td colspan="@(isAdminMode ? 11 : 10)" class="text-center text-muted">
                                         Nessuna attività trovata
                                     </td>
                                 </tr>
@@ -745,14 +753,43 @@
                             TODO
                         </button>
                     </div>
-                    <div @ref="noteEditorRef"
-                         id="note-editor-div" onkeydown="noteEditorHelper.handleTab(event,this)"
-                         contenteditable="true"
-                         class="form-control note-editor @(CampoHaTodo(AttivitaCorrente.Note) ? "campo-con-todo" : "")"
-                         style="min-height: 120px; max-height: 300px; overflow-y: auto; overflow-x: auto; white-space: pre;"
-                         @onfocus="OnNoteFocus"
-                         @onblur="OnNoteBlur"
-                         placeholder="@(AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro ? "Inserisci qui una descrizione dettagliata del lavoro svolto..." : "Note aggiuntive...")">
+                    <div style="position: relative;">
+                        <div @ref="noteEditorRef"
+                             id="note-editor-div" onkeydown="noteEditorHelper.handleTab(event,this)"
+                             contenteditable="true"
+                             class="form-control note-editor @(CampoHaTodo(AttivitaCorrente.Note) ? "campo-con-todo" : "")"
+                             style="min-height: 120px; max-height: 300px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                             @onfocus="OnNoteFocus"
+                             @onblur="OnNoteBlur"
+                             placeholder="@(AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro ? "Inserisci qui una descrizione dettagliata del lavoro svolto..." : "Note aggiuntive...")">
+                        </div>
+                        @* Pulsanti storico Note — overlay angolo in basso a destra *@
+                        <div style="position: absolute; bottom: 4px; right: 4px; display: flex; gap: 2px; z-index: 10;">
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="NoteUndo"
+                                    disabled="@(!IsModifica)"
+                                    title="Undo: torna alla versione precedente salvata"
+                                    style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
+                                    @onmousedown:preventDefault>
+                                ◀
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ApriStoriciNote"
+                                    disabled="@(!IsModifica)"
+                                    title="Storico versioni Note"
+                                    style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
+                                    @onmousedown:preventDefault>
+                                📋
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="NoteRedo"
+                                    disabled="@(!IsModifica)"
+                                    title="Redo: avanza alla versione successiva salvata"
+                                    style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
+                                    @onmousedown:preventDefault>
+                                ▶
+                            </button>
+                        </div>
                     </div>
                     @* Toolbar pulsanti editor Note — duplicata sotto l'editor *@
                     <div class="editor-toolbar mt-1">
@@ -1014,14 +1051,43 @@
                                 TODO
                             </button>
                         </div>
-                        <div @ref="changesetEditorRef"
-                             id="changeset-editor-div" onkeydown="changesetEditorHelper.handleTab(event,this)"
-                             contenteditable="true"
-                             class="form-control changeset-editor @(CampoHaTodo(AttivitaCorrente.ChangesetCoinvolti) ? "campo-con-todo" : "")"
-                             style="min-height: 200px; max-height: 350px; overflow-y: auto; overflow-x: auto; white-space: pre;"
-                             @onfocus="OnChangesetFocus"
-                             @onblur="OnChangesetBlur"
-                             placeholder="Inserisci i changeset/commit coinvolti...">
+                        <div style="position: relative;">
+                            <div @ref="changesetEditorRef"
+                                 id="changeset-editor-div" onkeydown="changesetEditorHelper.handleTab(event,this)"
+                                 contenteditable="true"
+                                 class="form-control changeset-editor @(CampoHaTodo(AttivitaCorrente.ChangesetCoinvolti) ? "campo-con-todo" : "")"
+                                 style="min-height: 200px; max-height: 350px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                                 @onfocus="OnChangesetFocus"
+                                 @onblur="OnChangesetBlur"
+                                 placeholder="Inserisci i changeset/commit coinvolti...">
+                            </div>
+                            @* Pulsanti storico Changeset — overlay angolo in basso a destra *@
+                            <div style="position: absolute; bottom: 4px; right: 4px; display: flex; gap: 2px; z-index: 10;">
+                                <button class="btn btn-outline-secondary btn-sm" type="button"
+                                        @onclick="ChangesetUndo"
+                                        disabled="@(!IsModifica)"
+                                        title="Undo: torna alla versione precedente salvata"
+                                        style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
+                                        @onmousedown:preventDefault>
+                                    ◀
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" type="button"
+                                        @onclick="ApriStoriciChangeset"
+                                        disabled="@(!IsModifica)"
+                                        title="Storico versioni Changeset"
+                                        style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
+                                        @onmousedown:preventDefault>
+                                    📋
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" type="button"
+                                        @onclick="ChangesetRedo"
+                                        disabled="@(!IsModifica)"
+                                        title="Redo: avanza alla versione successiva salvata"
+                                        style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
+                                        @onmousedown:preventDefault>
+                                    ▶
+                                </button>
+                            </div>
                         </div>
                         @* Toolbar pulsanti editor Changeset — duplicata sotto l'editor *@
                         <div class="editor-toolbar mt-1">
@@ -1201,6 +1267,22 @@
     OnChiudi="@ChiudiCalendario"
     OnEventiChanged="@OnEventiCalendarioChanged" />
 
+@* ===== MODALE STORICO VERSIONI NOTE ===== *@
+<EditorHistoryModal
+    Visibile="@_mostraStoriciNote"
+    VisibileChanged="@(v => _mostraStoriciNote = v)"
+    Storico="@(_noteHistory ?? new())"
+    SuSeleziona="@RipristinaVersioneNote"
+    Titolo="Note" />
+
+@* ===== MODALE STORICO VERSIONI CHANGESET ===== *@
+<EditorHistoryModal
+    Visibile="@_mostraStoriciChangeset"
+    VisibileChanged="@(v => _mostraStoriciChangeset = v)"
+    Storico="@(_changesetHistory ?? new())"
+    SuSeleziona="@RipristinaVersioneChangeset"
+    Titolo="Changeset" />
+
 @* ===== MODALE CONFERMA ELIMINAZIONE ===== *@
 @if (mostraConfermaElimina && attivitaDaEliminare != null)
 {
@@ -1338,6 +1420,31 @@
 
     /// <summary>Riferimento .NET per il callback Ctrl+S da JavaScript</summary>
     private DotNetObjectReference<Home>? dotNetRef;
+
+    // ===== Storico versioni editor Note =====
+    /// <summary>Lista versioni salvate per il campo Note (null = non ancora caricato)</summary>
+    private List<EditorHistoryEntry>? _noteHistory;
+    /// <summary>Indice di navigazione nello storico Note (-1 = stato corrente non salvato)</summary>
+    private int _noteHistoryIndex = -1;
+    /// <summary>Contenuto HTML corrente prima dell'inizio della navigazione undo Note</summary>
+    private string? _noteContenutoSalvato;
+
+    // ===== Storico versioni editor Changeset =====
+    /// <summary>Lista versioni salvate per il campo ChangesetCoinvolti (null = non ancora caricato)</summary>
+    private List<EditorHistoryEntry>? _changesetHistory;
+    /// <summary>Indice di navigazione nello storico Changeset (-1 = stato corrente non salvato)</summary>
+    private int _changesetHistoryIndex = -1;
+    /// <summary>Contenuto HTML corrente prima dell'inizio della navigazione undo Changeset</summary>
+    private string? _changesetContenutoSalvato;
+
+    // ===== Visibilità modali storico =====
+    /// <summary>Controlla la visibilità della modale storico Note</summary>
+    private bool _mostraStoriciNote = false;
+    /// <summary>Controlla la visibilità della modale storico Changeset</summary>
+    private bool _mostraStoriciChangeset = false;
+
+    /// <summary>ID utente corrente (cacheato da OnInitializedAsync)</summary>
+    private int _utenteCorrenteId;
 
     /// <summary>Visibilità della modale editor clienti</summary>
     private bool mostraEditorClienti = false;
@@ -1489,8 +1596,9 @@
         {
             // Carica utente corrente
             var utente = await UserService.GetOrCreateCurrentUserAsync();
-            utenteConnesso = string.IsNullOrEmpty(utente.NomeCompleto) 
-                ? utente.WindowsUsername 
+            _utenteCorrenteId = utente.Id;
+            utenteConnesso = string.IsNullOrEmpty(utente.NomeCompleto)
+                ? utente.WindowsUsername
                 : $"{utente.NomeCompleto} ({utente.WindowsUsername})";
 
             // Carica dati lookup
@@ -1649,6 +1757,14 @@
         // (Sviluppo non è salvato nel DB, quindi va sempre resettato)
         isSviluppoSelezionato = false;
 
+        // Reset storico editor (nuova attività selezionata)
+        _noteHistory = null;
+        _noteHistoryIndex = -1;
+        _noteContenutoSalvato = null;
+        _changesetHistory = null;
+        _changesetHistoryIndex = -1;
+        _changesetContenutoSalvato = null;
+
         // Segnala che i due editor contenteditable devono essere aggiornati
         changesetEditorNeedsUpdate = true;
         noteEditorNeedsUpdate = true;
@@ -1676,6 +1792,14 @@
         // Segnala aggiornamento editor changeset e note (svuota i div)
         changesetEditorNeedsUpdate = true;
         noteEditorNeedsUpdate = true;
+
+        // Reset storico editor (nuova attività)
+        _noteHistory = null;
+        _noteHistoryIndex = -1;
+        _noteContenutoSalvato = null;
+        _changesetHistory = null;
+        _changesetHistoryIndex = -1;
+        _changesetContenutoSalvato = null;
 
         messaggio = string.Empty;
     }
@@ -1840,6 +1964,26 @@
 
             // Registra l'orario dell'ultimo salvataggio (mostrato nella barra di stato)
             ultimoSalvataggio = DateTime.Now;
+
+            // Salva lo storico versioni per Note e ChangesetCoinvolti (solo se non vuoti)
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(HtmlToPlainText(AttivitaCorrente.Note ?? "")))
+                {
+                    await EditorHistoryService.SalvaAsync(
+                        savedId, _utenteCorrenteId, "Note",
+                        AttivitaCorrente.Note, ultimoSalvataggio.Value);
+                }
+
+                if (AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro
+                    && !string.IsNullOrWhiteSpace(HtmlToPlainText(AttivitaCorrente.ChangesetCoinvolti ?? "")))
+                {
+                    await EditorHistoryService.SalvaAsync(
+                        savedId, _utenteCorrenteId, "ChangesetCoinvolti",
+                        AttivitaCorrente.ChangesetCoinvolti, ultimoSalvataggio.Value);
+                }
+            }
+            catch { /* Ignora errori sullo storico: non compromette il salvataggio principale */ }
 
             // Ricarica i datalist ambienti/versioni (potrebbero essere stati aggiunti nuovi valori)
             tipiAmbientiRilascio = await AmbientiRilascioService.GetTipiAsync();
@@ -2322,6 +2466,147 @@
     {
         try { await JS.InvokeVoidAsync("sostituisciTodoNeiNodi", noteEditorRef); }
         catch { /* Ignora errori JS */ }
+    }
+
+    #endregion
+
+    #region Storico Versioni Editor (Undo/Redo)
+
+    /// <summary>
+    /// Carica lo storico Note (se non ancora caricato) e naviga alla versione precedente.
+    /// Al primo Undo: salva il contenuto corrente e carica l'indice 0 (versione più recente).
+    /// Agli Undo successivi: incrementa l'indice (versione più vecchia).
+    /// </summary>
+    private async Task NoteUndo()
+    {
+        if (!IsModifica) return;
+
+        if (_noteHistory == null)
+        {
+            try { _noteContenutoSalvato = await JS.InvokeAsync<string>("noteEditorHelper.getHtml", noteEditorRef); }
+            catch { _noteContenutoSalvato = AttivitaCorrente.Note; }
+
+            _noteHistory = await EditorHistoryService.GetStoricoAsync(AttivitaCorrente.Id, "Note");
+            _noteHistoryIndex = -1;
+        }
+
+        if (_noteHistory == null || !_noteHistory.Any()) return;
+
+        _noteHistoryIndex++;
+        if (_noteHistoryIndex >= _noteHistory.Count)
+            _noteHistoryIndex = _noteHistory.Count - 1;
+
+        await ImpostaContenutoNoteEditor(_noteHistory[_noteHistoryIndex].Contenuto ?? string.Empty);
+    }
+
+    /// <summary>
+    /// Naviga alla versione successiva (più recente) dello storico Note.
+    /// Se si torna all'indice -1 (prima dell'undo), ripristina il contenuto corrente.
+    /// </summary>
+    private async Task NoteRedo()
+    {
+        if (_noteHistory == null || !_noteHistory.Any()) return;
+
+        _noteHistoryIndex--;
+        if (_noteHistoryIndex < 0)
+        {
+            _noteHistoryIndex = -1;
+            await ImpostaContenutoNoteEditor(_noteContenutoSalvato ?? string.Empty);
+        }
+        else
+        {
+            await ImpostaContenutoNoteEditor(_noteHistory[_noteHistoryIndex].Contenuto ?? string.Empty);
+        }
+    }
+
+    /// <summary>Apre la modale storico versioni Note.</summary>
+    private async Task ApriStoriciNote()
+    {
+        if (!IsModifica) return;
+        _noteHistory = await EditorHistoryService.GetStoricoAsync(AttivitaCorrente.Id, "Note");
+        _mostraStoriciNote = true;
+    }
+
+    /// <summary>Ripristina una versione Note scelta dalla modale storico.</summary>
+    private async Task RipristinaVersioneNote(string contenuto)
+    {
+        await ImpostaContenutoNoteEditor(contenuto);
+    }
+
+    /// <summary>Imposta il contenuto nell'editor Note (DOM + DTO) e forza il re-render.</summary>
+    private async Task ImpostaContenutoNoteEditor(string html)
+    {
+        try { await JS.InvokeVoidAsync("noteEditorHelper.setContent", noteEditorRef, html); }
+        catch { /* Ignora errori JS */ }
+        AttivitaCorrente.Note = string.IsNullOrWhiteSpace(html) ? null : html;
+        noteEditorNeedsUpdate = true;
+    }
+
+    /// <summary>
+    /// Carica lo storico Changeset (se non ancora caricato) e naviga alla versione precedente.
+    /// </summary>
+    private async Task ChangesetUndo()
+    {
+        if (!IsModifica) return;
+
+        if (_changesetHistory == null)
+        {
+            try { _changesetContenutoSalvato = await JS.InvokeAsync<string>("changesetEditorHelper.getHtml", changesetEditorRef); }
+            catch { _changesetContenutoSalvato = AttivitaCorrente.ChangesetCoinvolti; }
+
+            _changesetHistory = await EditorHistoryService.GetStoricoAsync(AttivitaCorrente.Id, "ChangesetCoinvolti");
+            _changesetHistoryIndex = -1;
+        }
+
+        if (_changesetHistory == null || !_changesetHistory.Any()) return;
+
+        _changesetHistoryIndex++;
+        if (_changesetHistoryIndex >= _changesetHistory.Count)
+            _changesetHistoryIndex = _changesetHistory.Count - 1;
+
+        await ImpostaContenutoChangesetEditor(_changesetHistory[_changesetHistoryIndex].Contenuto ?? string.Empty);
+    }
+
+    /// <summary>
+    /// Naviga alla versione successiva (più recente) dello storico Changeset.
+    /// </summary>
+    private async Task ChangesetRedo()
+    {
+        if (_changesetHistory == null || !_changesetHistory.Any()) return;
+
+        _changesetHistoryIndex--;
+        if (_changesetHistoryIndex < 0)
+        {
+            _changesetHistoryIndex = -1;
+            await ImpostaContenutoChangesetEditor(_changesetContenutoSalvato ?? string.Empty);
+        }
+        else
+        {
+            await ImpostaContenutoChangesetEditor(_changesetHistory[_changesetHistoryIndex].Contenuto ?? string.Empty);
+        }
+    }
+
+    /// <summary>Apre la modale storico versioni Changeset.</summary>
+    private async Task ApriStoriciChangeset()
+    {
+        if (!IsModifica) return;
+        _changesetHistory = await EditorHistoryService.GetStoricoAsync(AttivitaCorrente.Id, "ChangesetCoinvolti");
+        _mostraStoriciChangeset = true;
+    }
+
+    /// <summary>Ripristina una versione Changeset scelta dalla modale storico.</summary>
+    private async Task RipristinaVersioneChangeset(string contenuto)
+    {
+        await ImpostaContenutoChangesetEditor(contenuto);
+    }
+
+    /// <summary>Imposta il contenuto nell'editor Changeset (DOM + DTO) e forza il re-render.</summary>
+    private async Task ImpostaContenutoChangesetEditor(string html)
+    {
+        try { await JS.InvokeVoidAsync("changesetEditorHelper.setContent", changesetEditorRef, html); }
+        catch { /* Ignora errori JS */ }
+        AttivitaCorrente.ChangesetCoinvolti = string.IsNullOrWhiteSpace(html) ? null : html;
+        changesetEditorNeedsUpdate = true;
     }
 
     #endregion

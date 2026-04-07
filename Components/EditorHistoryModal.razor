@@ -1,0 +1,189 @@
+@using WorkActivityTracker.Models
+
+@*
+    Componente modale per la navigazione dello storico versioni di un campo editor.
+    Mostra la lista delle versioni salvate con data e anteprima testuale.
+    Permette di selezionare una versione e ripristinarla nell'editor.
+*@
+
+@if (Visibile)
+{
+    <div class="modal fade show d-block" tabindex="-1"
+         style="background-color: rgba(0,0,0,0.5); z-index: 1200;">
+        <div class="modal-dialog modal-dialog-scrollable modal-xl"
+             style="max-width: 80%;">
+            <div class="modal-content" style="height: 80vh;">
+
+                @* ===== HEADER ===== *@
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title">🕐 Storico versioni: @Titolo</h5>
+                    <button type="button" class="btn-close btn-close-white"
+                            @onclick="Annulla"></button>
+                </div>
+
+                @* ===== BODY ===== *@
+                <div class="modal-body d-flex flex-column gap-2"
+                     style="overflow-y: auto;">
+
+                    @if (!Storico.Any())
+                    {
+                        <div class="text-muted text-center p-3">
+                            Nessuna versione salvata per questo campo.
+                        </div>
+                    }
+                    else
+                    {
+                        @* Griglia versioni *@
+                        <div style="max-height: 220px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px;">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-dark sticky-top">
+                                    <tr>
+                                        <th style="width: 175px;">Data salvataggio</th>
+                                        <th>Anteprima</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (int i = 0; i < Storico.Count; i++)
+                                    {
+                                        var voce = Storico[i];
+                                        var idx  = i;
+                                        <tr class="@(idx == _indiceSelezionato ? "table-warning" : "")"
+                                            style="cursor: pointer;"
+                                            @onclick="() => SelezionaRiga(idx)">
+                                            <td class="text-nowrap small">
+                                                @voce.DataSalvataggio.ToString("dd/MM/yyyy HH:mm:ss")
+                                            </td>
+                                            <td class="small text-truncate" style="max-width: 0;">
+                                                @TroncaTestoPulito(voce.Contenuto, 100)
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        @* Navigazione frecce *@
+                        <div class="d-flex gap-2 align-items-center">
+                            <button class="btn btn-outline-secondary btn-sm"
+                                    @onclick="RigaSu"
+                                    disabled="@(_indiceSelezionato <= 0)"
+                                    title="Versione precedente (più recente)">
+                                ↑
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm"
+                                    @onclick="RigaGiu"
+                                    disabled="@(_indiceSelezionato >= Storico.Count - 1)"
+                                    title="Versione successiva (più vecchia)">
+                                ↓
+                            </button>
+                            <span class="text-muted small">
+                                @(_indiceSelezionato + 1) di @Storico.Count
+                            </span>
+                        </div>
+
+                        @* Anteprima dettaglio *@
+                        @if (_indiceSelezionato >= 0 && _indiceSelezionato < Storico.Count)
+                        {
+                            <div class="border rounded p-2"
+                                 style="min-height: 150px; max-height: 300px;
+                                        overflow-y: auto; background: #f8f9fa;
+                                        white-space: pre-wrap; overflow-x: auto;">
+                                @((MarkupString)(Storico[_indiceSelezionato].Contenuto ?? string.Empty))
+                            </div>
+                        }
+                    }
+                </div>
+
+                @* ===== FOOTER ===== *@
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="Annulla">
+                        Annulla
+                    </button>
+                    <button class="btn btn-primary"
+                            disabled="@(!Storico.Any())"
+                            @onclick="Seleziona">
+                        ✔ Seleziona
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Controlla la visibilità della modale</summary>
+    [Parameter] public bool Visibile { get; set; }
+
+    /// <summary>Callback per aggiornare il parametro Visibile nel parent</summary>
+    [Parameter] public EventCallback<bool> VisibileChanged { get; set; }
+
+    /// <summary>Lista delle voci di storico da visualizzare (ordine discendente)</summary>
+    [Parameter] public List<EditorHistoryEntry> Storico { get; set; } = new();
+
+    /// <summary>Callback invocato con il contenuto HTML della versione selezionata</summary>
+    [Parameter] public EventCallback<string> SuSeleziona { get; set; }
+
+    /// <summary>Titolo mostrato nell'header della modale (es. "Note" o "Changeset")</summary>
+    [Parameter] public string Titolo { get; set; } = string.Empty;
+
+    /// <summary>Indice della riga selezionata nella griglia</summary>
+    private int _indiceSelezionato = 0;
+
+    /// <summary>Resetta la selezione ogni volta che la modale viene aperta</summary>
+    protected override void OnParametersSet()
+    {
+        if (Visibile)
+            _indiceSelezionato = 0;
+    }
+
+    /// <summary>Seleziona la riga cliccata nella griglia</summary>
+    private void SelezionaRiga(int indice) => _indiceSelezionato = indice;
+
+    /// <summary>Naviga alla riga precedente (più recente)</summary>
+    private void RigaSu()
+    {
+        if (_indiceSelezionato > 0)
+            _indiceSelezionato--;
+    }
+
+    /// <summary>Naviga alla riga successiva (più vecchia)</summary>
+    private void RigaGiu()
+    {
+        if (_indiceSelezionato < Storico.Count - 1)
+            _indiceSelezionato++;
+    }
+
+    /// <summary>Chiude la modale senza selezionare nulla</summary>
+    private async Task Annulla()
+    {
+        await VisibileChanged.InvokeAsync(false);
+    }
+
+    /// <summary>
+    /// Chiude la modale e notifica il parent con il contenuto HTML selezionato.
+    /// </summary>
+    private async Task Seleziona()
+    {
+        if (_indiceSelezionato < 0 || _indiceSelezionato >= Storico.Count)
+            return;
+
+        var contenuto = Storico[_indiceSelezionato].Contenuto ?? string.Empty;
+        await VisibileChanged.InvokeAsync(false);
+        await SuSeleziona.InvokeAsync(contenuto);
+    }
+
+    /// <summary>
+    /// Converte HTML in testo leggibile (rimuove tag) e tronca a maxLen caratteri.
+    /// </summary>
+    private static string TroncaTestoPulito(string? html, int maxLen)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+            return string.Empty;
+
+        var testo = System.Text.RegularExpressions.Regex.Replace(html, "<[^>]+>", " ");
+        testo = System.Net.WebUtility.HtmlDecode(testo).Trim();
+
+        return testo.Length <= maxLen ? testo : testo[..maxLen] + "…";
+    }
+}

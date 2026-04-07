@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-4.4-blue)
+![Version](https://img.shields.io/badge/version-4.5-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -16,7 +16,38 @@ Designed for software teams: log work sessions, associate them with clients and 
 
 ## Screenshot
 
-> _(aggiungere screenshot dell'interfaccia principale qui)_
+### Interfaccia principale
+Griglia delle attività con filtri per anno/mese/giorno e form di inserimento/modifica con editor Note, Changeset, congelati e barra di stato in fondo.
+
+![Interfaccia principale](images/00_MainForm.png)
+
+---
+
+### Segnalazioni Bug / Richieste di Modifica
+Modale per inviare segnalazioni agli altri utenti, con griglia riepilogativa, filtri per stato e utente, e funzionalità di risposta.
+
+![Segnalazioni](images/01_Segnalazioni.png)
+
+---
+
+### Appunti / Knowledge Base
+Modale per gestire una base di conoscenza personale: lista appunti con tag, editor ricco con toolbar di formattazione e filtro per tag.
+
+![Appunti](images/02_Appunti.png)
+
+---
+
+### TODO List
+Modale per la gestione dei TODO: griglia con stato, priorità e scadenza, form per aggiungere nuovi elementi e integrazione con il rilevamento TODO nelle attività.
+
+![TODO List](images/03_TODOList.png)
+
+---
+
+### Ricerca Avanzata
+Modale di ricerca full-text su tutti i campi delle attività, con anteprima del dettaglio e possibilità di selezionare direttamente l'attività trovata.
+
+![Ricerca Avanzata](images/04_RicercaAvanzata.png)
 
 ---
 
@@ -234,6 +265,40 @@ Barra fissa in fondo alla finestra:
 
 Proprietà booleana `PrivacyMode` in `appsettings.json`. Se `true`: le attività dell'utente non sono visibili ad altri utenti in modalità Admin. Nessuna UI per modificarla.
 
+### 19. Colonna "Cart. Doc." nella Griglia (v4.5)
+
+La colonna **Cart. Doc.** è stata aggiunta alla griglia delle attività (tra "Patch" e "Azioni").
+Mostra l'icona 📁 verde quando il campo `CartellaDocumentazione` è compilato; il tooltip riporta il percorso completo. Se il campo è vuoto la cella è vuota.
+
+### 20. Storico Versioni Editor — Undo/Redo (v4.5)
+
+Ogni volta che un'attività viene salvata, il contenuto HTML dei campi **Note** e **ChangesetCoinvolti** viene registrato nella tabella `EditorHistory` (storico infinito, associato all'utente e all'attività).
+
+Tre pulsanti sono posizionati come **overlay nell'angolo in basso a destra** di ciascuna textarea editor (non nella toolbar):
+
+| Pulsante | Azione |
+|---|---|
+| ◀ | Torna alla versione precedente salvata (Undo) |
+| 📋 | Apre la modale `EditorHistoryModal` con la lista completa delle versioni |
+| ▶ | Avanza alla versione successiva salvata (Redo) |
+
+I pulsanti sono disabilitati finché l'attività non è stata salvata almeno una volta. Il campo viene registrato nello storico **solo se non è vuoto** (verifica tramite `HtmlToPlainText`).
+
+**Logica navigazione:**
+- Indice `-1` = contenuto corrente non ancora salvato (stato iniziale).
+- Al primo Undo: il contenuto corrente viene memorizzato in memoria, viene caricata la lista storico da DB e viene mostrata la versione 0 (più recente).
+- Undo successivi: incrementa l'indice (va a versioni più vecchie, fino all'ultima).
+- Redo da indice 0: ripristina il contenuto memorizzato (torna all'indice -1).
+- Redo da indice >0: decrementa l'indice (torna a versioni più recenti).
+- Il cache storico viene azzerato ad ogni salvataggio e quando si seleziona un'altra attività.
+
+**Modale `EditorHistoryModal.razor`:**
+- Griglia con data salvataggio (`dd/MM/yyyy HH:mm:ss`) e anteprima testo (primi 100 caratteri, HTML strippato).
+- Riga selezionata evidenziata in giallo (`table-warning`).
+- Pulsanti ↑ ↓ per navigare le righe con contatore "N di Totale".
+- Div di anteprima dettagliato con HTML renderizzato (readonly).
+- Bottoni "Annulla" (chiude senza modifiche) e "✔ Seleziona" (chiude e applica la versione all'editor).
+
 ---
 
 ## Modello Dati
@@ -259,6 +324,7 @@ AttivitaAmbientiRilascio — Relazione N:N tra Attivita e ambienti di rilascio (
 TipiAttivita          — Tipi attività configurabili (Lavoro/Permesso/Ferie + custom) (v4.2)
 TipiAttivita_Log      — Log modifiche ai tipi attività (v4.2)
 EventiCalendario      — Eventi del calendario con scadenza e stato risolto (v4.2)
+EditorHistory         — Storico versioni HTML dei campi Note e ChangesetCoinvolti (v4.5)
 ```
 
 ### Tipo Attività
@@ -304,6 +370,7 @@ SQL Server Database
 | `AmbientiRilascioService` | Scoped | CRUD tipi ambienti e versioni di rilascio (v4.1) |
 | `TipiAttivitaService` | Scoped | CRUD tipi attività dinamici (v4.2) |
 | `CalendarioService` | Scoped | CRUD eventi calendario + eventi imminenti (v4.2) |
+| `EditorHistoryService` | Scoped | Salvataggio e recupero storico versioni editor Note/Changeset (v4.5) |
 
 ### Script JS in `wwwroot/index.html`
 
@@ -364,6 +431,13 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ---
 
 ## Changelog
+
+### v4.5
+- 🆕 **Griglia — colonna "Cart. Doc."**: icona 📁 verde nella griglia quando il campo `CartellaDocumentazione` è compilato; tooltip con il percorso completo
+- 🆕 **Storico versioni editor Note e Changeset**: ogni salvataggio registra una voce nella nuova tabella `EditorHistory` (solo se il campo non è vuoto); pulsanti ◀ 📋 ▶ come overlay nell'angolo in basso a destra di ciascuna textarea per navigare lo storico (Undo/Redo basato su versioni salvate) e aprire la modale di navigazione `EditorHistoryModal`
+- 🆕 **`EditorHistoryModal`**: nuova modale con griglia versioni (data + anteprima), navigazione ↑↓, anteprima HTML dettagliata e azione "✔ Seleziona" per ripristinare la versione scelta nell'editor
+- 🆕 Nuovo servizio: `EditorHistoryService`
+- 🆕 Nuova migrazione DB: `MigrateToV4.5.sql`
 
 ### v4.4 (patch UI)
 - 🆕 **Griglia — colonna "Ambienti"**: mostra i nomi degli ambienti di rilascio compilati (es. "Test, Produzione"), senza versione; calcolato tramite query batch in `ActivityService.GetActivitiesAsync()` e salvato in `WorkActivityDto.AmbientiRilascioNomi`

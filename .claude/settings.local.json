@@ -8,7 +8,10 @@
       "Bash(sed -i 's/@onclick=\"\"\\(\\) => ChangesetHighlight\\(\"\"yellow\"\"\\)\"\"/@onclick=\"\"ChangesetHighlightGiallo\"\"/g' Components/Pages/Home.razor)",
       "Bash(sed -i 's/@onclick=\"\"\\(\\) => ChangesetHighlight\\(\"\"orange\"\"\\)\"\"/@onclick=\"\"ChangesetHighlightArancione\"\"/g' Components/Pages/Home.razor)",
       "Bash(sed -i 's/@onclick=\"\"\\(\\) => ChangesetColoreTesto\\(\"\"red\"\"\\)\"\"/@onclick=\"\"ChangesetColoreTessoRosso\"\"/g' Components/Pages/Home.razor)",
-      "Bash(grep -E \"\\\\.sql$\")"
+      "Bash(grep -E \"\\\\.sql$\")",
+      "Bash(dir /s /b C:LavoriHistoryLavoriWorkActivityTrackerimages)",
+      "Bash(dir /s /b C:LavoriHistoryLavoriWorkActivityTracker)",
+      "Bash(findstr /i \"\\\\.png\\\\|\\\\.jpg\\\\|\\\\.jpeg\\\\|\\\\.gif\\\\|\\\\.webp\")"
     ]
   }
 }

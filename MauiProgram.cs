@@ -95,6 +95,9 @@ public static class MauiProgram
         // CalendarioService: Scoped per la gestione degli eventi del calendario
         builder.Services.AddScoped<CalendarioService>();
 
+        // EditorHistoryService: Scoped per la gestione dello storico versioni Note/Changeset
+        builder.Services.AddScoped<EditorHistoryService>();
+
         // UnsavedChangesService: Singleton per tracciare modifiche non salvate
         builder.Services.AddSingleton<UnsavedChangesService>();
 

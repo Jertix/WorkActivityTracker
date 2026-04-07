@@ -878,3 +878,33 @@ public class WorkActivityDto
     /// </summary>
     public string? AmbientiRilascioNomi { get; set; }
 }
+
+/// <summary>
+/// Voce dello storico versioni di un campo editor (Note o ChangesetCoinvolti).
+/// Ogni salvataggio di un'attività produce una riga in questa tabella.
+/// </summary>
+[Table("EditorHistory")]
+public class EditorHistoryEntry
+{
+    [Key]
+    public int Id { get; set; }
+
+    /// <summary>ID dell'attività a cui appartiene questa voce di storico</summary>
+    [Required]
+    public int AttivitaId { get; set; }
+
+    /// <summary>ID dell'utente che ha eseguito il salvataggio</summary>
+    [Required]
+    public int UtenteId { get; set; }
+
+    /// <summary>Nome del campo: 'Note' oppure 'ChangesetCoinvolti'</summary>
+    [Required]
+    [MaxLength(20)]
+    public string Campo { get; set; } = string.Empty;
+
+    /// <summary>Contenuto HTML del campo al momento del salvataggio</summary>
+    public string? Contenuto { get; set; }
+
+    /// <summary>Data e ora del salvataggio</summary>
+    public DateTime DataSalvataggio { get; set; } = DateTime.Now;
+}

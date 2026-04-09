@@ -62,4 +62,20 @@ public class EditorHistoryService
             .OrderByDescending(e => e.DataSalvataggio)
             .ToListAsync();
     }
+
+    /// <summary>
+    /// Restituisce il contenuto dell'ultima voce salvata per l'attività e il campo specificati,
+    /// oppure null se non esiste nessuna voce. Usato per evitare di salvare duplicati consecutivi.
+    /// </summary>
+    /// <param name="attivitaId">ID dell'attività</param>
+    /// <param name="campo">Nome del campo: 'Note' o 'ChangesetCoinvolti'</param>
+    public async Task<string?> GetUltimoContenutoAsync(int attivitaId, string campo)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.EditorHistory
+            .Where(e => e.AttivitaId == attivitaId && e.Campo == campo)
+            .OrderByDescending(e => e.DataSalvataggio)
+            .Select(e => e.Contenuto)
+            .FirstOrDefaultAsync();
+    }
 }

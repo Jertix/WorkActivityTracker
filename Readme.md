@@ -278,11 +278,11 @@ Tre pulsanti sono posizionati come **overlay nell'angolo in basso a destra** di 
 
 | Pulsante | Azione |
 |---|---|
-| ◀ | Torna alla versione precedente salvata (Undo) |
+| ← | Torna alla versione precedente salvata (Undo) |
 | 📋 | Apre la modale `EditorHistoryModal` con la lista completa delle versioni |
-| ▶ | Avanza alla versione successiva salvata (Redo) |
+| → | Avanza alla versione successiva salvata (Redo) |
 
-I pulsanti sono disabilitati finché l'attività non è stata salvata almeno una volta. Il campo viene registrato nello storico **solo se non è vuoto** (verifica tramite `HtmlToPlainText`).
+I pulsanti sono disabilitati finché l'attività non è stata salvata almeno una volta. Il campo viene registrato nello storico **solo se non è vuoto** (verifica tramite `HtmlToPlainText`) e **solo se il contenuto è diverso dall'ultimo salvataggio** (evita duplicati consecutivi in `EditorHistory`).
 
 **Logica navigazione:**
 - Indice `-1` = contenuto corrente non ancora salvato (stato iniziale).
@@ -434,7 +434,7 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 
 ### v4.5
 - 🆕 **Griglia — colonna "Cart. Doc."**: icona 📁 verde nella griglia quando il campo `CartellaDocumentazione` è compilato; tooltip con il percorso completo
-- 🆕 **Storico versioni editor Note e Changeset**: ogni salvataggio registra una voce nella nuova tabella `EditorHistory` (solo se il campo non è vuoto); pulsanti ◀ 📋 ▶ come overlay nell'angolo in basso a destra di ciascuna textarea per navigare lo storico (Undo/Redo basato su versioni salvate) e aprire la modale di navigazione `EditorHistoryModal`
+- 🆕 **Storico versioni editor Note e Changeset**: ogni salvataggio registra una voce nella nuova tabella `EditorHistory` (solo se il campo non è vuoto e il contenuto è cambiato rispetto all'ultimo salvataggio); pulsanti ← 📋 → come overlay nell'angolo in basso a destra di ciascuna textarea per navigare lo storico (Undo/Redo basato su versioni salvate) e aprire la modale di navigazione `EditorHistoryModal`
 - 🆕 **`EditorHistoryModal`**: nuova modale con griglia versioni (data + anteprima), navigazione ↑↓, anteprima HTML dettagliata e azione "✔ Seleziona" per ripristinare la versione scelta nell'editor
 - 🆕 Nuovo servizio: `EditorHistoryService`
 - 🆕 Nuova migrazione DB: `MigrateToV4.5.sql`

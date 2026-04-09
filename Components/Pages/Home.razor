@@ -771,7 +771,7 @@
                                     title="Undo: torna alla versione precedente salvata"
                                     style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
                                     @onmousedown:preventDefault>
-                                ◀
+                                ←
                             </button>
                             <button class="btn btn-outline-secondary btn-sm" type="button"
                                     @onclick="ApriStoriciNote"
@@ -787,7 +787,7 @@
                                     title="Redo: avanza alla versione successiva salvata"
                                     style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
                                     @onmousedown:preventDefault>
-                                ▶
+                                →
                             </button>
                         </div>
                     </div>
@@ -1069,7 +1069,7 @@
                                         title="Undo: torna alla versione precedente salvata"
                                         style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
                                         @onmousedown:preventDefault>
-                                    ◀
+                                    ←
                                 </button>
                                 <button class="btn btn-outline-secondary btn-sm" type="button"
                                         @onclick="ApriStoriciChangeset"
@@ -1085,7 +1085,7 @@
                                         title="Redo: avanza alla versione successiva salvata"
                                         style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
                                         @onmousedown:preventDefault>
-                                    ▶
+                                    →
                                 </button>
                             </div>
                         </div>
@@ -1965,22 +1965,31 @@
             // Registra l'orario dell'ultimo salvataggio (mostrato nella barra di stato)
             ultimoSalvataggio = DateTime.Now;
 
-            // Salva lo storico versioni per Note e ChangesetCoinvolti (solo se non vuoti)
+            // Salva lo storico versioni per Note e ChangesetCoinvolti (solo se non vuoti e diversi dall'ultimo salvataggio)
             try
             {
-                if (!string.IsNullOrWhiteSpace(HtmlToPlainText(AttivitaCorrente.Note ?? "")))
+                var noteHtml = AttivitaCorrente.Note;
+                if (!string.IsNullOrWhiteSpace(HtmlToPlainText(noteHtml ?? "")))
                 {
-                    await EditorHistoryService.SalvaAsync(
-                        savedId, _utenteCorrenteId, "Note",
-                        AttivitaCorrente.Note, ultimoSalvataggio.Value);
+                    var ultimoNote = await EditorHistoryService.GetUltimoContenutoAsync(savedId, "Note");
+                    if (ultimoNote != noteHtml)
+                    {
+                        await EditorHistoryService.SalvaAsync(
+                            savedId, _utenteCorrenteId, "Note",
+                            noteHtml, ultimoSalvataggio.Value);
+                    }
                 }
 
                 if (AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro
                     && !string.IsNullOrWhiteSpace(HtmlToPlainText(AttivitaCorrente.ChangesetCoinvolti ?? "")))
                 {
-                    await EditorHistoryService.SalvaAsync(
-                        savedId, _utenteCorrenteId, "ChangesetCoinvolti",
-                        AttivitaCorrente.ChangesetCoinvolti, ultimoSalvataggio.Value);
+                    var ultimoChangeset = await EditorHistoryService.GetUltimoContenutoAsync(savedId, "ChangesetCoinvolti");
+                    if (ultimoChangeset != AttivitaCorrente.ChangesetCoinvolti)
+                    {
+                        await EditorHistoryService.SalvaAsync(
+                            savedId, _utenteCorrenteId, "ChangesetCoinvolti",
+                            AttivitaCorrente.ChangesetCoinvolti, ultimoSalvataggio.Value);
+                    }
                 }
             }
             catch { /* Ignora errori sullo storico: non compromette il salvataggio principale */ }

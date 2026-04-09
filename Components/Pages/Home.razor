@@ -391,7 +391,7 @@
                         {
                             <tfoot class="table-secondary fw-bold">
                                 <tr>
-                                    <td colspan="@(isAdminMode ? 5 : 4)" class="text-end">Totale ore visualizzate:</td>
+                                    <td colspan="@(isAdminMode ? 6 : 5)" class="text-end">Totale ore visualizzate:</td>
                                     <td>@Attivita.Sum(a => a.OreLavorate).ToString("N2")</td>
                                     <td colspan="2"></td>
                                 </tr>
@@ -698,11 +698,23 @@
                                 style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
                             A
                         </button>
+                        <button class="btn btn-sm" type="button"
+                                @onclick="NoteHighlightVerde"
+                                title="Evidenzia in verde il testo selezionato"
+                                style="background-color: lightgreen; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                            A
+                        </button>
                         <div class="separator"></div>
                         <button class="btn btn-outline-secondary btn-sm" type="button"
                                 @onclick="NoteBarrato"
                                 title="Applica/rimuovi barrato al testo selezionato"
                                 style="text-decoration: line-through;">
+                            S
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteSottolineato"
+                                title="Applica/rimuovi sottolineato al testo selezionato"
+                                style="text-decoration: underline;">
                             S
                         </button>
                         <button class="btn btn-sm" type="button"
@@ -764,14 +776,14 @@
                              placeholder="@(AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro ? "Inserisci qui una descrizione dettagliata del lavoro svolto..." : "Note aggiuntive...")">
                         </div>
                         @* Pulsanti storico Note — overlay angolo in basso a destra *@
-                        <div style="position: absolute; bottom: 4px; right: 4px; display: flex; gap: 2px; z-index: 10;">
+                        <div style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 2px; z-index: 10;">
                             <button class="btn btn-outline-secondary btn-sm" type="button"
                                     @onclick="NoteUndo"
                                     disabled="@(!IsModifica)"
                                     title="Undo: torna alla versione precedente salvata"
                                     style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
                                     @onmousedown:preventDefault>
-                                ←
+                                ◀
                             </button>
                             <button class="btn btn-outline-secondary btn-sm" type="button"
                                     @onclick="ApriStoriciNote"
@@ -787,7 +799,7 @@
                                     title="Redo: avanza alla versione successiva salvata"
                                     style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
                                     @onmousedown:preventDefault>
-                                →
+                                ▶
                             </button>
                         </div>
                     </div>
@@ -821,11 +833,23 @@
                                 style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
                             A
                         </button>
+                        <button class="btn btn-sm" type="button"
+                                @onclick="NoteHighlightVerde"
+                                title="Evidenzia in verde il testo selezionato"
+                                style="background-color: lightgreen; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                            A
+                        </button>
                         <div class="separator"></div>
                         <button class="btn btn-outline-secondary btn-sm" type="button"
                                 @onclick="NoteBarrato"
                                 title="Applica/rimuovi barrato al testo selezionato"
                                 style="text-decoration: line-through;">
+                            S
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="NoteSottolineato"
+                                title="Applica/rimuovi sottolineato al testo selezionato"
+                                style="text-decoration: underline;">
                             S
                         </button>
                         <button class="btn btn-sm" type="button"
@@ -996,11 +1020,23 @@
                                     style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
                                 A
                             </button>
+                            <button class="btn btn-sm" type="button"
+                                    @onclick="ChangesetHighlightVerde"
+                                    title="Evidenzia in verde il testo selezionato"
+                                    style="background-color: lightgreen; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                A
+                            </button>
                             <div class="separator"></div>
                             <button class="btn btn-outline-secondary btn-sm" type="button"
                                     @onclick="ChangesetBarrato"
                                     title="Applica/rimuovi barrato al testo selezionato"
                                     style="text-decoration: line-through;">
+                                S
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetSottolineato"
+                                    title="Applica/rimuovi sottolineato al testo selezionato"
+                                    style="text-decoration: underline;">
                                 S
                             </button>
                             <button class="btn btn-sm" type="button"
@@ -1062,14 +1098,14 @@
                                  placeholder="Inserisci i changeset/commit coinvolti...">
                             </div>
                             @* Pulsanti storico Changeset — overlay angolo in basso a destra *@
-                            <div style="position: absolute; bottom: 4px; right: 4px; display: flex; gap: 2px; z-index: 10;">
+                            <div style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 2px; z-index: 10;">
                                 <button class="btn btn-outline-secondary btn-sm" type="button"
                                         @onclick="ChangesetUndo"
                                         disabled="@(!IsModifica)"
                                         title="Undo: torna alla versione precedente salvata"
                                         style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
                                         @onmousedown:preventDefault>
-                                    ←
+                                    ◀
                                 </button>
                                 <button class="btn btn-outline-secondary btn-sm" type="button"
                                         @onclick="ApriStoriciChangeset"
@@ -1085,7 +1121,7 @@
                                         title="Redo: avanza alla versione successiva salvata"
                                         style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
                                         @onmousedown:preventDefault>
-                                    →
+                                    ▶
                                 </button>
                             </div>
                         </div>
@@ -1119,11 +1155,23 @@
                                     style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
                                 A
                             </button>
+                            <button class="btn btn-sm" type="button"
+                                    @onclick="ChangesetHighlightVerde"
+                                    title="Evidenzia in verde il testo selezionato"
+                                    style="background-color: lightgreen; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                A
+                            </button>
                             <div class="separator"></div>
                             <button class="btn btn-outline-secondary btn-sm" type="button"
                                     @onclick="ChangesetBarrato"
                                     title="Applica/rimuovi barrato al testo selezionato"
                                     style="text-decoration: line-through;">
+                                S
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="ChangesetSottolineato"
+                                    title="Applica/rimuovi sottolineato al testo selezionato"
+                                    style="text-decoration: underline;">
                                 S
                             </button>
                             <button class="btn btn-sm" type="button"
@@ -2293,6 +2341,18 @@
         catch { /* Ignora errori JS */ }
     }
 
+    private async Task ChangesetSottolineato()
+    {
+        try { await JS.InvokeVoidAsync("eseguiSottolineato", changesetEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task ChangesetHighlightVerde()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", changesetEditorRef, "lightgreen"); }
+        catch { /* Ignora errori JS */ }
+    }
+
     private async Task ChangesetColoreTessoRosso()
     {
         try { await JS.InvokeVoidAsync("eseguiColoreTesto", changesetEditorRef, "red"); }
@@ -2418,6 +2478,18 @@
     private async Task NoteBarrato()
     {
         try { await JS.InvokeVoidAsync("eseguiBarrato", noteEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteSottolineato()
+    {
+        try { await JS.InvokeVoidAsync("eseguiSottolineato", noteEditorRef); }
+        catch { /* Ignora errori JS */ }
+    }
+
+    private async Task NoteHighlightVerde()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", noteEditorRef, "lightgreen"); }
         catch { /* Ignora errori JS */ }
     }
 

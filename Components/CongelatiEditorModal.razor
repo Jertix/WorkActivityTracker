@@ -26,12 +26,18 @@
                     <div class="card mb-3">
                         <div class="card-header bg-light d-flex justify-content-between align-items-center">
                             <strong>Elenco Congelati (@ambienti.Count elementi)</strong>
-                            @if (isLoading)
-                            {
-                                <div class="spinner-border spinner-border-sm text-primary" role="status">
-                                    <span class="visually-hidden">Caricamento...</span>
-                                </div>
-                            }
+                            <div class="d-flex align-items-center gap-2">
+                                @if (isLoading)
+                                {
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Caricamento...</span>
+                                    </div>
+                                }
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="EsportaCongelatiMarkdown"
+                                        title="Esporta la griglia in formato Markdown (.md) nella cartella Export">
+                                    📋 Esporta MD
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body p-0">
                             <div style="max-height: 300px; overflow-y: auto;">
@@ -363,6 +369,42 @@
         catch (Exception ex)
         {
             MostraMessaggio($"Errore nell'eliminazione: {ex.Message}", true);
+        }
+    }
+
+    #endregion
+
+    #region Export
+
+    private void EsportaCongelatiMarkdown()
+    {
+        try
+        {
+            var folder = System.IO.Path.Combine(AppContext.BaseDirectory, "Export");
+            System.IO.Directory.CreateDirectory(folder);
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var fileName = $"Congelati_{timestamp}.md";
+            var filePath = System.IO.Path.Combine(folder, fileName);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"# Congelati — Export del {DateTime.Now:dd/MM/yyyy HH:mm}");
+            sb.AppendLine();
+            sb.AppendLine("| Codice | Versione | Data Congelamento | Data Dismissione | Attivo |");
+            sb.AppendLine("|--------|----------|-------------------|------------------|--------|");
+            foreach (var a in ambienti)
+            {
+                var dataCong = a.DataCongelamento.HasValue ? a.DataCongelamento.Value.ToString("dd/MM/yyyy") : "-";
+                var dataDism = a.DataDismissione.HasValue ? a.DataDismissione.Value.ToString("dd/MM/yyyy") : "-";
+                var attivo = a.Attivo ? "Sì" : "No";
+                sb.AppendLine($"| {a.Codice} | {a.Descrizione ?? "-"} | {dataCong} | {dataDism} | {attivo} |");
+            }
+
+            System.IO.File.WriteAllText(filePath, sb.ToString(), System.Text.Encoding.UTF8);
+            MostraMessaggio($"Esportato: {fileName}", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore durante l'esportazione: {ex.Message}", true);
         }
     }
 

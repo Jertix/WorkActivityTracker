@@ -177,6 +177,13 @@
             document.execCommand('strikeThrough');
         };
 
+        // Applica/rimuove il sottolineato al testo selezionato
+        window.eseguiSottolineato = function (el) {
+            if (!el) return;
+            el.focus();
+            document.execCommand('underline');
+        };
+
         // Colora il testo selezionato con il colore specificato (es. 'red')
         window.eseguiColoreTesto = function (el, color) {
             if (!el) return;

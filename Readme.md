@@ -128,7 +128,7 @@ Per i tipi **Permesso** e **Ferie**, vengono mostrati solo i campi Data, Ore, De
 - **Rilevamento TODO preciso**: regex `(?<![a-zA-Z])TODO(?![a-zA-Z])` (word boundary, case-insensitive).
 - **Evidenziazione TODO**: riga rossa se TODO è in Descrizione, Note, ChangesetCoinvolti, UrlTicket.
 - **Riga selezionata**: colore giallo vivace (`#ffe066`). Se riga TODO+selezionata: arancione.
-- **Riga totale ore**: footer con la somma delle ore delle attività visibili.
+- **Riga totale ore**: footer con la somma delle ore delle attività visibili, allineata sotto la colonna **Ore**.
 - **Colonna Ambienti**: mostra i nomi degli ambienti di rilascio compilati, separati da virgola (es. "Test, Produzione"), senza numero di versione. Calcolato da una query batch in `ActivityService.GetActivitiesAsync()` e salvato in `WorkActivityDto.AmbientiRilascioNomi`. Vuota se nessun ambiente è stato associato.
 - **Colonna Patch**: mostra ✔ verde se il campo "URL Patch/Pacchetto nei rilasci" (`UrlPatchRilasci`) è compilato.
 - **Colonna Azioni**: pulsanti Copia (📄), Esporta TXT (💾), Duplica (📋), Elimina (🗑️).
@@ -165,6 +165,11 @@ Visibili nel form solo quando `TipoAttivita == Lavoro` e il cliente selezionato 
 Campo `contenteditable` (non textarea) con toolbar di editing:
 - **⇥ →** / **⇤ ←**: indentazione destra/sinistra delle righe selezionate.
 - **G** (Grassetto): applica/rimuove bold con `document.execCommand('bold')`.
+- **A** giallo / **A** arancione / **A** verde: evidenziatura del testo selezionato (hiliteColor).
+- **S** barrato / **S** sottolineato: formattazione barrato e sottolineato.
+- **A** rosso: colora il testo in rosso.
+- **✕**: rimuove tutta la formattazione (bold, colore, highlight, sottolineato, ecc.).
+- **◀** / 📋 / **▶**: Undo / Storico versioni / Redo (overlay in basso a destra dell'editor, sopra le scrollbar).
 - **⊟**: rimuove le righe vuote dal contenuto dell'editor.
 - **TODO**: sostituisce ogni occorrenza di "TODO" (parola isolata) con `--`, preservando tutta la formattazione HTML.
 - Altezza: min 120px, max 300px con scroll verticale.
@@ -190,6 +195,11 @@ Changeset XXX: [Testo del check-in]
 `div` con `contenteditable="true"` con toolbar di editing:
 - **⇥ →** / **⇤ ←**: indentazione (cursore rimane sulla stessa riga dopo l'operazione).
 - **G** (Grassetto): applica/rimuove bold.
+- **A** giallo / **A** arancione / **A** verde: evidenziatura del testo selezionato (hiliteColor).
+- **S** barrato / **S** sottolineato: formattazione barrato e sottolineato.
+- **A** rosso: colora il testo in rosso.
+- **✕**: rimuove tutta la formattazione (bold, colore, highlight, sottolineato, ecc.).
+- **◀** / 📋 / **▶**: Undo / Storico versioni / Redo (overlay in basso a destra dell'editor, sopra le scrollbar).
 - **⊟**: rimuove le righe vuote dal contenuto dell'editor.
 - **TODO**: sostituisce ogni occorrenza di "TODO" (parola isolata) con `--`, preservando tutta la formattazione HTML.
 - Altezza: min 200px, max 350px, scroll verticale **e orizzontale**.
@@ -217,6 +227,7 @@ Modale `ClientiEditorModal` aperta dal pulsante ✏️ accanto al campo Cliente:
 Modale `CongelatiEditorModal` aperta dal pulsante "✏️ Modifica lista" sotto la tabella congelati. Log in `Ambienti_Log`.
 
 - Campi: Codice, Versione, Data Congelamento, **Data Dismissione**, Attivo.
+- **📋 Esporta MD**: esporta la griglia in formato Markdown (tabella GFM) nella cartella `Export/` (`Congelati_[timestamp].md`).
 - **Data Dismissione**: obbligatoria quando la checkbox "Attivo" viene deselezionata; il form mostra un errore di validazione se mancante. Mostrata come colonna nella griglia.
 - Il log `Ambienti_Log` include `DataDismissione` nei campi `VecchioValore` e `NuovoValore` per tracciabilità completa.
 

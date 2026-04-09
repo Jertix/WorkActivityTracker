@@ -54,4 +54,12 @@
     </Content>
   </ItemGroup>
 
+  <!-- Script SQL copiati nell'output -->
+  <ItemGroup>
+    <Content Include="Database\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Database\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
 </Project>

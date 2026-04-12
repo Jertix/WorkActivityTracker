@@ -11,7 +11,8 @@
       "Bash(grep -E \"\\\\.sql$\")",
       "Bash(dir /s /b C:LavoriHistoryLavoriWorkActivityTrackerimages)",
       "Bash(dir /s /b C:LavoriHistoryLavoriWorkActivityTracker)",
-      "Bash(findstr /i \"\\\\.png\\\\|\\\\.jpg\\\\|\\\\.jpeg\\\\|\\\\.gif\\\\|\\\\.webp\")"
+      "Bash(findstr /i \"\\\\.png\\\\|\\\\.jpg\\\\|\\\\.jpeg\\\\|\\\\.gif\\\\|\\\\.webp\")",
+      "Bash(dotnet build:*)"
     ]
   }
 }

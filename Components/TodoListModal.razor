@@ -200,6 +200,9 @@
                 
                 @* ===== FOOTER ===== *@
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-info" @onclick="EsportaTodoMarkdown">
+                        📥 Export MD
+                    </button>
                     <button type="button" class="btn btn-secondary" @onclick="Chiudi">
                         ❌ Chiudi
                     </button>
@@ -459,6 +462,47 @@
         // Rimuovi newline per la visualizzazione nella griglia
         var singleLine = text.Replace("\r\n", " ").Replace("\n", " ");
         return singleLine.Length > maxLength ? singleLine[..maxLength] + "..." : singleLine;
+    }
+
+    #endregion
+
+    #region Export
+
+    private void EsportaTodoMarkdown()
+    {
+        try
+        {
+            var folder = System.IO.Path.Combine(AppContext.BaseDirectory, "Export");
+            System.IO.Directory.CreateDirectory(folder);
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var fileName = $"TodoList_{timestamp}.md";
+            var filePath = System.IO.Path.Combine(folder, fileName);
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"# TODO List — Export del {DateTime.Now:dd/MM/yyyy HH:mm}");
+            sb.AppendLine();
+            sb.AppendLine("| Stato | Urgenza | Data Ins. | Titolo | Descrizione | Data Compl. |");
+            sb.AppendLine("|-------|---------|-----------|--------|-------------|-------------|");
+            foreach (var todo in todos)
+            {
+                var stato = todo.Completato ? "✅" : "⬜";
+                var urgenza = GetUrgenzaLabel(todo.LivelloUrgenza);
+                var dataIns = todo.DataInserimento.ToString("dd/MM/yyyy");
+                var titolo = (todo.Titolo ?? "-").Replace("|", "\\|");
+                var desc = (todo.Descrizione ?? "-").Replace("\r\n", " ").Replace("\n", " ").Replace("|", "\\|");
+                var dataCompl = todo.DataCompletamento.HasValue
+                    ? todo.DataCompletamento.Value.ToString("dd/MM/yyyy HH:mm")
+                    : "-";
+                sb.AppendLine($"| {stato} | {urgenza} | {dataIns} | {titolo} | {desc} | {dataCompl} |");
+            }
+
+            System.IO.File.WriteAllText(filePath, sb.ToString(), System.Text.Encoding.UTF8);
+            MostraMessaggio($"Esportato: {fileName}", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore durante l'esportazione: {ex.Message}", true);
+        }
     }
 
     #endregion

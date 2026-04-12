@@ -362,7 +362,7 @@
                                                 💾
                                             </button>
                                             <button class="btn btn-sm btn-info me-1"
-                                                    @onclick="() => DuplicaAttivita(att)"
+                                                    @onclick="async () => await DuplicaAttivita(att)"
                                                     @onclick:stopPropagation="true"
                                                     title="Duplica attività (copia tutti i campi tranne la data)">
                                                 📋
@@ -393,7 +393,7 @@
                                 <tr>
                                     <td colspan="@(isAdminMode ? 6 : 5)" class="text-end">Totale ore visualizzate:</td>
                                     <td>@Attivita.Sum(a => a.OreLavorate).ToString("N2")</td>
-                                    <td colspan="2"></td>
+                                    <td colspan="5"></td>
                                 </tr>
                             </tfoot>
                         }
@@ -1912,7 +1912,7 @@
     /// Duplica un'attività esistente copiando tutti i campi tranne la data.
     /// Utile per inserire la stessa lavorazione per più giorni consecutivi.
     /// </summary>
-    private void DuplicaAttivita(WorkActivityDto attivita)
+    private async Task DuplicaAttivita(WorkActivityDto attivita)
     {
         AttivitaCorrente = new WorkActivityDto
         {
@@ -1937,15 +1937,25 @@
             ChangesetCoinvolti = attivita.ChangesetCoinvolti,
             UrlPatchRilasci = attivita.UrlPatchRilasci,
             TestoCheckIn = attivita.TestoCheckIn,
-            CartellaDocumentazione = attivita.CartellaDocumentazione,
-            AmbientiRilascio = attivita.AmbientiRilascio.Select(a => new AmbienteRilascioDto
-            {
-                Posizione = a.Posizione,
-                TipoAmbiente = a.TipoAmbiente,
-                Versione = a.Versione
-            }).ToList()
+            CartellaDocumentazione = attivita.CartellaDocumentazione
             // UtenteId e UtenteUsername NON copiati: verranno assegnati automaticamente al salvataggio
         };
+
+        // Carica le coppie ambiente/versione di rilascio dal DB (la griglia non le ha)
+        if (attivita.Id > 0)
+        {
+            try
+            {
+                AttivitaCorrente.AmbientiRilascio = (await AmbientiRilascioService.GetAmbientiRilascioAsync(attivita.Id))
+                    .Select(a => new AmbienteRilascioDto
+                    {
+                        Posizione = a.Posizione,
+                        TipoAmbiente = a.TipoAmbiente,
+                        Versione = a.Versione
+                    }).ToList();
+            }
+            catch { /* Ignora errori: le coppie restano vuote */ }
+        }
 
         // Reset della selezione "Sviluppo" nella tabella congelati
         isSviluppoSelezionato = false;
@@ -2208,7 +2218,7 @@
     {
         if (string.IsNullOrEmpty(descrizione)) return string.Empty;
         var parts = descrizione.Trim().Split('.');
-        if (parts.Length == 3 && int.TryParse(parts[2], out int patch))
+        if (parts.Length == 3 && int.TryParse(parts[2], out int patch) && patch >= 50)
             return $"{descrizione}-4.1.{patch - 50}";
         return descrizione;
     }

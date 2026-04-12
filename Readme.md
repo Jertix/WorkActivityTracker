@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-4.5-blue)
+![Version](https://img.shields.io/badge/version-4.6-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -210,7 +210,7 @@ Changeset XXX: [Testo del check-in]
 
 ### 8. TODO List (Modale)
 
-Modale separata per gestire TODO personali. Ogni TODO: Titolo, Descrizione, Data inserimento, Urgenza (1-5), Completato. Badge con contatore nel pulsante in alto.
+Modale separata per gestire TODO personali. Ogni TODO: Titolo, Descrizione, Data inserimento, Urgenza (1-5), Completato. Badge con contatore nel pulsante in alto. Pulsante **📥 Export MD** nel footer per esportare la lista in formato Markdown (tabella GFM) nella cartella `Export/`.
 
 ### 9. Appunti / Knowledge Base (Modale)
 
@@ -442,6 +442,12 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ---
 
 ## Changelog
+
+### v4.6
+- 🔧 **Fix Duplica attività — Ambienti di rilascio**: `DuplicaAttivita()` ora carica gli ambienti di rilascio dal DB prima di copiarli, risolvendo il problema per cui gli ambienti risultavano vuoti nell'attività duplicata
+- 🆕 **TODO List — Export Markdown**: nuovo pulsante "📥 Export MD" nel footer della modale TODO; esporta la lista in formato Markdown (tabella GFM con colonne Stato, Urgenza, Data Ins., Titolo, Descrizione, Data Compl.) nella cartella `Export/`
+- 🔧 **Fix griglia — riga totale ore**: corretto il `colspan` nel footer della tabella attività; lo sfondo `table-secondary` ora copre tutte le colonne fino ad Azioni
+- 🔧 **Fix FormattaVersioneCongelato — versioni negative**: la versione secondaria `4.1.X` viene mostrata solo quando il patch è >= 50; per versioni inferiori (es. 3.2.41) viene mostrata solo la versione base senza suffisso
 
 ### v4.5
 - 🆕 **Griglia — colonna "Cart. Doc."**: icona 📁 verde nella griglia quando il campo `CartellaDocumentazione` è compilato; tooltip con il percorso completo

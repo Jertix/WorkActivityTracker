@@ -404,6 +404,88 @@
         };
     </script>
 
+    <!-- Collegamento Editor Helper: contenteditable per "Come collegarsi" nella Gestione Clienti (v4.7) -->
+    <script>
+        window.collegamentoEditorHelper = {
+            setContent: function (el, html) {
+                if (!el) return;
+                if (document.activeElement === el) return;
+                if (!html) { el.innerHTML = ''; return; }
+
+                if (/<[^>]+>/.test(html)) {
+                    el.innerHTML = html;
+                } else {
+                    var escaped = html
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/\n/g, '<br>');
+                    el.innerHTML = escaped;
+                }
+            },
+
+            getHtml: function (el) {
+                if (!el) return '';
+                return el.innerHTML;
+            },
+
+            getText: function (el) {
+                if (!el) return '';
+                return el.innerText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            },
+
+            handleTab: function (e, el) {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const right = !e.shiftKey;
+                    window.collegamentoEditorHelper.indent(el, right);
+                }
+            },
+
+            indent: function (editor, right) {
+                const sel = window.getSelection();
+                if (!sel.rangeCount) return;
+                const range = sel.getRangeAt(0);
+                const container = range.commonAncestorContainer;
+                let node = container.nodeType === 3 ? container.parentNode : container;
+                while (node && node !== editor) {
+                    if (node.tagName === 'DIV' || node.tagName === 'P') break;
+                    node = node.parentNode;
+                }
+                if (!node) node = editor;
+                const lines = [];
+                if (node === editor) {
+                    lines.push(...Array.from(editor.childNodes).filter(n => n.nodeType === Node.ELEMENT_NODE));
+                } else {
+                    lines.push(node);
+                }
+                lines.forEach(l => {
+                    if (right) {
+                        l.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;' + l.innerHTML;
+                    } else {
+                        if (l.innerHTML.startsWith('&nbsp;&nbsp;&nbsp;&nbsp;')) {
+                            l.innerHTML = l.innerHTML.substring(24);
+                        }
+                    }
+                });
+            },
+
+            rimuoviRigheVuote: function(el) {
+                if (!el) return;
+                el.querySelectorAll('div, p').forEach(function(node) {
+                    if (node.textContent.replace(/\u00a0/g, '').trim() === '') {
+                        node.remove();
+                    }
+                });
+                var html = el.innerHTML;
+                html = html.replace(/(<br\s*\/?>){2,}/gi, '<br>');
+                html = html.replace(/^(<br\s*\/?>)+/i, '');
+                html = html.replace(/(<br\s*\/?>)+$/i, '');
+                el.innerHTML = html;
+            }
+        };
+    </script>
+
     <!-- Sostituisce le occorrenze di TODO (parola isolata) con '--' nei text node dell'editor,
          preservando tutta la formattazione HTML (bold, highlight, colori). -->
     <script>

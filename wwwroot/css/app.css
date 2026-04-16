@@ -333,3 +333,14 @@ tfoot.table-secondary td {
     background-color: #dee2e6;
     margin: 0 2px;
 }
+
+/* Feedback visivo salvataggio: lampeggio verde sulla status bar (v4.7) */
+@keyframes pulse-save {
+    0%   { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); background-color: #212529; }
+    30%  { box-shadow: 0 0 14px 4px rgba(40, 167, 69, 0.75); background-color: #1e5c2e; }
+    100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); background-color: #212529; }
+}
+
+.status-bar-pulse {
+    animation: pulse-save 1.4s ease-out 1;
+}

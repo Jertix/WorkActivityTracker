@@ -908,3 +908,82 @@ public class EditorHistoryEntry
     /// <summary>Data e ora del salvataggio</summary>
     public DateTime DataSalvataggio { get; set; } = DateTime.Now;
 }
+
+/// <summary>
+/// Dettagli per ogni coppia (cliente, ambiente): server, persone di riferimento,
+/// come collegarsi. Condivisi fra tutti gli utenti dell'applicazione.
+/// </summary>
+[Table("ClientiAmbienti")]
+public class ClienteAmbiente
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    public int ClienteId { get; set; }
+
+    [Required]
+    [MaxLength(100)]
+    public string Ambiente { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? ApplicationServer { get; set; }
+
+    [MaxLength(500)]
+    public string? DatabaseServer { get; set; }
+
+    /// <summary>Testo libero con i nomi/ruoli delle persone di riferimento</summary>
+    public string? PersoneRiferimento { get; set; }
+
+    /// <summary>Istruzioni su come collegarsi al cliente/ambiente (HTML)</summary>
+    public string? ComeCollegarsi { get; set; }
+
+    public DateTime? DataModifica { get; set; }
+
+    [ForeignKey(nameof(ClienteId))]
+    public virtual Cliente? Cliente { get; set; }
+}
+
+/// <summary>
+/// Log delle modifiche a ClientiAmbienti per tracciabilità (Nuovo/Modifica/Elimina).
+/// </summary>
+[Table("ClientiAmbienti_Log")]
+public class ClienteAmbienteLog
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(100)]
+    public string NomeUtente { get; set; } = string.Empty;
+
+    /// <summary>Tipo di azione: Nuovo, Modifica, Elimina</summary>
+    [Required]
+    [MaxLength(20)]
+    public string AzioneSvolta { get; set; } = string.Empty;
+
+    public int? ClienteId { get; set; }
+
+    [MaxLength(100)]
+    public string? Ambiente { get; set; }
+
+    public string? VecchioValore { get; set; }
+
+    public string? NuovoValore { get; set; }
+
+    public DateTime Timestamp { get; set; } = DateTime.Now;
+}
+
+/// <summary>DTO per ClienteAmbiente (join con Cliente per NomeCliente)</summary>
+public class ClienteAmbienteDto
+{
+    public int Id { get; set; }
+    public int ClienteId { get; set; }
+    public string NomeCliente { get; set; } = string.Empty;
+    public string Ambiente { get; set; } = string.Empty;
+    public string? ApplicationServer { get; set; }
+    public string? DatabaseServer { get; set; }
+    public string? PersoneRiferimento { get; set; }
+    public string? ComeCollegarsi { get; set; }
+    public DateTime? DataModifica { get; set; }
+}

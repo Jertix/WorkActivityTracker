@@ -67,6 +67,11 @@
                     </span>
                 }
             </button>
+            @* Pulsante Gestione Clienti (v4.7) *@
+            <button class="btn btn-warning btn-sm text-dark fw-semibold" @onclick="() => mostraGestioneClienti = true"
+                    title="Gestione Clienti: ambienti, server, persone di riferimento, come collegarsi (dati condivisi tra tutti gli utenti)">
+                🏢 Gestione Clienti
+            </button>
             @* Checkbox modalità admin (configurabile da appsettings.json) *@
             @if (AppConfig.MostraModalitaAdmin)
             {
@@ -1280,11 +1285,16 @@
     OnTodoCountChanged="@OnTodoCountChanged" />
 
 @* ===== MODALE APPUNTI ===== *@
-<AppuntiModal 
+<AppuntiModal
     IsVisible="@mostraAppunti"
     IsAdminMode="@isAdminMode"
     OnChiudi="@ChiudiAppunti"
     OnAppuntiCountChanged="@OnAppuntiCountChanged" />
+
+@* ===== MODALE GESTIONE CLIENTI (v4.7) ===== *@
+<GestioneClientiModal
+    IsVisible="@mostraGestioneClienti"
+    OnChiudi="() => mostraGestioneClienti = false" />
 
 @* ===== MODALE EDITOR CONGELATI ===== *@
 <CongelatiEditorModal
@@ -1384,7 +1394,7 @@
 }
 
 @* ===== BARRA DI STATO IN BASSO ===== *@
-<div class="status-bar">
+<div class="status-bar @(statusBarLampeggia ? "status-bar-pulse" : "")">
     @if (ultimoSalvataggio.HasValue)
     {
         <span>💾 Ultimo salvataggio: @ultimoSalvataggio.Value.ToString("HH:mm:ss")</span>
@@ -1545,6 +1555,9 @@
     /// <summary>Controlla la visibilità della modale Appunti</summary>
     private bool mostraAppunti = false;
 
+    /// <summary>Controlla la visibilità della modale Gestione Clienti (v4.7)</summary>
+    private bool mostraGestioneClienti = false;
+
     /// <summary>Contatore degli Appunti (per il badge)</summary>
     private int appuntiCount = 0;
 
@@ -1557,6 +1570,8 @@
     // ===== Barra di stato =====
     /// <summary>Timestamp dell'ultimo salvataggio riuscito</summary>
     private DateTime? ultimoSalvataggio = null;
+    // v4.7: flag per animazione pulse sulla status bar dopo il salvataggio
+    private bool statusBarLampeggia = false;
 
     /// <summary>Lista dei tipi ambienti di rilascio (per datalist)</summary>
     private List<TipoAmbienteRilascio> tipiAmbientiRilascio = new();
@@ -2022,6 +2037,18 @@
 
             // Registra l'orario dell'ultimo salvataggio (mostrato nella barra di stato)
             ultimoSalvataggio = DateTime.Now;
+
+            // v4.7: feedback visivo — lampeggio verde sulla status bar per 1.5s
+            statusBarLampeggia = true;
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(1500);
+                await InvokeAsync(() =>
+                {
+                    statusBarLampeggia = false;
+                    StateHasChanged();
+                });
+            });
 
             // Salva lo storico versioni per Note e ChangesetCoinvolti (solo se non vuoti e diversi dall'ultimo salvataggio)
             try
@@ -2797,7 +2824,8 @@
     /// </summary>
     private async Task ResetFiltri()
     {
-        FiltroAnno = null;
+        // v4.7: mantiene l'anno corrente per non perdere il focus sull'anno di lavoro
+        FiltroAnno = DateTime.Now.Year;
         FiltroMese = null;
         FiltroGiorno = null;
         TestoRicerca = string.Empty;

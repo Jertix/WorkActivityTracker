@@ -1,0 +1,629 @@
+@using WorkActivityTracker.Models
+@using WorkActivityTracker.Services
+@inject ClienteService ClienteService
+@inject ClienteAmbienteService ClienteAmbienteService
+@inject IJSRuntime JS
+
+@*
+    Componente modale per la gestione degli ambienti per cliente (v4.7).
+    Dati CONDIVISI tra tutti gli utenti. Include logging di tutte le modifiche.
+    Campo "Come collegarsi" con editor rich HTML (toolbar completa come Note).
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-scrollable modal-xl" style="max-width: 90%;">
+            <div class="modal-content" style="height: 90vh;">
+
+                @* ===== HEADER ===== *@
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title">🏢 Gestione Clienti</h5>
+                    <button type="button" class="btn-close" @onclick="Chiudi"></button>
+                </div>
+
+                @* ===== BODY ===== *@
+                <div class="modal-body" style="overflow-y: auto;">
+
+                    @* Banner info condivisione *@
+                    <div class="alert alert-info py-2 mb-3 small">
+                        ⚠️ <strong>Attenzione:</strong> le informazioni mostrate in questa finestra sono uguali e condivise per tutti gli utenti che utilizzano questo programma.
+                    </div>
+
+                    @* ===== GRIGLIA AMBIENTI CLIENTE ===== *@
+                    <div class="card mb-3">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <strong>Elenco Ambienti Cliente (@righe.Count elementi)</strong>
+                            <div class="d-flex align-items-center gap-2">
+                                @if (isLoading)
+                                {
+                                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                                        <span class="visually-hidden">Caricamento...</span>
+                                    </div>
+                                }
+                                <button class="btn btn-success btn-sm" @onclick="Nuovo" disabled="@isSaving">
+                                    ➕ Nuovo
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div style="max-height: 250px; overflow-y: auto;">
+                                <table class="table table-hover table-striped mb-0">
+                                    <thead class="table-dark sticky-top">
+                                        <tr>
+                                            <th>Cliente</th>
+                                            <th>Ambiente</th>
+                                            <th style="width: 120px;">Azioni</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @if (righe.Any())
+                                        {
+                                            @foreach (var r in righe)
+                                            {
+                                                <tr @onclick="() => Seleziona(r)"
+                                                    class="@(corrente.Id == r.Id ? "table-active" : "")"
+                                                    style="cursor: pointer;">
+                                                    <td class="fw-bold">@r.NomeCliente</td>
+                                                    <td>@r.Ambiente</td>
+                                                    <td>
+                                                        <button class="btn btn-sm btn-outline-primary me-1"
+                                                                @onclick="() => Clona(r)"
+                                                                @onclick:stopPropagation="true"
+                                                                title="Clona questo record nel form">
+                                                            🗐
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger"
+                                                                @onclick="() => ChiediElimina(r)"
+                                                                @onclick:stopPropagation="true"
+                                                                title="Elimina">
+                                                            🗑️
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="3" class="text-center text-muted py-4">
+                                                    Nessun ambiente cliente presente. Premi "Nuovo" per aggiungerne uno.
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== FORM DETTAGLIO ===== *@
+                    <div class="card">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <strong>@(IsModifica ? "📝 Modifica Ambiente Cliente" : "➕ Nuovo Ambiente Cliente")</strong>
+                            @if (corrente.Id > 0)
+                            {
+                                <span class="badge bg-primary">ID: @corrente.Id</span>
+                            }
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-3">
+                                @* Cliente *@
+                                <div class="col-md-6">
+                                    <label class="form-label">Cliente <span class="text-danger">*</span></label>
+                                    <select class="form-select" @bind="corrente.ClienteId">
+                                        <option value="0">-- Seleziona cliente --</option>
+                                        @foreach (var c in clienti)
+                                        {
+                                            <option value="@c.Id">@c.Nome</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                @* Ambiente *@
+                                <div class="col-md-6">
+                                    <label class="form-label">Ambiente <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" list="datalistAmbienti"
+                                           @bind="corrente.Ambiente"
+                                           maxlength="100"
+                                           placeholder="Es: Test, Qualità, Produzione..." />
+                                    <datalist id="datalistAmbienti">
+                                        @foreach (var a in ambientiDistinti)
+                                        {
+                                            <option value="@a"></option>
+                                        }
+                                    </datalist>
+                                </div>
+
+                                @* Application Server *@
+                                <div class="col-md-6">
+                                    <label class="form-label">Application Server</label>
+                                    <input type="text" class="form-control" @bind="corrente.ApplicationServer"
+                                           maxlength="500" placeholder="Es: APP01.azienda.local" />
+                                </div>
+
+                                @* Database Server *@
+                                <div class="col-md-6">
+                                    <label class="form-label">Database Server</label>
+                                    <input type="text" class="form-control" @bind="corrente.DatabaseServer"
+                                           maxlength="500" placeholder="Es: DB01.azienda.local\SQL2019" />
+                                </div>
+
+                                @* Persone di riferimento *@
+                                <div class="col-12">
+                                    <label class="form-label">Persone di riferimento</label>
+                                    <textarea class="form-control" rows="3"
+                                              @bind="corrente.PersoneRiferimento"
+                                              placeholder="Nomi, email, telefoni dei referenti..."></textarea>
+                                </div>
+
+                                @* Come collegarsi (rich HTML editor) *@
+                                <div class="col-12">
+                                    <label class="form-label">Come collegarsi</label>
+                                    @* Toolbar sopra *@
+                                    <div class="editor-toolbar">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoIndentaLeft"
+                                                title="Indenta a sinistra" @onmousedown:preventDefault>
+                                            ⇤ ←
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoIndentaRight"
+                                                title="Indenta a destra" @onmousedown:preventDefault>
+                                            ⇥ →
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-dark btn-sm fw-bold" type="button"
+                                                @onclick="CollegamentoBold"
+                                                title="Grassetto">
+                                            G
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="CollegamentoHighlightGiallo"
+                                                title="Evidenzia in giallo"
+                                                style="background-color: yellow; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="CollegamentoHighlightArancione"
+                                                title="Evidenzia in arancione"
+                                                style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="CollegamentoHighlightVerde"
+                                                title="Evidenzia in verde"
+                                                style="background-color: lightgreen; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoBarrato"
+                                                title="Barrato"
+                                                style="text-decoration: line-through;">
+                                            S
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoSottolineato"
+                                                title="Sottolineato"
+                                                style="text-decoration: underline;">
+                                            S
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="CollegamentoColoreRosso"
+                                                title="Colora in rosso"
+                                                style="color: red; font-weight: bold; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoRimuoviFormattazione"
+                                                title="Rimuovi formattazione">
+                                            ✕
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoInserisciTimestamp"
+                                                title="Inserisci ora corrente">
+                                            🕐
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoInserisciSeparatore"
+                                                title="Separatore sottile">
+                                            ─
+                                        </button>
+                                        <button class="btn btn-outline-dark btn-sm" type="button"
+                                                @onclick="CollegamentoInserisciSeparatoreSpesso"
+                                                title="Separatore spesso"
+                                                style="font-weight: 900;">
+                                            █
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="CollegamentoInserisciSeparatoreRosso"
+                                                title="Separatore rosso"
+                                                style="color: red; font-weight: 900; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            █
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoRimuoviRigheVuote"
+                                                title="Rimuovi righe vuote"
+                                                @onmousedown:preventDefault>
+                                            ⊟
+                                        </button>
+                                    </div>
+                                    <div @ref="collegamentoEditorRef"
+                                         id="collegamento-editor-div"
+                                         onkeydown="collegamentoEditorHelper.handleTab(event,this)"
+                                         contenteditable="true"
+                                         class="form-control note-editor"
+                                         style="min-height: 140px; max-height: 280px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                                         placeholder="Procedura, link, credenziali, VPN, RDP, ecc.">
+                                    </div>
+                                </div>
+
+                                @if (corrente.DataModifica.HasValue)
+                                {
+                                    <div class="col-12 small text-muted">
+                                        Ultima modifica: @corrente.DataModifica.Value.ToString("dd/MM/yyyy HH:mm:ss")
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== MESSAGGI ===== *@
+                    @if (!string.IsNullOrEmpty(messaggio))
+                    {
+                        <div class="alert @(isErrore ? "alert-danger" : "alert-success") alert-dismissible fade show mt-3" role="alert">
+                            @messaggio
+                            <button type="button" class="btn-close" @onclick="() => messaggio = string.Empty"></button>
+                        </div>
+                    }
+                </div>
+
+                @* ===== FOOTER ===== *@
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Chiudi">
+                        ❌ Chiudi
+                    </button>
+                    <button type="button" class="btn btn-primary" @onclick="Salva" disabled="@isSaving">
+                        💾 Salva
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ===== MODALE CONFERMA ELIMINAZIONE ===== *@
+    @if (mostraConfermaElimina)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.6); z-index: 2000;">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">⚠️ Conferma eliminazione</h5>
+                        <button type="button" class="btn-close btn-close-white" @onclick="AnnullaElimina"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (daEliminare != null)
+                        {
+                            <p>Confermi l'eliminazione dell'ambiente:</p>
+                            <ul>
+                                <li><strong>Cliente:</strong> @daEliminare.NomeCliente</li>
+                                <li><strong>Ambiente:</strong> @daEliminare.Ambiente</li>
+                            </ul>
+                            <p class="text-muted small">L'operazione sarà registrata nel log.</p>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="AnnullaElimina">Annulla</button>
+                        <button type="button" class="btn btn-danger" @onclick="ConfermaElimina">🗑️ Elimina</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    #region Parameters
+
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnChiudi { get; set; }
+
+    #endregion
+
+    #region Fields
+
+    private List<ClienteAmbienteDto> righe = new();
+    private List<ClienteDto> clienti = new();
+    private List<string> ambientiDistinti = new();
+    private ClienteAmbienteDto corrente = new();
+
+    private ElementReference collegamentoEditorRef;
+    private bool collegamentoEditorNeedsUpdate = false;
+
+    private bool isLoading = false;
+    private bool isSaving = false;
+    private string messaggio = string.Empty;
+    private bool isErrore = false;
+
+    private bool mostraConfermaElimina = false;
+    private ClienteAmbienteDto? daEliminare;
+
+    private bool _wasVisible = false;
+
+    private bool IsModifica => corrente.Id > 0;
+
+    #endregion
+
+    #region Lifecycle
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && !_wasVisible)
+        {
+            _wasVisible = true;
+            await CaricaTutto();
+            corrente = new ClienteAmbienteDto();
+            collegamentoEditorNeedsUpdate = true;
+        }
+        else if (!IsVisible && _wasVisible)
+        {
+            _wasVisible = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (collegamentoEditorNeedsUpdate && IsVisible)
+        {
+            collegamentoEditorNeedsUpdate = false;
+            try
+            {
+                await JS.InvokeVoidAsync("collegamentoEditorHelper.setContent",
+                    collegamentoEditorRef, corrente.ComeCollegarsi ?? string.Empty);
+            }
+            catch { /* ref non ancora pronto */ }
+        }
+    }
+
+    #endregion
+
+    #region Data Loading
+
+    private async Task CaricaTutto()
+    {
+        isLoading = true;
+        try
+        {
+            righe = await ClienteAmbienteService.GetAllAsync();
+            clienti = await ClienteService.GetClientiAsync();
+            ambientiDistinti = await ClienteAmbienteService.GetAmbientiDistintiAsync();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel caricamento: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    #endregion
+
+    #region CRUD
+
+    private void Nuovo()
+    {
+        corrente = new ClienteAmbienteDto();
+        messaggio = string.Empty;
+        collegamentoEditorNeedsUpdate = true;
+    }
+
+    private void Seleziona(ClienteAmbienteDto r)
+    {
+        corrente = new ClienteAmbienteDto
+        {
+            Id = r.Id,
+            ClienteId = r.ClienteId,
+            NomeCliente = r.NomeCliente,
+            Ambiente = r.Ambiente,
+            ApplicationServer = r.ApplicationServer,
+            DatabaseServer = r.DatabaseServer,
+            PersoneRiferimento = r.PersoneRiferimento,
+            ComeCollegarsi = r.ComeCollegarsi,
+            DataModifica = r.DataModifica
+        };
+        messaggio = string.Empty;
+        collegamentoEditorNeedsUpdate = true;
+    }
+
+    private void Clona(ClienteAmbienteDto r)
+    {
+        // Popola il form con una copia (Id=0). Non salva: l'utente modifica
+        // l'ambiente e preme Salva per creare il nuovo record.
+        corrente = new ClienteAmbienteDto
+        {
+            Id = 0,
+            ClienteId = r.ClienteId,
+            NomeCliente = r.NomeCliente,
+            Ambiente = r.Ambiente,
+            ApplicationServer = r.ApplicationServer,
+            DatabaseServer = r.DatabaseServer,
+            PersoneRiferimento = r.PersoneRiferimento,
+            ComeCollegarsi = r.ComeCollegarsi,
+            DataModifica = null
+        };
+        MostraMessaggio("Record clonato nel form. Modifica l'ambiente e premi Salva per creare il nuovo record.", false);
+        collegamentoEditorNeedsUpdate = true;
+    }
+
+    private async Task Salva()
+    {
+        try
+        {
+            isSaving = true;
+
+            // Legge l'HTML dall'editor
+            try
+            {
+                corrente.ComeCollegarsi = await JS.InvokeAsync<string>(
+                    "collegamentoEditorHelper.getHtml", collegamentoEditorRef);
+            }
+            catch { /* editor non accessibile — mantiene valore esistente */ }
+
+            if (IsModifica)
+            {
+                corrente = await ClienteAmbienteService.UpdateAsync(corrente);
+                MostraMessaggio("Ambiente cliente aggiornato.", false);
+            }
+            else
+            {
+                corrente = await ClienteAmbienteService.AddAsync(corrente);
+                MostraMessaggio("Ambiente cliente aggiunto.", false);
+            }
+
+            await CaricaTutto();
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel salvataggio: {ex.Message}", true);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void ChiediElimina(ClienteAmbienteDto r)
+    {
+        daEliminare = r;
+        mostraConfermaElimina = true;
+    }
+
+    private void AnnullaElimina()
+    {
+        mostraConfermaElimina = false;
+        daEliminare = null;
+    }
+
+    private async Task ConfermaElimina()
+    {
+        if (daEliminare == null)
+        {
+            mostraConfermaElimina = false;
+            return;
+        }
+        try
+        {
+            await ClienteAmbienteService.DeleteAsync(daEliminare.Id);
+            if (corrente.Id == daEliminare.Id)
+            {
+                Nuovo();
+            }
+            await CaricaTutto();
+            MostraMessaggio("Ambiente cliente eliminato.", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nell'eliminazione: {ex.Message}", true);
+        }
+        finally
+        {
+            mostraConfermaElimina = false;
+            daEliminare = null;
+        }
+    }
+
+    #endregion
+
+    #region Editor Toolbar (Come Collegarsi)
+
+    private async Task CollegamentoBold()
+    {
+        try { await JS.InvokeVoidAsync("eseguiBold", collegamentoEditorRef); } catch { }
+    }
+    private async Task CollegamentoIndentaRight()
+    {
+        try { await JS.InvokeVoidAsync("collegamentoEditorHelper.indent", collegamentoEditorRef, true); } catch { }
+    }
+    private async Task CollegamentoIndentaLeft()
+    {
+        try { await JS.InvokeVoidAsync("collegamentoEditorHelper.indent", collegamentoEditorRef, false); } catch { }
+    }
+    private async Task CollegamentoHighlightGiallo()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", collegamentoEditorRef, "yellow"); } catch { }
+    }
+    private async Task CollegamentoHighlightArancione()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", collegamentoEditorRef, "orange"); } catch { }
+    }
+    private async Task CollegamentoHighlightVerde()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", collegamentoEditorRef, "lightgreen"); } catch { }
+    }
+    private async Task CollegamentoBarrato()
+    {
+        try { await JS.InvokeVoidAsync("eseguiBarrato", collegamentoEditorRef); } catch { }
+    }
+    private async Task CollegamentoSottolineato()
+    {
+        try { await JS.InvokeVoidAsync("eseguiSottolineato", collegamentoEditorRef); } catch { }
+    }
+    private async Task CollegamentoColoreRosso()
+    {
+        try { await JS.InvokeVoidAsync("eseguiColoreTesto", collegamentoEditorRef, "red"); } catch { }
+    }
+    private async Task CollegamentoRimuoviFormattazione()
+    {
+        try { await JS.InvokeVoidAsync("rimuoviFormattazione", collegamentoEditorRef); } catch { }
+    }
+    private async Task CollegamentoInserisciTimestamp()
+    {
+        var ts = DateTime.Now.ToString("HH:mm:ss") + " ";
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", collegamentoEditorRef, ts); } catch { }
+    }
+    private async Task CollegamentoInserisciSeparatore()
+    {
+        var sep = new string('─', 120);
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", collegamentoEditorRef, sep); } catch { }
+    }
+    private async Task CollegamentoInserisciSeparatoreSpesso()
+    {
+        var sep = new string('█', 120);
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", collegamentoEditorRef, sep); } catch { }
+    }
+    private async Task CollegamentoInserisciSeparatoreRosso()
+    {
+        var sep = "<span style=\"color:red\">" + new string('█', 120) + "</span>";
+        try { await JS.InvokeVoidAsync("inserisciHtmlACursore", collegamentoEditorRef, sep); } catch { }
+    }
+    private async Task CollegamentoRimuoviRigheVuote()
+    {
+        try { await JS.InvokeVoidAsync("collegamentoEditorHelper.rimuoviRigheVuote", collegamentoEditorRef); } catch { }
+    }
+
+    #endregion
+
+    #region UI Helpers
+
+    private async Task Chiudi()
+    {
+        corrente = new ClienteAmbienteDto();
+        messaggio = string.Empty;
+        mostraConfermaElimina = false;
+        daEliminare = null;
+        await OnChiudi.InvokeAsync();
+    }
+
+    private void MostraMessaggio(string msg, bool errore)
+    {
+        messaggio = msg;
+        isErrore = errore;
+    }
+
+    #endregion
+}

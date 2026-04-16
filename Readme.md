@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-4.6-blue)
+![Version](https://img.shields.io/badge/version-4.7-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -442,6 +442,17 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ---
 
 ## Changelog
+
+### v4.7
+- 🆕 **Gestione Clienti** (finestra dedicata): nuovo pulsante toolbar "🏢 Gestione Clienti" accanto ad "Appunti". Gestisce configurazioni per-ambiente (cliente + ambiente) con campi Application Server, Database Server, Persone di riferimento e "Come collegarsi" (editor HTML rich con toolbar completa: grassetto, evidenziazioni giallo/arancione/verde, barrato, sottolineato, rosso, timestamp, separatori, rimuovi righe vuote). Dati **condivisi** tra tutti gli utenti (banner informativo), con log di ogni modifica (Nuovo / Modifica / Elimina) tracciato per NomeUtente
+- 🆕 **Clona ambiente cliente**: il pulsante 🗐 in griglia popola il form con una copia del record (Id=0); l'utente modifica l'ambiente e preme Salva per creare un nuovo record — non salva automaticamente per evitare duplicati
+- 🔧 **Fix Reset filtri — anno corrente**: `ResetFiltri()` ora mantiene l'anno corrente (invece di azzerarlo), così il focus sull'anno di lavoro non viene perso
+- 🆕 **Feedback visivo salvataggio**: dopo ogni salvataggio la status bar lampeggia in verde per ~1.5 secondi (utile quando si usa Ctrl+S su pagine lunghe e il cambio di orario è difficile da notare). Animazione CSS `@keyframes pulse-save` / classe `.status-bar-pulse`
+- 🆕 Nuovo servizio: `ClienteAmbienteService`
+- 🆕 Nuove tabelle DB: `ClientiAmbienti`, `ClientiAmbienti_Log`
+- 🆕 Nuova modale: `GestioneClientiModal.razor`
+- 🆕 Nuovo JS helper: `collegamentoEditorHelper` in `wwwroot/index.html` (stessa interfaccia di `noteEditorHelper`)
+- 🆕 Nuova migrazione DB: `MigrateToV4.7.sql`
 
 ### v4.6
 - 🔧 **Fix Duplica attività — Ambienti di rilascio**: `DuplicaAttivita()` ora carica gli ambienti di rilascio dal DB prima di copiarli, risolvendo il problema per cui gli ambienti risultavano vuoti nell'attività duplicata

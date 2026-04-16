@@ -83,6 +83,9 @@ public static class MauiProgram
         // ClienteService: Scoped per la gestione dei clienti con logging
         builder.Services.AddScoped<ClienteService>();
 
+        // ClienteAmbienteService: Scoped per la gestione degli ambienti per cliente (v4.7)
+        builder.Services.AddScoped<ClienteAmbienteService>();
+
         // SegnalazioneService: Scoped per la gestione delle segnalazioni
         builder.Services.AddScoped<SegnalazioneService>();
 

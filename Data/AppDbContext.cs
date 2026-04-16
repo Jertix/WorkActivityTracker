@@ -76,6 +76,12 @@ public class AppDbContext : DbContext
     /// <summary>Tabella storico versioni dei campi Note e ChangesetCoinvolti</summary>
     public DbSet<EditorHistoryEntry> EditorHistory { get; set; }
 
+    /// <summary>Tabella ambienti per cliente (Application Server, Database Server, come collegarsi)</summary>
+    public DbSet<ClienteAmbiente> ClientiAmbienti { get; set; } = null!;
+
+    /// <summary>Tabella log modifiche a ClientiAmbienti</summary>
+    public DbSet<ClienteAmbienteLog> ClientiAmbientiLog { get; set; } = null!;
+
     /// <summary>
     /// Configura il modello EF Core: chiavi, indici, relazioni.
     /// </summary>
@@ -159,5 +165,17 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<EditorHistoryEntry>()
             .Property(e => e.DataSalvataggio)
             .HasDefaultValueSql("GETDATE()");
+
+        // ClientiAmbienti: indice unico composto (ClienteId, Ambiente)
+        modelBuilder.Entity<ClienteAmbiente>()
+            .HasIndex(ca => new { ca.ClienteId, ca.Ambiente })
+            .IsUnique();
+
+        // ClientiAmbienti: relazione con Cliente (restrict — il cliente è soft-deleted via Attivo)
+        modelBuilder.Entity<ClienteAmbiente>()
+            .HasOne(ca => ca.Cliente)
+            .WithMany()
+            .HasForeignKey(ca => ca.ClienteId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

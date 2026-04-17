@@ -67,13 +67,13 @@
                                                     <td class="fw-bold">@r.NomeCliente</td>
                                                     <td>@r.Ambiente</td>
                                                     <td>
-                                                        <button class="btn btn-sm btn-outline-primary me-1"
+                                                        <button class="btn btn-sm btn-primary me-1"
                                                                 @onclick="() => Clona(r)"
                                                                 @onclick:stopPropagation="true"
                                                                 title="Clona questo record nel form">
                                                             🗐
                                                         </button>
-                                                        <button class="btn btn-sm btn-outline-danger"
+                                                        <button class="btn btn-sm btn-danger"
                                                                 @onclick="() => ChiediElimina(r)"
                                                                 @onclick:stopPropagation="true"
                                                                 title="Elimina">
@@ -256,7 +256,7 @@
                                          onkeydown="collegamentoEditorHelper.handleTab(event,this)"
                                          contenteditable="true"
                                          class="form-control note-editor"
-                                         style="min-height: 140px; max-height: 280px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                                         style="min-height: 240px; max-height: 400px; overflow-y: auto; overflow-x: auto; white-space: pre;"
                                          placeholder="Procedura, link, credenziali, VPN, RDP, ecc.">
                                     </div>
                                 </div>

@@ -469,9 +469,9 @@
                 
                 @* ===== PRIMA RIGA: Tipo Attività, Data, Cliente, Ore, Versione ===== *@
                 <div class="col-md-2">
-                    <label class="form-label">Tipo Attività</label>
+                    <label class="form-label fw-bold">Tipo Attività</label>
                     <div class="input-group">
-                        <select class="form-select @(AttivitaCorrente.TipoAttivita != TipiAttivita.Lavoro ? "border-warning fw-bold" : "")"
+                        <select class="form-select fw-bold @(AttivitaCorrente.TipoAttivita != TipiAttivita.Lavoro ? "border-warning" : "")"
                                 @bind="AttivitaCorrente.TipoAttivita">
                             @foreach (var tipo in tipiAttivitaLista)
                             {
@@ -489,15 +489,15 @@
                     </div>
                 </div>
                 <div class="col-md-2">
-                    <label class="form-label">Data <span class="text-danger">*</span></label>
-                    <input type="date" class="form-control" @bind="AttivitaCorrente.Data" />
+                    <label class="form-label fw-bold">Data <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control fw-bold" @bind="AttivitaCorrente.Data" />
                 </div>
                 @if (AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro)
                 {
                     <div class="col-md-3">
-                        <label class="form-label">Cliente</label>
+                        <label class="form-label fw-bold">Cliente</label>
                         <div class="input-group">
-                            <select class="form-select" @bind="AttivitaCorrente.ClienteId">
+                            <select class="form-select fw-bold" @bind="AttivitaCorrente.ClienteId">
                                 @foreach (var cliente in clientiOrdinati)
                                 {
                                     <option value="@cliente.Id">@cliente.Nome</option>
@@ -511,19 +511,19 @@
                         </div>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label">Ore Lavorate <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control" @bind="AttivitaCorrente.OreLavorate" min="0" max="24" step="0.5" />
+                        <label class="form-label fw-bold">Ore Lavorate <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control fw-bold" @bind="AttivitaCorrente.OreLavorate" min="0" max="24" step="0.5" />
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Versione di sviluppo</label>
-                        <input type="text" class="form-control" @bind="AttivitaCorrente.Versione" placeholder="@VersioneSviluppoPlaceholder" />
+                        <label class="form-label fw-bold">Versione di sviluppo</label>
+                        <input type="text" class="form-control fw-bold" @bind="AttivitaCorrente.Versione" placeholder="@VersioneSviluppoPlaceholder" />
                     </div>
                 }
                 else
                 {
                     <div class="col-md-2">
-                        <label class="form-label">Ore @(AttivitaCorrente.TipoAttivita == TipiAttivita.Ferie ? "(0 = giorno intero)" : "")</label>
-                        <input type="number" class="form-control" @bind="AttivitaCorrente.OreLavorate" min="0" max="24" step="0.5" />
+                        <label class="form-label fw-bold">Ore @(AttivitaCorrente.TipoAttivita == TipiAttivita.Ferie ? "(0 = giorno intero)" : "")</label>
+                        <input type="number" class="form-control fw-bold" @bind="AttivitaCorrente.OreLavorate" min="0" max="24" step="0.5" />
                     </div>
                     <div class="col-md-6">
                         @if (AttivitaCorrente.TipoAttivita == TipiAttivita.Permesso ||

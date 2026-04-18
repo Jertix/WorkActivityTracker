@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-4.7-blue)
+![Version](https://img.shields.io/badge/version-4.8-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -423,6 +423,9 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 | `MigrateToV4.2.sql` | Aggiunta TipiAttivita, TipiAttivita_Log, EventiCalendario |
 | `MigrateToV4.3.sql` | Aggiunta NumeroTicket in Attivita |
 | `MigrateToV4.4.sql` | `UrlPatchRilasci` → NVARCHAR(MAX); aggiunta `DataDismissione` in Ambienti |
+| `MigrateToV4.5.sql` | Aggiunta tabella `EditorHistory` per storico versioni Note/Changeset |
+| `MigrateToV4.7.sql` | Aggiunta tabelle `ClientiAmbienti`, `ClientiAmbienti_Log` |
+| `MigrateToV4.8.sql` | Aggiunta `DatiAmbiente`, `DirectoryInstallazione`, `InformazioniPool` in `ClientiAmbienti` |
 
 ---
 
@@ -443,8 +446,19 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 
 ## Changelog
 
+### v4.8
+- 🔒 **Gestione Clienti — avviso dati sensibili**: il banner informativo ora avvisa esplicitamente di non inserire dati sensibili nei campi e di utilizzare esclusivamente **1Password** per quelli riservati
+- ⌨️ **Gestione Clienti — Ctrl+S**: il tasto **Ctrl+S** salva il record corrente anche quando la finestra Gestione Clienti è aperta (registra un callback `[JSInvokable]` sul modale, con priorità rispetto al Ctrl+S del form principale; si deregistra alla chiusura)
+- 🆕 **Gestione Clienti — editor "Dati recuperati dall'ambiente"**: nuovo editor HTML rich (sotto "Come collegarsi") con toolbar completa (grassetto, evidenziazioni giallo/arancione/verde, barrato, sottolineato, rosso, timestamp, separatori, rimuovi righe vuote). Campo `DatiAmbiente` (NVARCHAR(MAX)) nella tabella `ClientiAmbienti`
+- 🆕 **Gestione Clienti — Directory di installazione**: nuovo campo testo (col-md-8) per la directory di installazione di XLayers (es. `c:\inetpub\wwwroot\XLayers`). Campo `DirectoryInstallazione` (NVARCHAR(MAX)) nella tabella `ClientiAmbienti`
+- 🆕 **Gestione Clienti — Informazioni sul pool**: nuovo campo testo affiancato (col-md-4) per le informazioni sul pool applicativo (32bit / 64bit, identity, ecc.). Campo `InformazioniPool` (NVARCHAR(1000)) nella tabella `ClientiAmbienti`
+- 🎨 **Form principale — prima riga in grassetto**: i campi della prima riga "Nuova Attività" (Tipo Attività, Data, Cliente, Ore Lavorate, Versione di sviluppo) mostrano label e valori in **grassetto** per una maggiore leggibilità
+- 🆕 Nuova migrazione DB: `MigrateToV4.8.sql`
+- 🆕 Nuovo JS helper: `datiAmbienteEditorHelper` in `wwwroot/index.html` (alias di `collegamentoEditorHelper`)
+- 🔧 `registraCtrlSModal` / `deregistraCtrlSModal` in `wwwroot/index.html`: supporto Ctrl+S a livello di modale con priorità sul form principale
+
 ### v4.7
-- 🆕 **Gestione Clienti** (finestra dedicata): nuovo pulsante toolbar "🏢 Gestione Clienti" accanto ad "Appunti". Gestisce configurazioni per-ambiente (cliente + ambiente) con campi Application Server, Database Server, Persone di riferimento e "Come collegarsi" (editor HTML rich con toolbar completa: grassetto, evidenziazioni giallo/arancione/verde, barrato, sottolineato, rosso, timestamp, separatori, rimuovi righe vuote). Dati **condivisi** tra tutti gli utenti (banner informativo), con log di ogni modifica (Nuovo / Modifica / Elimina) tracciato per NomeUtente
+- 🆕 **Gestione Clienti** (finestra dedicata): nuovo pulsante toolbar "🏢 Gestione Clienti" accanto ad "Appunti". Gestisce configurazioni per-ambiente (cliente + ambiente) con campi Application Server, Database Server, Persone di riferimento, Directory di installazione XLayers, Informazioni pool e "Come collegarsi" (editor HTML rich con toolbar completa). Dati **condivisi** tra tutti gli utenti (banner informativo con avviso dati sensibili → usare 1Password), con log di ogni modifica (Nuovo / Modifica / Elimina) tracciato per NomeUtente
 - 🆕 **Clona ambiente cliente**: il pulsante 🗐 in griglia popola il form con una copia del record (Id=0); l'utente modifica l'ambiente e preme Salva per creare un nuovo record — non salva automaticamente per evitare duplicati
 - 🔧 **Fix Reset filtri — anno corrente**: `ResetFiltri()` ora mantiene l'anno corrente (invece di azzerarlo), così il focus sull'anno di lavoro non viene perso
 - 🆕 **Feedback visivo salvataggio**: dopo ogni salvataggio la status bar lampeggia in verde per ~1.5 secondi (utile quando si usa Ctrl+S su pagine lunghe e il cambio di orario è difficile da notare). Animazione CSS `@keyframes pulse-save` / classe `.status-bar-pulse`

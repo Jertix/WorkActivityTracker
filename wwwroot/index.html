@@ -52,13 +52,16 @@
     <!-- Ctrl+S globale: chiama il metodo Blazor registrato -->
     <script>
         window._ctrlSRef = null;
+        window._ctrlSModalRef = null;
 
         window.registraCtrlS = function (dotNetRef) {
             window._ctrlSRef = dotNetRef;
             document.addEventListener('keydown', function (e) {
                 if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
                     e.preventDefault();
-                    if (window._ctrlSRef) {
+                    if (window._ctrlSModalRef) {
+                        window._ctrlSModalRef.invokeMethodAsync('SalvaViaShortcut');
+                    } else if (window._ctrlSRef) {
                         window._ctrlSRef.invokeMethodAsync('SalvaViaShortcut');
                     }
                 }
@@ -67,6 +70,14 @@
 
         window.deregistraCtrlS = function () {
             window._ctrlSRef = null;
+        };
+
+        window.registraCtrlSModal = function (dotNetRef) {
+            window._ctrlSModalRef = dotNetRef;
+        };
+
+        window.deregistraCtrlSModal = function () {
+            window._ctrlSModalRef = null;
         };
     </script>
 
@@ -404,7 +415,8 @@
         };
     </script>
 
-    <!-- Collegamento Editor Helper: contenteditable per "Come collegarsi" nella Gestione Clienti (v4.7) -->
+    <!-- Collegamento Editor Helper: contenteditable per "Come collegarsi" nella Gestione Clienti (v4.7)
+         Dati Ambiente Editor Helper: contenteditable per "Dati recuperati dall'ambiente" (v4.8) -->
     <script>
         window.collegamentoEditorHelper = {
             setContent: function (el, html) {
@@ -484,6 +496,9 @@
                 el.innerHTML = html;
             }
         };
+
+        // datiAmbienteEditorHelper: stessa interfaccia di collegamentoEditorHelper (v4.8)
+        window.datiAmbienteEditorHelper = window.collegamentoEditorHelper;
     </script>
 
     <!-- Sostituisce le occorrenze di TODO (parola isolata) con '--' nei text node dell'editor,

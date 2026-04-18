@@ -3,6 +3,7 @@
 @inject ClienteService ClienteService
 @inject ClienteAmbienteService ClienteAmbienteService
 @inject IJSRuntime JS
+@implements IDisposable
 
 @*
     Componente modale per la gestione degli ambienti per cliente (v4.7).
@@ -28,6 +29,7 @@
                     @* Banner info condivisione *@
                     <div class="alert alert-info py-2 mb-3 small">
                         ⚠️ <strong>Attenzione:</strong> le informazioni mostrate in questa finestra sono uguali e condivise per tutti gli utenti che utilizzano questo programma.
+                        Non inserire <strong>dati sensibili</strong> nei campi sottostanti: per i dati sensibili utilizzare esclusivamente <strong>1Password</strong>.
                     </div>
 
                     @* ===== GRIGLIA AMBIENTI CLIENTE ===== *@
@@ -157,6 +159,19 @@
                                               placeholder="Nomi, email, telefoni dei referenti..."></textarea>
                                 </div>
 
+                                @* Directory installazione + Info pool *@
+                                <div class="col-md-8">
+                                    <label class="form-label">Directory di installazione di XLayers</label>
+                                    <input type="text" class="form-control" @bind="corrente.DirectoryInstallazione"
+                                           placeholder="Es: c:\inetpub\wwwroot\XLayers" />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Informazioni sul pool</label>
+                                    <input type="text" class="form-control" @bind="corrente.InformazioniPool"
+                                           maxlength="1000"
+                                           placeholder="Es: 32bit / 64bit, identity, ecc." />
+                                </div>
+
                                 @* Come collegarsi (rich HTML editor) *@
                                 <div class="col-12">
                                     <label class="form-label">Come collegarsi</label>
@@ -261,6 +276,110 @@
                                     </div>
                                 </div>
 
+                                @* Dati recuperati dall'ambiente del cliente (rich HTML editor) *@
+                                <div class="col-12">
+                                    <label class="form-label">Dati recuperati dall'ambiente del cliente <span class="text-muted small">(Installationlog.ini, proprietà di sistema, ecc.)</span></label>
+                                    @* Toolbar sopra *@
+                                    <div class="editor-toolbar">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteIndentaLeft"
+                                                title="Indenta a sinistra" @onmousedown:preventDefault>
+                                            ⇤ ←
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteIndentaRight"
+                                                title="Indenta a destra" @onmousedown:preventDefault>
+                                            ⇥ →
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-dark btn-sm fw-bold" type="button"
+                                                @onclick="DatiAmbienteBold"
+                                                title="Grassetto">
+                                            G
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="DatiAmbienteHighlightGiallo"
+                                                title="Evidenzia in giallo"
+                                                style="background-color: yellow; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="DatiAmbienteHighlightArancione"
+                                                title="Evidenzia in arancione"
+                                                style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="DatiAmbienteHighlightVerde"
+                                                title="Evidenzia in verde"
+                                                style="background-color: lightgreen; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteBarrato"
+                                                title="Barrato"
+                                                style="text-decoration: line-through;">
+                                            S
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteSottolineato"
+                                                title="Sottolineato"
+                                                style="text-decoration: underline;">
+                                            S
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="DatiAmbienteColoreRosso"
+                                                title="Colora in rosso"
+                                                style="color: red; font-weight: bold; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteRimuoviFormattazione"
+                                                title="Rimuovi formattazione">
+                                            ✕
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteInserisciTimestamp"
+                                                title="Inserisci ora corrente">
+                                            🕐
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteInserisciSeparatore"
+                                                title="Separatore sottile">
+                                            ─
+                                        </button>
+                                        <button class="btn btn-outline-dark btn-sm" type="button"
+                                                @onclick="DatiAmbienteInserisciSeparatoreSpesso"
+                                                title="Separatore spesso"
+                                                style="font-weight: 900;">
+                                            █
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="DatiAmbienteInserisciSeparatoreRosso"
+                                                title="Separatore rosso"
+                                                style="color: red; font-weight: 900; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            █
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteRimuoviRigheVuote"
+                                                title="Rimuovi righe vuote"
+                                                @onmousedown:preventDefault>
+                                            ⊟
+                                        </button>
+                                    </div>
+                                    <div @ref="datiAmbienteEditorRef"
+                                         id="dati-ambiente-editor-div"
+                                         onkeydown="datiAmbienteEditorHelper.handleTab(event,this)"
+                                         contenteditable="true"
+                                         class="form-control note-editor"
+                                         style="min-height: 240px; max-height: 400px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                                         placeholder="Incolla qui i dati recuperati dall'ambiente (Installationlog.ini, proprietà di sistema, ecc.)">
+                                    </div>
+                                </div>
+
                                 @if (corrente.DataModifica.HasValue)
                                 {
                                     <div class="col-12 small text-muted">
@@ -343,6 +462,11 @@
     private ElementReference collegamentoEditorRef;
     private bool collegamentoEditorNeedsUpdate = false;
 
+    private ElementReference datiAmbienteEditorRef;
+    private bool datiAmbienteEditorNeedsUpdate = false;
+
+    private DotNetObjectReference<GestioneClientiModal>? _dotNetRef;
+
     private bool isLoading = false;
     private bool isSaving = false;
     private string messaggio = string.Empty;
@@ -367,10 +491,14 @@
             await CaricaTutto();
             corrente = new ClienteAmbienteDto();
             collegamentoEditorNeedsUpdate = true;
+            datiAmbienteEditorNeedsUpdate = true;
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("registraCtrlSModal", _dotNetRef);
         }
         else if (!IsVisible && _wasVisible)
         {
             _wasVisible = false;
+            await JS.InvokeVoidAsync("deregistraCtrlSModal");
         }
     }
 
@@ -383,6 +511,17 @@
             {
                 await JS.InvokeVoidAsync("collegamentoEditorHelper.setContent",
                     collegamentoEditorRef, corrente.ComeCollegarsi ?? string.Empty);
+            }
+            catch { /* ref non ancora pronto */ }
+        }
+
+        if (datiAmbienteEditorNeedsUpdate && IsVisible)
+        {
+            datiAmbienteEditorNeedsUpdate = false;
+            try
+            {
+                await JS.InvokeVoidAsync("datiAmbienteEditorHelper.setContent",
+                    datiAmbienteEditorRef, corrente.DatiAmbiente ?? string.Empty);
             }
             catch { /* ref non ancora pronto */ }
         }
@@ -420,6 +559,7 @@
         corrente = new ClienteAmbienteDto();
         messaggio = string.Empty;
         collegamentoEditorNeedsUpdate = true;
+        datiAmbienteEditorNeedsUpdate = true;
     }
 
     private void Seleziona(ClienteAmbienteDto r)
@@ -434,10 +574,14 @@
             DatabaseServer = r.DatabaseServer,
             PersoneRiferimento = r.PersoneRiferimento,
             ComeCollegarsi = r.ComeCollegarsi,
+            DatiAmbiente = r.DatiAmbiente,
+            DirectoryInstallazione = r.DirectoryInstallazione,
+            InformazioniPool = r.InformazioniPool,
             DataModifica = r.DataModifica
         };
         messaggio = string.Empty;
         collegamentoEditorNeedsUpdate = true;
+        datiAmbienteEditorNeedsUpdate = true;
     }
 
     private void Clona(ClienteAmbienteDto r)
@@ -454,10 +598,14 @@
             DatabaseServer = r.DatabaseServer,
             PersoneRiferimento = r.PersoneRiferimento,
             ComeCollegarsi = r.ComeCollegarsi,
+            DatiAmbiente = r.DatiAmbiente,
+            DirectoryInstallazione = r.DirectoryInstallazione,
+            InformazioniPool = r.InformazioniPool,
             DataModifica = null
         };
         MostraMessaggio("Record clonato nel form. Modifica l'ambiente e premi Salva per creare il nuovo record.", false);
         collegamentoEditorNeedsUpdate = true;
+        datiAmbienteEditorNeedsUpdate = true;
     }
 
     private async Task Salva()
@@ -466,11 +614,18 @@
         {
             isSaving = true;
 
-            // Legge l'HTML dall'editor
+            // Legge l'HTML dagli editor
             try
             {
                 corrente.ComeCollegarsi = await JS.InvokeAsync<string>(
                     "collegamentoEditorHelper.getHtml", collegamentoEditorRef);
+            }
+            catch { /* editor non accessibile — mantiene valore esistente */ }
+
+            try
+            {
+                corrente.DatiAmbiente = await JS.InvokeAsync<string>(
+                    "datiAmbienteEditorHelper.getHtml", datiAmbienteEditorRef);
             }
             catch { /* editor non accessibile — mantiene valore esistente */ }
 
@@ -536,6 +691,13 @@
             daEliminare = null;
         }
     }
+
+    #endregion
+
+    #region Ctrl+S Shortcut
+
+    [JSInvokable]
+    public async Task SalvaViaShortcut() => await Salva();
 
     #endregion
 
@@ -608,6 +770,75 @@
 
     #endregion
 
+    #region Editor Toolbar (Dati Ambiente)
+
+    private async Task DatiAmbienteBold()
+    {
+        try { await JS.InvokeVoidAsync("eseguiBold", datiAmbienteEditorRef); } catch { }
+    }
+    private async Task DatiAmbienteIndentaRight()
+    {
+        try { await JS.InvokeVoidAsync("datiAmbienteEditorHelper.indent", datiAmbienteEditorRef, true); } catch { }
+    }
+    private async Task DatiAmbienteIndentaLeft()
+    {
+        try { await JS.InvokeVoidAsync("datiAmbienteEditorHelper.indent", datiAmbienteEditorRef, false); } catch { }
+    }
+    private async Task DatiAmbienteHighlightGiallo()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", datiAmbienteEditorRef, "yellow"); } catch { }
+    }
+    private async Task DatiAmbienteHighlightArancione()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", datiAmbienteEditorRef, "orange"); } catch { }
+    }
+    private async Task DatiAmbienteHighlightVerde()
+    {
+        try { await JS.InvokeVoidAsync("eseguiHighlight", datiAmbienteEditorRef, "lightgreen"); } catch { }
+    }
+    private async Task DatiAmbienteBarrato()
+    {
+        try { await JS.InvokeVoidAsync("eseguiBarrato", datiAmbienteEditorRef); } catch { }
+    }
+    private async Task DatiAmbienteSottolineato()
+    {
+        try { await JS.InvokeVoidAsync("eseguiSottolineato", datiAmbienteEditorRef); } catch { }
+    }
+    private async Task DatiAmbienteColoreRosso()
+    {
+        try { await JS.InvokeVoidAsync("eseguiColoreTesto", datiAmbienteEditorRef, "red"); } catch { }
+    }
+    private async Task DatiAmbienteRimuoviFormattazione()
+    {
+        try { await JS.InvokeVoidAsync("rimuoviFormattazione", datiAmbienteEditorRef); } catch { }
+    }
+    private async Task DatiAmbienteInserisciTimestamp()
+    {
+        var ts = DateTime.Now.ToString("HH:mm:ss") + " ";
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", datiAmbienteEditorRef, ts); } catch { }
+    }
+    private async Task DatiAmbienteInserisciSeparatore()
+    {
+        var sep = new string('─', 120);
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", datiAmbienteEditorRef, sep); } catch { }
+    }
+    private async Task DatiAmbienteInserisciSeparatoreSpesso()
+    {
+        var sep = new string('█', 120);
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", datiAmbienteEditorRef, sep); } catch { }
+    }
+    private async Task DatiAmbienteInserisciSeparatoreRosso()
+    {
+        var sep = "<span style=\"color:red\">" + new string('█', 120) + "</span>";
+        try { await JS.InvokeVoidAsync("inserisciHtmlACursore", datiAmbienteEditorRef, sep); } catch { }
+    }
+    private async Task DatiAmbienteRimuoviRigheVuote()
+    {
+        try { await JS.InvokeVoidAsync("datiAmbienteEditorHelper.rimuoviRigheVuote", datiAmbienteEditorRef); } catch { }
+    }
+
+    #endregion
+
     #region UI Helpers
 
     private async Task Chiudi()
@@ -623,6 +854,11 @@
     {
         messaggio = msg;
         isErrore = errore;
+    }
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
     }
 
     #endregion

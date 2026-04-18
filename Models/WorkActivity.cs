@@ -938,6 +938,16 @@ public class ClienteAmbiente
     /// <summary>Istruzioni su come collegarsi al cliente/ambiente (HTML)</summary>
     public string? ComeCollegarsi { get; set; }
 
+    /// <summary>Dati recuperati dall'ambiente del cliente (HTML, es: Installationlog.ini, proprietà di sistema)</summary>
+    public string? DatiAmbiente { get; set; }
+
+    /// <summary>Directory di installazione di XLayers (es: c:\inetpub\wwwroot\XLayers)</summary>
+    public string? DirectoryInstallazione { get; set; }
+
+    /// <summary>Informazioni sul pool (es: 32bit / 64bit, etc...)</summary>
+    [MaxLength(1000)]
+    public string? InformazioniPool { get; set; }
+
     public DateTime? DataModifica { get; set; }
 
     [ForeignKey(nameof(ClienteId))]
@@ -985,5 +995,8 @@ public class ClienteAmbienteDto
     public string? DatabaseServer { get; set; }
     public string? PersoneRiferimento { get; set; }
     public string? ComeCollegarsi { get; set; }
+    public string? DatiAmbiente { get; set; }
+    public string? DirectoryInstallazione { get; set; }
+    public string? InformazioniPool { get; set; }
     public DateTime? DataModifica { get; set; }
 }

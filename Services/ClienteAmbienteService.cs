@@ -41,6 +41,9 @@ public class ClienteAmbienteService
                         DatabaseServer = ca.DatabaseServer,
                         PersoneRiferimento = ca.PersoneRiferimento,
                         ComeCollegarsi = ca.ComeCollegarsi,
+                        DatiAmbiente = ca.DatiAmbiente,
+                        DirectoryInstallazione = ca.DirectoryInstallazione,
+                        InformazioniPool = ca.InformazioniPool,
                         DataModifica = ca.DataModifica
                     };
 
@@ -87,6 +90,9 @@ public class ClienteAmbienteService
             DatabaseServer = string.IsNullOrWhiteSpace(dto.DatabaseServer) ? null : dto.DatabaseServer.Trim(),
             PersoneRiferimento = string.IsNullOrWhiteSpace(dto.PersoneRiferimento) ? null : dto.PersoneRiferimento,
             ComeCollegarsi = string.IsNullOrWhiteSpace(dto.ComeCollegarsi) ? null : dto.ComeCollegarsi,
+            DatiAmbiente = string.IsNullOrWhiteSpace(dto.DatiAmbiente) ? null : dto.DatiAmbiente,
+            DirectoryInstallazione = string.IsNullOrWhiteSpace(dto.DirectoryInstallazione) ? null : dto.DirectoryInstallazione,
+            InformazioniPool = string.IsNullOrWhiteSpace(dto.InformazioniPool) ? null : dto.InformazioniPool,
             DataModifica = DateTime.Now
         };
         context.ClientiAmbienti.Add(entity);
@@ -155,6 +161,9 @@ public class ClienteAmbienteService
             DatabaseServer = entity.DatabaseServer,
             PersoneRiferimento = entity.PersoneRiferimento,
             ComeCollegarsi = entity.ComeCollegarsi,
+            DatiAmbiente = entity.DatiAmbiente,
+            DirectoryInstallazione = entity.DirectoryInstallazione,
+            InformazioniPool = entity.InformazioniPool,
             DataModifica = entity.DataModifica
         };
         var vecchioValore = Serialize(vecchioDto);
@@ -170,6 +179,9 @@ public class ClienteAmbienteService
         entity.DatabaseServer = string.IsNullOrWhiteSpace(dto.DatabaseServer) ? null : dto.DatabaseServer.Trim();
         entity.PersoneRiferimento = string.IsNullOrWhiteSpace(dto.PersoneRiferimento) ? null : dto.PersoneRiferimento;
         entity.ComeCollegarsi = string.IsNullOrWhiteSpace(dto.ComeCollegarsi) ? null : dto.ComeCollegarsi;
+        entity.DatiAmbiente = string.IsNullOrWhiteSpace(dto.DatiAmbiente) ? null : dto.DatiAmbiente;
+        entity.DirectoryInstallazione = string.IsNullOrWhiteSpace(dto.DirectoryInstallazione) ? null : dto.DirectoryInstallazione;
+        entity.InformazioniPool = string.IsNullOrWhiteSpace(dto.InformazioniPool) ? null : dto.InformazioniPool;
         entity.DataModifica = DateTime.Now;
 
         dto.NomeCliente = nuovoNomeCliente;
@@ -216,6 +228,9 @@ public class ClienteAmbienteService
             DatabaseServer = entity.DatabaseServer,
             PersoneRiferimento = entity.PersoneRiferimento,
             ComeCollegarsi = entity.ComeCollegarsi,
+            DatiAmbiente = entity.DatiAmbiente,
+            DirectoryInstallazione = entity.DirectoryInstallazione,
+            InformazioniPool = entity.InformazioniPool,
             DataModifica = entity.DataModifica
         };
 
@@ -251,5 +266,6 @@ public class ClienteAmbienteService
     private static string Serialize(ClienteAmbienteDto d) =>
         $"Cliente: {d.NomeCliente} | Ambiente: {d.Ambiente} | "
       + $"AppServer: {d.ApplicationServer} | DbServer: {d.DatabaseServer} | "
-      + $"Persone: {d.PersoneRiferimento} | ComeCollegarsi: {d.ComeCollegarsi}";
+      + $"Persone: {d.PersoneRiferimento} | ComeCollegarsi: {d.ComeCollegarsi} | "
+      + $"DirInstallazione: {d.DirectoryInstallazione} | InfoPool: {d.InformazioniPool}";
 }

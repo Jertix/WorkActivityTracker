@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-4.8-blue)
+![Version](https://img.shields.io/badge/version-4.9-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -426,6 +426,7 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 | `MigrateToV4.5.sql` | Aggiunta tabella `EditorHistory` per storico versioni Note/Changeset |
 | `MigrateToV4.7.sql` | Aggiunta tabelle `ClientiAmbienti`, `ClientiAmbienti_Log` |
 | `MigrateToV4.8.sql` | Aggiunta `DatiAmbiente`, `DirectoryInstallazione`, `InformazioniPool` in `ClientiAmbienti` |
+| `MigrateToV4.9.sql` | Aggiunta `Descrizione4`, `Descrizione5` in `Ambienti`; `TipoVersione`, `NumeroVersione` in `ClientiAmbienti` |
 
 ---
 
@@ -445,6 +446,18 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ---
 
 ## Changelog
+
+### v4.9
+- 🆕 **Congelati — Versione 4 e Versione 5**: nuove colonne `Descrizione4` e `Descrizione5` nella tabella `Ambienti` (NVARCHAR(100) NULL), visibili nella griglia "Modifica riportata sui congelati" del form principale e gestibili dall'editor Congelati (✏️ Modifica lista)
+- 🆕 **Gestione Clienti — Tipo + Numero della versione**: nuovi campi `TipoVersione` (Versione / Versione4 / Versione5) e `NumeroVersione` sulla tabella `ClientiAmbienti`. Il campo "Numero della versione" è un input con `<datalist>` popolato dai **congelati attivi** filtrati per il tipo selezionato (suggerimenti distinti, non vincolante)
+- 🆕 **Gestione Clienti — nuove colonne in griglia**: `Versione` (prefisso V / V4 / V5 + numero), `Data ultimo aggiornamento` (da `DataModifica`) e `Utente` (da `ClientiAmbienti_Log`, ultimo utente che ha modificato la riga)
+- 🆕 **Home — filtro Settimana (ISO 8601)**: nuova combo "Settimana" tra Mese e Giorno con opzioni `W1..W53` (limitate per l'anno selezionato tramite `ISOWeek.GetWeeksInYear`). Bottone affiancato che imposta automaticamente la settimana ISO corrente (con l'anno ISO corretto). Filtro applicato in memoria dopo la query base, poiché EF non traduce `ISOWeek`
+- 🆕 **Form attività — pulsante "🔍 Ricerca"**: bottone accanto al campo **Descrizione** che azzera i filtri, copia la descrizione nel campo Ricerca ed esegue la ricerca
+- 🎨 **Feedback salvataggio esteso a 4 s**: il lampeggio verde sulla status bar ora dura 4 secondi (era 1,5 s), con plateau di colore pieno tra il 10% e l'85% dell'animazione
+- 🆕 **Gestione Clienti — indicatore + mini status bar**: nuova "lucina" verde accanto al titolo 🏢 Gestione Clienti (lampeggia 4 s ad ogni salvataggio) + mini status bar sopra il footer che mostra l'orario dell'ultimo salvataggio con la stessa animazione della Home
+- 🆕 Nuova migrazione DB: `MigrateToV4.9.sql`
+- 🔧 `ActivityService.GetActivitiesAsync`: nuovo parametro opzionale `int? settimana`
+- 🎨 CSS: `@keyframes pulse-save` rivisto a 4 s, nuove classi `.save-indicator` / `.save-indicator-on` (`@keyframes pulse-dot`) e `.modal-status-bar`
 
 ### v4.8
 - 🔒 **Gestione Clienti — avviso dati sensibili**: il banner informativo ora avvisa esplicitamente di non inserire dati sensibili nei campi e di utilizzare esclusivamente **1Password** per quelli riservati

@@ -334,13 +334,52 @@ tfoot.table-secondary td {
     margin: 0 2px;
 }
 
-/* Feedback visivo salvataggio: lampeggio verde sulla status bar (v4.7) */
+/* Feedback visivo salvataggio: lampeggio verde sulla status bar (v4.9: esteso a 4s) */
 @keyframes pulse-save {
     0%   { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); background-color: #212529; }
-    30%  { box-shadow: 0 0 14px 4px rgba(40, 167, 69, 0.75); background-color: #1e5c2e; }
+    10%  { box-shadow: 0 0 14px 4px rgba(40, 167, 69, 0.75); background-color: #1e5c2e; }
+    85%  { box-shadow: 0 0 14px 4px rgba(40, 167, 69, 0.75); background-color: #1e5c2e; }
     100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); background-color: #212529; }
 }
 
 .status-bar-pulse {
-    animation: pulse-save 1.4s ease-out 1;
+    animation: pulse-save 4s ease-out 1;
+}
+
+/* Indicatore salvataggio nel modal Gestione Clienti (v4.9) */
+.save-indicator {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background-color: #adb5bd;
+    border: 1px solid #6c757d;
+    transition: background-color 0.2s;
+}
+
+.save-indicator-on {
+    animation: pulse-dot 4s ease-out 1;
+}
+
+@keyframes pulse-dot {
+    0%   { background-color: #adb5bd; box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+    10%  { background-color: #28a745; box-shadow: 0 0 10px 3px rgba(40, 167, 69, 0.85); }
+    85%  { background-color: #28a745; box-shadow: 0 0 10px 3px rgba(40, 167, 69, 0.85); }
+    100% { background-color: #adb5bd; box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+}
+
+/* Mini status bar nel modal Gestione Clienti (v4.9) */
+.modal-status-bar {
+    background-color: #212529;
+    color: #f8f9fa;
+    font-size: 0.75rem;
+    padding: 4px 16px;
+    border-top: 1px solid #495057;
+    min-height: 26px;
+    display: flex;
+    align-items: center;
+}
+
+.modal-status-bar .text-muted {
+    color: #adb5bd !important;
 }

@@ -199,7 +199,19 @@ public class Ambiente
     /// </summary>
     [MaxLength(100)]
     public string? Descrizione { get; set; }
-    
+
+    /// <summary>
+    /// Versione aggiuntiva 4 del congelato (opzionale)
+    /// </summary>
+    [MaxLength(100)]
+    public string? Descrizione4 { get; set; }
+
+    /// <summary>
+    /// Versione aggiuntiva 5 del congelato (opzionale)
+    /// </summary>
+    [MaxLength(100)]
+    public string? Descrizione5 { get; set; }
+
     /// <summary>
     /// Data di congelamento dell'ambiente
     /// </summary>
@@ -441,6 +453,8 @@ public class AmbienteDto
     public int Id { get; set; }
     public string Codice { get; set; } = string.Empty;
     public string? Descrizione { get; set; }
+    public string? Descrizione4 { get; set; }
+    public string? Descrizione5 { get; set; }
     public DateTime? DataCongelamento { get; set; }
     public DateTime? DataDismissione { get; set; }
     public bool Attivo { get; set; } = true;
@@ -948,6 +962,14 @@ public class ClienteAmbiente
     [MaxLength(1000)]
     public string? InformazioniPool { get; set; }
 
+    /// <summary>Tipo di versione selezionato: "Versione" | "Versione4" | "Versione5"</summary>
+    [MaxLength(20)]
+    public string? TipoVersione { get; set; }
+
+    /// <summary>Numero della versione (libero, può essere scelto da datalist o digitato)</summary>
+    [MaxLength(100)]
+    public string? NumeroVersione { get; set; }
+
     public DateTime? DataModifica { get; set; }
 
     [ForeignKey(nameof(ClienteId))]
@@ -998,5 +1020,9 @@ public class ClienteAmbienteDto
     public string? DatiAmbiente { get; set; }
     public string? DirectoryInstallazione { get; set; }
     public string? InformazioniPool { get; set; }
+    public string? TipoVersione { get; set; }
+    public string? NumeroVersione { get; set; }
     public DateTime? DataModifica { get; set; }
+    /// <summary>Utente dell'ultima modifica (letto da ClientiAmbienti_Log, ordinato per Timestamp desc)</summary>
+    public string? UltimoUtente { get; set; }
 }

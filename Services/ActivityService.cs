@@ -127,11 +127,12 @@ public class ActivityService
     /// <param name="adminMode">Se true, mostra le attività di tutti gli utenti</param>
     /// <returns>Lista delle attività che soddisfano i criteri di ricerca</returns>
     public async Task<List<WorkActivityDto>> GetActivitiesAsync(
-        int? anno = null, 
-        int? mese = null, 
-        int? giorno = null, 
+        int? anno = null,
+        int? mese = null,
+        int? giorno = null,
         string? ricerca = null,
-        bool adminMode = false)
+        bool adminMode = false,
+        int? settimana = null)
     {
         using var context = await _contextFactory.CreateDbContextAsync();
         var currentUser = await _userService.GetOrCreateCurrentUserAsync();
@@ -162,7 +163,9 @@ public class ActivityService
         }
 
         // Applica filtri per data
-        if (anno.HasValue)
+        // Nota: se è impostato il filtro settimana, l'anno viene confrontato con ISOWeek.GetYear
+        // (può differire da Data.Year a cavallo d'anno), quindi saltiamo il filtro anno SQL.
+        if (anno.HasValue && !settimana.HasValue)
             query = query.Where(a => a.Data.Year == anno.Value);
 
         if (mese.HasValue)
@@ -176,6 +179,15 @@ public class ActivityService
             .OrderByDescending(a => a.Data)
             .ThenByDescending(a => a.Id)
             .ToListAsync();
+
+        // Filtro settimana (ISO 8601) eseguito in memoria — EF non traduce ISOWeek
+        if (settimana.HasValue)
+        {
+            results = results.Where(a =>
+                System.Globalization.ISOWeek.GetWeekOfYear(a.Data) == settimana.Value
+                && (!anno.HasValue || System.Globalization.ISOWeek.GetYear(a.Data) == anno.Value)
+            ).ToList();
+        }
 
         // Ricerca testuale con normalizzazione degli spazi (eseguita in memoria)
         // Questo permette di cercare "oggi   sono  andato" e trovare "oggi sono andato"

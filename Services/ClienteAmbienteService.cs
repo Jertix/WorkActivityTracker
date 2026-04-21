@@ -44,10 +44,35 @@ public class ClienteAmbienteService
                         DatiAmbiente = ca.DatiAmbiente,
                         DirectoryInstallazione = ca.DirectoryInstallazione,
                         InformazioniPool = ca.InformazioniPool,
+                        TipoVersione = ca.TipoVersione,
+                        NumeroVersione = ca.NumeroVersione,
                         DataModifica = ca.DataModifica
                     };
 
-        return await query.ToListAsync();
+        var list = await query.ToListAsync();
+
+        // Recupera l'ultimo utente che ha modificato ogni (ClienteId, Ambiente) dal log
+        var ultimiUtenti = await context.ClientiAmbientiLog
+            .GroupBy(l => new { l.ClienteId, l.Ambiente })
+            .Select(g => new
+            {
+                g.Key.ClienteId,
+                g.Key.Ambiente,
+                UltimoUtente = g.OrderByDescending(x => x.Timestamp).First().NomeUtente
+            })
+            .ToListAsync();
+
+        var dict = ultimiUtenti.ToDictionary(
+            k => (k.ClienteId ?? 0, k.Ambiente ?? string.Empty),
+            v => v.UltimoUtente);
+
+        foreach (var dto in list)
+        {
+            if (dict.TryGetValue((dto.ClienteId, dto.Ambiente), out var utente))
+                dto.UltimoUtente = utente;
+        }
+
+        return list;
     }
 
     /// <summary>
@@ -93,6 +118,8 @@ public class ClienteAmbienteService
             DatiAmbiente = string.IsNullOrWhiteSpace(dto.DatiAmbiente) ? null : dto.DatiAmbiente,
             DirectoryInstallazione = string.IsNullOrWhiteSpace(dto.DirectoryInstallazione) ? null : dto.DirectoryInstallazione,
             InformazioniPool = string.IsNullOrWhiteSpace(dto.InformazioniPool) ? null : dto.InformazioniPool,
+            TipoVersione = string.IsNullOrWhiteSpace(dto.TipoVersione) ? null : dto.TipoVersione.Trim(),
+            NumeroVersione = string.IsNullOrWhiteSpace(dto.NumeroVersione) ? null : dto.NumeroVersione.Trim(),
             DataModifica = DateTime.Now
         };
         context.ClientiAmbienti.Add(entity);
@@ -164,6 +191,8 @@ public class ClienteAmbienteService
             DatiAmbiente = entity.DatiAmbiente,
             DirectoryInstallazione = entity.DirectoryInstallazione,
             InformazioniPool = entity.InformazioniPool,
+            TipoVersione = entity.TipoVersione,
+            NumeroVersione = entity.NumeroVersione,
             DataModifica = entity.DataModifica
         };
         var vecchioValore = Serialize(vecchioDto);
@@ -182,6 +211,8 @@ public class ClienteAmbienteService
         entity.DatiAmbiente = string.IsNullOrWhiteSpace(dto.DatiAmbiente) ? null : dto.DatiAmbiente;
         entity.DirectoryInstallazione = string.IsNullOrWhiteSpace(dto.DirectoryInstallazione) ? null : dto.DirectoryInstallazione;
         entity.InformazioniPool = string.IsNullOrWhiteSpace(dto.InformazioniPool) ? null : dto.InformazioniPool;
+        entity.TipoVersione = string.IsNullOrWhiteSpace(dto.TipoVersione) ? null : dto.TipoVersione.Trim();
+        entity.NumeroVersione = string.IsNullOrWhiteSpace(dto.NumeroVersione) ? null : dto.NumeroVersione.Trim();
         entity.DataModifica = DateTime.Now;
 
         dto.NomeCliente = nuovoNomeCliente;
@@ -231,6 +262,8 @@ public class ClienteAmbienteService
             DatiAmbiente = entity.DatiAmbiente,
             DirectoryInstallazione = entity.DirectoryInstallazione,
             InformazioniPool = entity.InformazioniPool,
+            TipoVersione = entity.TipoVersione,
+            NumeroVersione = entity.NumeroVersione,
             DataModifica = entity.DataModifica
         };
 
@@ -267,5 +300,6 @@ public class ClienteAmbienteService
         $"Cliente: {d.NomeCliente} | Ambiente: {d.Ambiente} | "
       + $"AppServer: {d.ApplicationServer} | DbServer: {d.DatabaseServer} | "
       + $"Persone: {d.PersoneRiferimento} | ComeCollegarsi: {d.ComeCollegarsi} | "
-      + $"DirInstallazione: {d.DirectoryInstallazione} | InfoPool: {d.InformazioniPool}";
+      + $"DirInstallazione: {d.DirectoryInstallazione} | InfoPool: {d.InformazioniPool} | "
+      + $"TipoVersione: {d.TipoVersione} | NumeroVersione: {d.NumeroVersione}";
 }

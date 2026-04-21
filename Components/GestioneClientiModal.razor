@@ -2,6 +2,7 @@
 @using WorkActivityTracker.Services
 @inject ClienteService ClienteService
 @inject ClienteAmbienteService ClienteAmbienteService
+@inject AmbienteService AmbienteService
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -19,7 +20,11 @@
 
                 @* ===== HEADER ===== *@
                 <div class="modal-header bg-warning text-dark">
-                    <h5 class="modal-title">🏢 Gestione Clienti</h5>
+                    <h5 class="modal-title d-flex align-items-center gap-2">
+                        🏢 Gestione Clienti
+                        <span class="save-indicator @(lampeggiaSalvataggio ? "save-indicator-on" : "")"
+                              title="Indicatore salvataggio (lampeggia quando un record viene salvato)"></span>
+                    </h5>
                     <button type="button" class="btn-close" @onclick="Chiudi"></button>
                 </div>
 
@@ -55,6 +60,9 @@
                                         <tr>
                                             <th>Cliente</th>
                                             <th>Ambiente</th>
+                                            <th style="width: 160px;">Versione</th>
+                                            <th style="width: 140px;">Data ultimo aggiornamento</th>
+                                            <th style="width: 120px;">Utente</th>
                                             <th style="width: 120px;">Azioni</th>
                                         </tr>
                                     </thead>
@@ -68,6 +76,19 @@
                                                     style="cursor: pointer;">
                                                     <td class="fw-bold">@r.NomeCliente</td>
                                                     <td>@r.Ambiente</td>
+                                                    <td>
+                                                        @if (!string.IsNullOrWhiteSpace(r.TipoVersione))
+                                                        {
+                                                            <span class="badge bg-secondary me-1">@TipoVersionePrefix(r.TipoVersione)</span>
+                                                        }
+                                                        @r.NumeroVersione
+                                                    </td>
+                                                    <td class="small text-muted">
+                                                        @(r.DataModifica.HasValue ? r.DataModifica.Value.ToString("dd/MM/yyyy HH:mm") : "-")
+                                                    </td>
+                                                    <td class="small text-muted">
+                                                        @(r.UltimoUtente ?? "-")
+                                                    </td>
                                                     <td>
                                                         <button class="btn btn-sm btn-primary me-1"
                                                                 @onclick="() => Clona(r)"
@@ -88,7 +109,7 @@
                                         else
                                         {
                                             <tr>
-                                                <td colspan="3" class="text-center text-muted py-4">
+                                                <td colspan="6" class="text-center text-muted py-4">
                                                     Nessun ambiente cliente presente. Premi "Nuovo" per aggiungerne uno.
                                                 </td>
                                             </tr>
@@ -133,6 +154,32 @@
                                         @foreach (var a in ambientiDistinti)
                                         {
                                             <option value="@a"></option>
+                                        }
+                                    </datalist>
+                                </div>
+
+                                @* Tipo di Versione *@
+                                <div class="col-md-3">
+                                    <label class="form-label">Tipo di Versione</label>
+                                    <select class="form-select" @bind="corrente.TipoVersione">
+                                        <option value="">-- Nessuno --</option>
+                                        <option value="Versione">Versione</option>
+                                        <option value="Versione4">Versione4</option>
+                                        <option value="Versione5">Versione5</option>
+                                    </select>
+                                </div>
+
+                                @* Numero della versione *@
+                                <div class="col-md-3">
+                                    <label class="form-label">Numero della versione</label>
+                                    <input type="text" class="form-control" list="datalistNumeriVersione"
+                                           @bind="corrente.NumeroVersione"
+                                           maxlength="100"
+                                           placeholder="Es: 3.2.50" />
+                                    <datalist id="datalistNumeriVersione">
+                                        @foreach (var n in NumeriVersioneSuggeriti)
+                                        {
+                                            <option value="@n"></option>
                                         }
                                     </datalist>
                                 </div>
@@ -400,6 +447,18 @@
                     }
                 </div>
 
+                @* ===== MINI STATUS BAR ===== *@
+                <div class="modal-status-bar @(lampeggiaSalvataggio ? "status-bar-pulse" : "")">
+                    @if (ultimoSalvataggioModal.HasValue)
+                    {
+                        <span>💾 Ultimo salvataggio: @ultimoSalvataggioModal.Value.ToString("HH:mm:ss")</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted">Nessun salvataggio effettuato in questa sessione.</span>
+                    }
+                </div>
+
                 @* ===== FOOTER ===== *@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="Chiudi">
@@ -457,7 +516,27 @@
     private List<ClienteAmbienteDto> righe = new();
     private List<ClienteDto> clienti = new();
     private List<string> ambientiDistinti = new();
+    private List<AmbienteDto> congelatiAttivi = new();
     private ClienteAmbienteDto corrente = new();
+
+    private bool lampeggiaSalvataggio = false;
+    private DateTime? ultimoSalvataggioModal;
+
+    private IEnumerable<string> NumeriVersioneSuggeriti => corrente.TipoVersione switch
+    {
+        "Versione" => congelatiAttivi.Select(a => a.Descrizione).Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!).Distinct(),
+        "Versione4" => congelatiAttivi.Select(a => a.Descrizione4).Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!).Distinct(),
+        "Versione5" => congelatiAttivi.Select(a => a.Descrizione5).Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!).Distinct(),
+        _ => Enumerable.Empty<string>()
+    };
+
+    private static string TipoVersionePrefix(string? tipo) => tipo switch
+    {
+        "Versione" => "V",
+        "Versione4" => "V4",
+        "Versione5" => "V5",
+        _ => string.Empty
+    };
 
     private ElementReference collegamentoEditorRef;
     private bool collegamentoEditorNeedsUpdate = false;
@@ -539,6 +618,7 @@
             righe = await ClienteAmbienteService.GetAllAsync();
             clienti = await ClienteService.GetClientiAsync();
             ambientiDistinti = await ClienteAmbienteService.GetAmbientiDistintiAsync();
+            congelatiAttivi = await AmbienteService.GetAmbientiAsync();
         }
         catch (Exception ex)
         {
@@ -570,6 +650,8 @@
             ClienteId = r.ClienteId,
             NomeCliente = r.NomeCliente,
             Ambiente = r.Ambiente,
+            TipoVersione = r.TipoVersione,
+            NumeroVersione = r.NumeroVersione,
             ApplicationServer = r.ApplicationServer,
             DatabaseServer = r.DatabaseServer,
             PersoneRiferimento = r.PersoneRiferimento,
@@ -577,7 +659,8 @@
             DatiAmbiente = r.DatiAmbiente,
             DirectoryInstallazione = r.DirectoryInstallazione,
             InformazioniPool = r.InformazioniPool,
-            DataModifica = r.DataModifica
+            DataModifica = r.DataModifica,
+            UltimoUtente = r.UltimoUtente
         };
         messaggio = string.Empty;
         collegamentoEditorNeedsUpdate = true;
@@ -586,14 +669,14 @@
 
     private void Clona(ClienteAmbienteDto r)
     {
-        // Popola il form con una copia (Id=0). Non salva: l'utente modifica
-        // l'ambiente e preme Salva per creare il nuovo record.
         corrente = new ClienteAmbienteDto
         {
             Id = 0,
             ClienteId = r.ClienteId,
             NomeCliente = r.NomeCliente,
             Ambiente = r.Ambiente,
+            TipoVersione = r.TipoVersione,
+            NumeroVersione = r.NumeroVersione,
             ApplicationServer = r.ApplicationServer,
             DatabaseServer = r.DatabaseServer,
             PersoneRiferimento = r.PersoneRiferimento,
@@ -639,6 +722,15 @@
                 corrente = await ClienteAmbienteService.AddAsync(corrente);
                 MostraMessaggio("Ambiente cliente aggiunto.", false);
             }
+
+            ultimoSalvataggioModal = DateTime.Now;
+            lampeggiaSalvataggio = true;
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(4000);
+                lampeggiaSalvataggio = false;
+                await InvokeAsync(StateHasChanged);
+            });
 
             await CaricaTutto();
         }

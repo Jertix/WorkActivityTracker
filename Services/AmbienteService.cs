@@ -36,6 +36,8 @@ public class AmbienteService
             Id = a.Id,
             Codice = a.Codice,
             Descrizione = a.Descrizione,
+            Descrizione4 = a.Descrizione4,
+            Descrizione5 = a.Descrizione5,
             DataCongelamento = a.DataCongelamento,
             DataDismissione = a.DataDismissione,
             Attivo = a.Attivo
@@ -58,6 +60,8 @@ public class AmbienteService
             Id = a.Id,
             Codice = a.Codice,
             Descrizione = a.Descrizione,
+            Descrizione4 = a.Descrizione4,
+            Descrizione5 = a.Descrizione5,
             DataCongelamento = a.DataCongelamento,
             DataDismissione = a.DataDismissione,
             Attivo = a.Attivo
@@ -81,6 +85,8 @@ public class AmbienteService
         {
             Codice = dto.Codice,
             Descrizione = dto.Descrizione,
+            Descrizione4 = dto.Descrizione4,
+            Descrizione5 = dto.Descrizione5,
             DataCongelamento = dto.DataCongelamento,
             DataDismissione = null,
             Attivo = true
@@ -127,15 +133,17 @@ public class AmbienteService
             throw new InvalidOperationException($"Esiste già un altro ambiente con codice '{dto.Codice}'");
 
         // Cattura i valori PRIMA della modifica per il log
-        var vecchioValore = $"Codice: {ambiente.Codice}; Versione: {ambiente.Descrizione ?? "-"}; DataCongelamento: {ambiente.DataCongelamento?.ToString("dd/MM/yyyy") ?? "-"}; DataDismissione: {ambiente.DataDismissione?.ToString("dd/MM/yyyy") ?? "-"}; Attivo: {(ambiente.Attivo ? "Sì" : "No")}";
+        var vecchioValore = $"Codice: {ambiente.Codice}; Versione: {ambiente.Descrizione ?? "-"}; Versione4: {ambiente.Descrizione4 ?? "-"}; Versione5: {ambiente.Descrizione5 ?? "-"}; DataCongelamento: {ambiente.DataCongelamento?.ToString("dd/MM/yyyy") ?? "-"}; DataDismissione: {ambiente.DataDismissione?.ToString("dd/MM/yyyy") ?? "-"}; Attivo: {(ambiente.Attivo ? "Sì" : "No")}";
 
         ambiente.Codice = dto.Codice;
         ambiente.Descrizione = dto.Descrizione;
+        ambiente.Descrizione4 = dto.Descrizione4;
+        ambiente.Descrizione5 = dto.Descrizione5;
         ambiente.DataCongelamento = dto.DataCongelamento;
         ambiente.DataDismissione = dto.DataDismissione;
         ambiente.Attivo = dto.Attivo;
 
-        var nuovoValore = $"Codice: {dto.Codice}; Versione: {dto.Descrizione ?? "-"}; DataCongelamento: {dto.DataCongelamento?.ToString("dd/MM/yyyy") ?? "-"}; DataDismissione: {dto.DataDismissione?.ToString("dd/MM/yyyy") ?? "-"}; Attivo: {(dto.Attivo ? "Sì" : "No")}";
+        var nuovoValore = $"Codice: {dto.Codice}; Versione: {dto.Descrizione ?? "-"}; Versione4: {dto.Descrizione4 ?? "-"}; Versione5: {dto.Descrizione5 ?? "-"}; DataCongelamento: {dto.DataCongelamento?.ToString("dd/MM/yyyy") ?? "-"}; DataDismissione: {dto.DataDismissione?.ToString("dd/MM/yyyy") ?? "-"}; Attivo: {(dto.Attivo ? "Sì" : "No")}";
 
         // Log dell'azione con vecchio e nuovo valore
         var log = new AmbienteLog

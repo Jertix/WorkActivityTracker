@@ -203,6 +203,30 @@
             </div>
         </div>
         
+        @* Filtro Settimana ISO + bottone settimana corrente *@
+        <div class="col-md-2">
+            <label class="form-label">Settimana</label>
+            <div class="d-flex gap-1">
+                <select class="form-select" @bind="FiltroSettimana" @bind:after="CaricaAttivita">
+                    <option value="">Tutte</option>
+                    @{
+                        int maxSettimane = FiltroAnno.HasValue
+                            ? System.Globalization.ISOWeek.GetWeeksInYear(FiltroAnno.Value)
+                            : 53;
+                    }
+                    @for (int s = 1; s <= maxSettimane; s++)
+                    {
+                        <option value="@s">W@(s)</option>
+                    }
+                </select>
+                <button class="btn btn-outline-primary btn-sm" @onclick="ImpostaSettimanaCorrente"
+                        title="Seleziona la settimana ISO corrente"
+                        style="white-space: nowrap; min-width: 46px;">
+                    W@(System.Globalization.ISOWeek.GetWeekOfYear(DateTime.Today))
+                </button>
+            </div>
+        </div>
+
         @* Filtro Giorno + bottone Oggi *@
         <div class="col-md-2">
             <label class="form-label">Giorno</label>
@@ -239,22 +263,22 @@
         </div>
         
         @* Campo Ricerca *@
-        <div class="col-md-4">
+        <div class="col-md-2">
             <label class="form-label">Ricerca</label>
             <div class="input-group">
-                <input type="text" class="form-control" @bind="TestoRicerca" @bind:event="oninput" 
-                       @onkeypress="OnSearchKeyPress" placeholder="Cerca in descrizione, ticket, note..." />
-                <button class="btn btn-primary" @onclick="EseguiRicercaEAbilita">
-                    🔍 Cerca
+                <input type="text" class="form-control" @bind="TestoRicerca" @bind:event="oninput"
+                       @onkeypress="OnSearchKeyPress" placeholder="Cerca..." />
+                <button class="btn btn-primary" @onclick="EseguiRicercaEAbilita" title="Cerca">
+                    🔍
                 </button>
-                <button class="btn btn-info" 
+                <button class="btn btn-info"
                         @onclick="ApriDettagliRicerca"
                         title="Apri ricerca avanzata">
-                    🔍 Ricerca avanzata
+                    🔎
                 </button>
             </div>
         </div>
-        
+
         @* Bottone Reset Filtri *@
         <div class="col-md-2 d-flex align-items-end">
             <button class="btn btn-outline-secondary w-100" @onclick="ResetFiltri">
@@ -589,9 +613,15 @@
                 @* ===== SECONDA RIGA: Descrizione ===== *@
                 <div class="col-md-12">
                     <label class="form-label">Descrizione <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control fw-bold @(CampoHaTodo(AttivitaCorrente.Descrizione) ? "campo-con-todo" : "")"
-                           @bind="AttivitaCorrente.Descrizione"
-                           placeholder="@(AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro ? "Descrizione breve dell'attività" : $"Es: {AttivitaCorrente.TipoAttivita} dal ... al ...")" />
+                    <div class="input-group">
+                        <input type="text" class="form-control fw-bold @(CampoHaTodo(AttivitaCorrente.Descrizione) ? "campo-con-todo" : "")"
+                               @bind="AttivitaCorrente.Descrizione"
+                               placeholder="@(AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro ? "Descrizione breve dell'attività" : $"Es: {AttivitaCorrente.TipoAttivita} dal ... al ...")" />
+                        <button class="btn btn-outline-primary" type="button" @onclick="CercaPerQuestaDescrizione"
+                                title="Cerca per questa descrizione (azzera i filtri e cerca il testo della descrizione)">
+                            🔍 Ricerca
+                        </button>
+                    </div>
                 </div>
 
                 @* ===== TERZA RIGA: URL Ticket + Numero Ticket (visibile per Lavoro e tipi personalizzati) ===== *@
@@ -919,6 +949,8 @@
                                         <th style="width: 30px;"></th>
                                         <th>Nome</th>
                                         <th>Versione</th>
+                                        <th>Versione 4</th>
+                                        <th>Versione 5</th>
                                         <th style="width: 100px;">Data Cong.</th>
                                     </tr>
                                 </thead>
@@ -940,6 +972,8 @@
                                             @AttivitaCorrente.Versione
                                         </td>
                                         <td class="text-muted">-</td>
+                                        <td class="text-muted">-</td>
+                                        <td class="text-muted">-</td>
                                     </tr>
                                     @* ===== Ambienti dal database ===== *@
                                     @foreach (var ambiente in ambienti)
@@ -958,6 +992,12 @@
                                             </td>
                                             <td class="text-muted">
                                                 @ambiente.Descrizione
+                                            </td>
+                                            <td class="text-muted">
+                                                @(ambiente.Descrizione4 ?? "-")
+                                            </td>
+                                            <td class="text-muted">
+                                                @(ambiente.Descrizione5 ?? "-")
                                             </td>
                                             <td class="text-muted small">
                                                 @(ambiente.DataCongelamento?.ToString("dd/MM/yy") ?? "-")
@@ -1520,6 +1560,7 @@
     private int? FiltroAnno { get; set; }
     private int? FiltroMese { get; set; }
     private int? FiltroGiorno { get; set; }
+    private int? FiltroSettimana { get; set; }
     private string TestoRicerca { get; set; } = string.Empty;
 
     // Stati dell'interfaccia
@@ -1740,11 +1781,12 @@
         {
             isLoading = true;
             Attivita = await ActivityService.GetActivitiesAsync(
-                FiltroAnno, 
-                FiltroMese, 
-                FiltroGiorno, 
+                FiltroAnno,
+                FiltroMese,
+                FiltroGiorno,
                 string.IsNullOrWhiteSpace(TestoRicerca) ? null : TestoRicerca,
-                isAdminMode);
+                isAdminMode,
+                FiltroSettimana);
             
             // Applica filtro "Solo TODO" se attivo
             if (filtroSoloTodo)
@@ -2038,11 +2080,11 @@
             // Registra l'orario dell'ultimo salvataggio (mostrato nella barra di stato)
             ultimoSalvataggio = DateTime.Now;
 
-            // v4.7: feedback visivo — lampeggio verde sulla status bar per 1.5s
+            // v4.9: feedback visivo — lampeggio verde sulla status bar per 4s
             statusBarLampeggia = true;
             _ = Task.Run(async () =>
             {
-                await Task.Delay(1500);
+                await Task.Delay(4000);
                 await InvokeAsync(() =>
                 {
                     statusBarLampeggia = false;
@@ -2789,6 +2831,7 @@
         FiltroAnno = oggi.Year;
         FiltroMese = oggi.Month;
         FiltroGiorno = oggi.Day;
+        FiltroSettimana = null;
         await CaricaAttivita();
     }
 
@@ -2800,6 +2843,7 @@
         FiltroAnno = DateTime.Now.Year;
         FiltroMese = null;
         FiltroGiorno = null;
+        FiltroSettimana = null;
         await CaricaAttivita();
     }
 
@@ -2812,6 +2856,7 @@
         FiltroAnno = oggi.Year;
         FiltroMese = oggi.Month;
         FiltroGiorno = null;
+        FiltroSettimana = null;
         await CaricaAttivita();
     }
 
@@ -2828,10 +2873,35 @@
         FiltroAnno = DateTime.Now.Year;
         FiltroMese = null;
         FiltroGiorno = null;
+        FiltroSettimana = null;
         TestoRicerca = string.Empty;
         ricercaEseguita = false;
         filtroSoloTodo = false;
         await CaricaAttivita();
+    }
+
+    /// <summary>
+    /// Imposta la settimana ISO corrente (e l'anno ISO associato), azzerando mese e giorno.
+    /// </summary>
+    private async Task ImpostaSettimanaCorrente()
+    {
+        var oggi = DateTime.Today;
+        FiltroAnno = System.Globalization.ISOWeek.GetYear(oggi);
+        FiltroMese = null;
+        FiltroGiorno = null;
+        FiltroSettimana = System.Globalization.ISOWeek.GetWeekOfYear(oggi);
+        await CaricaAttivita();
+    }
+
+    /// <summary>
+    /// Azzera i filtri, copia la Descrizione corrente nel campo Ricerca ed esegue la ricerca.
+    /// </summary>
+    private async Task CercaPerQuestaDescrizione()
+    {
+        var desc = AttivitaCorrente?.Descrizione ?? string.Empty;
+        await ResetFiltri();
+        TestoRicerca = desc;
+        await EseguiRicercaEAbilita();
     }
 
     /// <summary>

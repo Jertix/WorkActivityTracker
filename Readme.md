@@ -448,6 +448,8 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ## Changelog
 
 ### v4.9
+- 🆕 **Export XLSX — colonna "Ticket"**: aggiunta la colonna `Ticket` (campo `NumeroTicket`) prima di `Descrizione` nell'export della griglia attività (`📊 Esporta XLSX`)
+- 🆕 **TODO List — campo "Cerca"**: nuova casella di ricerca live in cima alla modale (sopra la griglia "Elenco TODO"), filtra case-insensitive su Titolo + Descrizione; bottone ✕ per pulire la ricerca
 - 🆕 **Congelati — Versione 4 e Versione 5**: nuove colonne `Descrizione4` e `Descrizione5` nella tabella `Ambienti` (NVARCHAR(100) NULL), visibili nella griglia "Modifica riportata sui congelati" del form principale e gestibili dall'editor Congelati (✏️ Modifica lista)
 - 🆕 **Gestione Clienti — Tipo + Numero della versione**: nuovi campi `TipoVersione` (Versione / Versione4 / Versione5) e `NumeroVersione` sulla tabella `ClientiAmbienti`. Il campo "Numero della versione" è un input con `<datalist>` popolato dai **congelati attivi** filtrati per il tipo selezionato (suggerimenti distinti, non vincolante)
 - 🆕 **Gestione Clienti — nuove colonne in griglia**: `Versione` (prefisso V / V4 / V5 + numero), `Data ultimo aggiornamento` (da `DataModifica`) e `Utente` (da `ClientiAmbienti_Log`, ultimo utente che ha modificato la riga)

@@ -31,11 +31,25 @@
                 
                 @* ===== BODY ===== *@
                 <div class="modal-body" style="overflow-y: auto;">
-                    
+
+                    @* ===== RICERCA ===== *@
+                    <div class="mb-2 d-flex gap-2 align-items-center">
+                        <span style="font-weight: 600;">🔎 Cerca:</span>
+                        <input type="text" class="form-control form-control-sm"
+                               style="max-width: 400px;"
+                               placeholder="Cerca in titolo o descrizione..."
+                               @bind="testoRicerca" @bind:event="oninput" />
+                        @if (!string.IsNullOrEmpty(testoRicerca))
+                        {
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => testoRicerca = string.Empty"
+                                    title="Pulisci ricerca">✕</button>
+                        }
+                    </div>
+
                     @* ===== GRIGLIA TODO ===== *@
                     <div class="card mb-3">
                         <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                            <strong>Elenco TODO (@todos.Count elementi)</strong>
+                            <strong>Elenco TODO (@TodosFiltrati.Count elementi)</strong>
                             @if (isLoading)
                             {
                                 <div class="spinner-border spinner-border-sm text-primary" role="status">
@@ -58,9 +72,9 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        @if (todos.Any())
+                                        @if (TodosFiltrati.Any())
                                         {
-                                            @foreach (var todo in todos)
+                                            @foreach (var todo in TodosFiltrati)
                                             {
                                                 <tr @onclick="() => SelezionaTodo(todo)" 
                                                     class="@GetRowClass(todo)"
@@ -244,8 +258,23 @@
     private bool isSaving = false;
     private string messaggio = string.Empty;
     private bool isErrore = false;
+    private string testoRicerca = string.Empty;
 
     private bool IsModifica => todoCorrente.Id > 0;
+
+    private List<TodoItemDto> TodosFiltrati
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(testoRicerca))
+                return todos;
+            var q = testoRicerca.Trim();
+            return todos.Where(t =>
+                (t.Titolo?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (t.Descrizione?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+        }
+    }
 
     #endregion
 

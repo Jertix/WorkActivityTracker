@@ -3179,6 +3179,7 @@
             if (isAdminMode) ws.Cell(1, col++).Value = "Utente";
             ws.Cell(1, col++).Value = "Data";
             ws.Cell(1, col++).Value = "Tipo";
+            ws.Cell(1, col++).Value = "Ticket";
             ws.Cell(1, col++).Value = "Descrizione";
             ws.Cell(1, col++).Value = "Cliente";
             ws.Cell(1, col++).Value = "Ore";
@@ -3199,6 +3200,7 @@
                 ws.Cell(row, col).Style.NumberFormat.Format = "dd/MM/yyyy";
                 ws.Cell(row, col++).Value = att.Data;
                 ws.Cell(row, col++).Value = att.TipoAttivita;
+                ws.Cell(row, col++).Value = att.NumeroTicket ?? string.Empty;
                 ws.Cell(row, col++).Value = att.Descrizione;
                 ws.Cell(row, col++).Value = att.ClienteNome;
                 ws.Cell(row, col++).Value = att.OreLavorate;

@@ -356,7 +356,7 @@
                                         <td>@TruncateText(att.NumeroTicket, 20)</td>
                                         <td>
                                             @TruncateText(att.Descrizione, 50)
-                                            @if (ContieneTodo(att))
+                                            @if (att.HasTodo)
                                             {
                                                 <span class="todo-badge">TODO</span>
                                             }
@@ -766,7 +766,7 @@
                         <div class="separator"></div>
                         <button class="btn btn-outline-secondary btn-sm" type="button"
                                 @onclick="NoteInserisciTimestamp"
-                                title="Inserisci l'ora corrente (HH:mm:ss) nel punto del cursore">
+                                title="Inserisci data e ora correnti (dd-MM-yyyy HH:mm:ss) nel punto del cursore">
                             🕐
                         </button>
                         <button class="btn btn-outline-secondary btn-sm" type="button"
@@ -805,7 +805,7 @@
                              id="note-editor-div" onkeydown="noteEditorHelper.handleTab(event,this)"
                              contenteditable="true"
                              class="form-control note-editor @(CampoHaTodo(AttivitaCorrente.Note) ? "campo-con-todo" : "")"
-                             style="min-height: 120px; max-height: 300px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                             style="min-height: 200px; max-height: 500px; overflow-y: auto; overflow-x: auto; white-space: pre;"
                              @onfocus="OnNoteFocus"
                              @onblur="OnNoteBlur"
                              placeholder="@(AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro ? "Inserisci qui una descrizione dettagliata del lavoro svolto..." : "Note aggiuntive...")">
@@ -901,7 +901,7 @@
                         <div class="separator"></div>
                         <button class="btn btn-outline-secondary btn-sm" type="button"
                                 @onclick="NoteInserisciTimestamp"
-                                title="Inserisci l'ora corrente (HH:mm:ss) nel punto del cursore">
+                                title="Inserisci data e ora correnti (dd-MM-yyyy HH:mm:ss) nel punto del cursore">
                             🕐
                         </button>
                         <button class="btn btn-outline-secondary btn-sm" type="button"
@@ -1098,7 +1098,7 @@
                             <div class="separator"></div>
                             <button class="btn btn-outline-secondary btn-sm" type="button"
                                     @onclick="ChangesetInserisciTimestamp"
-                                    title="Inserisci l'ora corrente (HH:mm:ss) nel punto del cursore">
+                                    title="Inserisci data e ora correnti (dd-MM-yyyy HH:mm:ss) nel punto del cursore">
                                 🕐
                             </button>
                             <button class="btn btn-outline-secondary btn-sm" type="button"
@@ -1233,7 +1233,7 @@
                             <div class="separator"></div>
                             <button class="btn btn-outline-secondary btn-sm" type="button"
                                     @onclick="ChangesetInserisciTimestamp"
-                                    title="Inserisci l'ora corrente (HH:mm:ss) nel punto del cursore">
+                                    title="Inserisci data e ora correnti (dd-MM-yyyy HH:mm:ss) nel punto del cursore">
                                 🕐
                             </button>
                             <button class="btn btn-outline-secondary btn-sm" type="button"
@@ -1791,7 +1791,7 @@
             // Applica filtro "Solo TODO" se attivo
             if (filtroSoloTodo)
             {
-                Attivita = Attivita.Where(a => ContieneTodo(a)).ToList();
+                Attivita = Attivita.Where(a => a.HasTodo).ToList();
             }
             
             anniDisponibili = await ActivityService.GetAnniDisponibiliAsync(isAdminMode);
@@ -1825,6 +1825,14 @@
     /// </summary>
     private async Task SelezionaAttivita(WorkActivityDto attivita)
     {
+        // La griglia carica i DTO in modalità leggera (senza Note/Changeset, campi pesanti):
+        // quando si seleziona una riga esistente si ricarica il record completo dal DB.
+        if (attivita.Id > 0)
+        {
+            var completo = await ActivityService.GetActivityByIdAsync(attivita.Id, isAdminMode);
+            if (completo != null) attivita = completo;
+        }
+
         AttivitaCorrente = new WorkActivityDto
         {
             Id = attivita.Id,
@@ -1971,6 +1979,14 @@
     /// </summary>
     private async Task DuplicaAttivita(WorkActivityDto attivita)
     {
+        // La griglia non carica Note/Changeset (campi pesanti): ricarica il record completo dal DB
+        // prima di copiarne i contenuti, altrimenti la copia perderebbe Note e Changeset.
+        if (attivita.Id > 0)
+        {
+            var completo = await ActivityService.GetActivityByIdAsync(attivita.Id, isAdminMode);
+            if (completo != null) attivita = completo;
+        }
+
         AttivitaCorrente = new WorkActivityDto
         {
             // ID = 0 per creare una NUOVA attività
@@ -2446,7 +2462,7 @@
 
     private async Task ChangesetInserisciTimestamp()
     {
-        var ts = DateTime.Now.ToString("HH:mm:ss") + " ";
+        var ts = DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss") + " ";
         try { await JS.InvokeVoidAsync("inserisciTestoACursore", changesetEditorRef, ts); }
         catch { /* Ignora errori JS */ }
     }
@@ -2586,7 +2602,7 @@
 
     private async Task NoteInserisciTimestamp()
     {
-        var ts = DateTime.Now.ToString("HH:mm:ss") + " ";
+        var ts = DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss") + " ";
         try { await JS.InvokeVoidAsync("inserisciTestoACursore", noteEditorRef, ts); }
         catch { /* Ignora errori JS */ }
     }
@@ -2944,12 +2960,13 @@
                 mese: null, 
                 giorno: null, 
                 ricerca: null,  // Nessun filtro testo, la modale farà la ricerca
-                adminMode: isAdminMode);
+                adminMode: isAdminMode,
+                includeContenuto: true);  // La ricerca avanzata cerca dentro Note/Changeset
             
             // Applica filtro "Solo TODO" se attivo
             if (filtroSoloTodo)
             {
-                attivitaTuttePerRicerca = attivitaTuttePerRicerca.Where(a => ContieneTodo(a)).ToList();
+                attivitaTuttePerRicerca = attivitaTuttePerRicerca.Where(a => a.HasTodo).ToList();
             }
             
             mostraModaleRicerca = true;
@@ -3235,9 +3252,18 @@
             var nomeFile = $"DettaglioTutteLeAttività_{dal}_{al}_{timestamp}.txt";
             var percorso = System.IO.Path.Combine(GetExportFolder(), nomeFile);
 
+            // La griglia è in modalità leggera (senza Note/Changeset): ricarica le stesse attività
+            // in modalità completa (con i contenuti) usando i filtri correnti, così l'export è completo.
+            var attivitaComplete = await ActivityService.GetActivitiesAsync(
+                FiltroAnno, FiltroMese, FiltroGiorno,
+                string.IsNullOrWhiteSpace(TestoRicerca) ? null : TestoRicerca,
+                isAdminMode, FiltroSettimana, includeContenuto: true);
+            if (filtroSoloTodo)
+                attivitaComplete = attivitaComplete.Where(a => a.HasTodo).ToList();
+
             var sb = new System.Text.StringBuilder();
             bool primo = true;
-            foreach (var att in Attivita)
+            foreach (var att in attivitaComplete)
             {
                 if (!primo) sb.AppendLine(new string('=', 60));
                 sb.AppendLine(GeneraTestoAttivitaPlain(att));
@@ -3263,6 +3289,13 @@
     {
         try
         {
+            // La griglia non carica Note/Changeset: ricarica il record completo per l'export.
+            if (att.Id > 0)
+            {
+                var completo = await ActivityService.GetActivityByIdAsync(att.Id, isAdminMode);
+                if (completo != null) att = completo;
+            }
+
             var data = att.Data.ToString("yyyyMMdd");
             var desc = string.Concat((att.Descrizione ?? "").Take(40)
                 .Where(c => !System.IO.Path.GetInvalidFileNameChars().Contains(c)));
@@ -3570,6 +3603,13 @@
     {
         try
         {
+            // La griglia non carica Note/Changeset: ricarica il record completo per la copia.
+            if (attivita.Id > 0)
+            {
+                var completo = await ActivityService.GetActivityByIdAsync(attivita.Id, isAdminMode);
+                if (completo != null) attivita = completo;
+            }
+
             var testo = GeneraTestoAttivita(attivita);
             await JS.InvokeVoidAsync("copyToClipboard", testo);
             MostraMessaggio("Attività copiata negli appunti!", false);
@@ -3608,8 +3648,8 @@
             classes.Add("row-selected");
         }
 
-        // Riga con TODO (sfondo rosso)
-        if (ContieneTodo(attivita))
+        // Riga con TODO (sfondo rosso) — usa il flag calcolato lato DB (la griglia non carica le Note)
+        if (attivita.HasTodo)
         {
             classes.Add("todo-row");
         }

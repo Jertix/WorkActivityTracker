@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-4.9-blue)
+![Version](https://img.shields.io/badge/version-5.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -172,7 +172,7 @@ Campo `contenteditable` (non textarea) con toolbar di editing:
 - **◀** / 📋 / **▶**: Undo / Storico versioni / Redo (overlay in basso a destra dell'editor, sopra le scrollbar).
 - **⊟**: rimuove le righe vuote dal contenuto dell'editor.
 - **TODO**: sostituisce ogni occorrenza di "TODO" (parola isolata) con `--`, preservando tutta la formattazione HTML.
-- Altezza: min 120px, max 300px con scroll verticale.
+- Altezza: min 200px, max 500px con scroll verticale.
 - Font: Segoe UI, `white-space: pre-wrap`.
 - **Bordo rosso** se il campo contiene TODO.
 - Salva/carica **HTML** (`innerHTML`) per persistere il grassetto nel database.
@@ -427,6 +427,7 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 | `MigrateToV4.7.sql` | Aggiunta tabelle `ClientiAmbienti`, `ClientiAmbienti_Log` |
 | `MigrateToV4.8.sql` | Aggiunta `DatiAmbiente`, `DirectoryInstallazione`, `InformazioniPool` in `ClientiAmbienti` |
 | `MigrateToV4.9.sql` | Aggiunta `Descrizione4`, `Descrizione5` in `Ambienti`; `TipoVersione`, `NumeroVersione` in `ClientiAmbienti` |
+| `MigrateToV5.0.sql` | Indici performance: `IX_Attivita_UtenteId_Data`, `IX_EditorHistory_Attivita_Campo`, `IX_AttivitaAmbientiRilascio_AttivitaId` |
 
 ---
 
@@ -446,6 +447,16 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ---
 
 ## Changelog
+
+### v5.0
+- ⚡ **Performance griglia/ricerca**: la griglia non carica più i campi pesanti `Note` e `ChangesetCoinvolti` (HTML con screenshot base64). I contenuti vengono caricati **on-demand** alla selezione della riga, alla copia (📄), alla duplicazione (📋) e all'export TXT. Il ricaricamento dopo il salvataggio e la ricerca rapida risultano molto più veloci anche con molte immagini.
+- ⚡ **Ricerca rapida lato SQL**: la ricerca testuale della griglia è spostata su SQL (`LIKE`), così cerca anche dentro `Note`/`Changeset` senza trasferirli. La normalizzazione degli spazi multipli resta attiva nella **Ricerca avanzata** (modale), che continua a caricare i contenuti completi.
+- ⚡ **Filtro data SARGable**: il filtro Anno/Mese/Giorno usa un intervallo di date (`>= inizio AND < fine`) invece di `YEAR()/MONTH()`, così l'indice su `Data` può essere sfruttato.
+- ⚡ **Nuovi indici DB** (`MigrateToV5.0.sql`): `IX_Attivita_UtenteId_Data` (filtro utente + ordinamento data), `IX_EditorHistory_Attivita_Campo` (storico editor, letto a ogni salvataggio), `IX_AttivitaAmbientiRilascio_AttivitaId` (colonna "Ambienti").
+- 🆕 **`WorkActivityDto.HasTodo`**: flag calcolato lato DB (LIKE word-boundary) per evidenziare e filtrare i TODO nella griglia senza caricare le Note.
+- 🕐 **Tasto data/ora**: il pulsante 🕐 negli editor (Note, Changeset e Gestione Clienti) ora inserisce **data + ora** nel formato `dd-MM-yyyy HH:mm:ss` (prima solo `HH:mm:ss`).
+- 🎨 **Editor "Descrizione dettagliata lavoro svolto"**: altezza aumentata (min 200px, max 500px).
+- 🎨 **Gestione Clienti**: gli editor "Come collegarsi" e "Dati recuperati dall'ambiente del cliente" hanno ora la toolbar di formattazione **sopra e sotto** (come nel form principale) e caselle più alte (min 320px, max 600px).
 
 ### v4.9
 - 🆕 **Export XLSX — colonna "Ticket"**: aggiunta la colonna `Ticket` (campo `NumeroTicket`) prima di `Descrizione` nell'export della griglia attività (`📊 Esporta XLSX`)

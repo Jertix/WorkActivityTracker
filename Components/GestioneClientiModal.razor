@@ -285,7 +285,7 @@
                                         <div class="separator"></div>
                                         <button class="btn btn-outline-secondary btn-sm" type="button"
                                                 @onclick="CollegamentoInserisciTimestamp"
-                                                title="Inserisci ora corrente">
+                                                title="Inserisci data e ora correnti (dd-MM-yyyy HH:mm:ss)">
                                             🕐
                                         </button>
                                         <button class="btn btn-outline-secondary btn-sm" type="button"
@@ -318,8 +318,99 @@
                                          onkeydown="collegamentoEditorHelper.handleTab(event,this)"
                                          contenteditable="true"
                                          class="form-control note-editor"
-                                         style="min-height: 240px; max-height: 400px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                                         style="min-height: 320px; max-height: 600px; overflow-y: auto; overflow-x: auto; white-space: pre;"
                                          placeholder="Procedura, link, credenziali, VPN, RDP, ecc.">
+                                    </div>
+                                    @* Toolbar duplicata sotto l'editor *@
+                                    <div class="editor-toolbar">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoIndentaLeft"
+                                                title="Indenta a sinistra" @onmousedown:preventDefault>
+                                            ⇤ ←
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoIndentaRight"
+                                                title="Indenta a destra" @onmousedown:preventDefault>
+                                            ⇥ →
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-dark btn-sm fw-bold" type="button"
+                                                @onclick="CollegamentoBold"
+                                                title="Grassetto">
+                                            G
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="CollegamentoHighlightGiallo"
+                                                title="Evidenzia in giallo"
+                                                style="background-color: yellow; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="CollegamentoHighlightArancione"
+                                                title="Evidenzia in arancione"
+                                                style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="CollegamentoHighlightVerde"
+                                                title="Evidenzia in verde"
+                                                style="background-color: lightgreen; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoBarrato"
+                                                title="Barrato"
+                                                style="text-decoration: line-through;">
+                                            S
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoSottolineato"
+                                                title="Sottolineato"
+                                                style="text-decoration: underline;">
+                                            S
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="CollegamentoColoreRosso"
+                                                title="Colora in rosso"
+                                                style="color: red; font-weight: bold; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoRimuoviFormattazione"
+                                                title="Rimuovi formattazione">
+                                            ✕
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoInserisciTimestamp"
+                                                title="Inserisci data e ora correnti (dd-MM-yyyy HH:mm:ss)">
+                                            🕐
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoInserisciSeparatore"
+                                                title="Separatore sottile">
+                                            ─
+                                        </button>
+                                        <button class="btn btn-outline-dark btn-sm" type="button"
+                                                @onclick="CollegamentoInserisciSeparatoreSpesso"
+                                                title="Separatore spesso"
+                                                style="font-weight: 900;">
+                                            █
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="CollegamentoInserisciSeparatoreRosso"
+                                                title="Separatore rosso"
+                                                style="color: red; font-weight: 900; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            █
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="CollegamentoRimuoviRigheVuote"
+                                                title="Rimuovi righe vuote"
+                                                @onmousedown:preventDefault>
+                                            ⊟
+                                        </button>
                                     </div>
                                 </div>
 
@@ -389,7 +480,7 @@
                                         <div class="separator"></div>
                                         <button class="btn btn-outline-secondary btn-sm" type="button"
                                                 @onclick="DatiAmbienteInserisciTimestamp"
-                                                title="Inserisci ora corrente">
+                                                title="Inserisci data e ora correnti (dd-MM-yyyy HH:mm:ss)">
                                             🕐
                                         </button>
                                         <button class="btn btn-outline-secondary btn-sm" type="button"
@@ -422,8 +513,99 @@
                                          onkeydown="datiAmbienteEditorHelper.handleTab(event,this)"
                                          contenteditable="true"
                                          class="form-control note-editor"
-                                         style="min-height: 240px; max-height: 400px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                                         style="min-height: 320px; max-height: 600px; overflow-y: auto; overflow-x: auto; white-space: pre;"
                                          placeholder="Incolla qui i dati recuperati dall'ambiente (Installationlog.ini, proprietà di sistema, ecc.)">
+                                    </div>
+                                    @* Toolbar duplicata sotto l'editor *@
+                                    <div class="editor-toolbar">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteIndentaLeft"
+                                                title="Indenta a sinistra" @onmousedown:preventDefault>
+                                            ⇤ ←
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteIndentaRight"
+                                                title="Indenta a destra" @onmousedown:preventDefault>
+                                            ⇥ →
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-dark btn-sm fw-bold" type="button"
+                                                @onclick="DatiAmbienteBold"
+                                                title="Grassetto">
+                                            G
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="DatiAmbienteHighlightGiallo"
+                                                title="Evidenzia in giallo"
+                                                style="background-color: yellow; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="DatiAmbienteHighlightArancione"
+                                                title="Evidenzia in arancione"
+                                                style="background-color: orange; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="DatiAmbienteHighlightVerde"
+                                                title="Evidenzia in verde"
+                                                style="background-color: lightgreen; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteBarrato"
+                                                title="Barrato"
+                                                style="text-decoration: line-through;">
+                                            S
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteSottolineato"
+                                                title="Sottolineato"
+                                                style="text-decoration: underline;">
+                                            S
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="DatiAmbienteColoreRosso"
+                                                title="Colora in rosso"
+                                                style="color: red; font-weight: bold; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            A
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteRimuoviFormattazione"
+                                                title="Rimuovi formattazione">
+                                            ✕
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteInserisciTimestamp"
+                                                title="Inserisci data e ora correnti (dd-MM-yyyy HH:mm:ss)">
+                                            🕐
+                                        </button>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteInserisciSeparatore"
+                                                title="Separatore sottile">
+                                            ─
+                                        </button>
+                                        <button class="btn btn-outline-dark btn-sm" type="button"
+                                                @onclick="DatiAmbienteInserisciSeparatoreSpesso"
+                                                title="Separatore spesso"
+                                                style="font-weight: 900;">
+                                            █
+                                        </button>
+                                        <button class="btn btn-sm" type="button"
+                                                @onclick="DatiAmbienteInserisciSeparatoreRosso"
+                                                title="Separatore rosso"
+                                                style="color: red; font-weight: 900; border: 1px solid #ccc; font-size: 0.75rem; padding: 2px 7px;">
+                                            █
+                                        </button>
+                                        <div class="separator"></div>
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                @onclick="DatiAmbienteRimuoviRigheVuote"
+                                                title="Rimuovi righe vuote"
+                                                @onmousedown:preventDefault>
+                                            ⊟
+                                        </button>
                                     </div>
                                 </div>
 
@@ -837,7 +1019,7 @@
     }
     private async Task CollegamentoInserisciTimestamp()
     {
-        var ts = DateTime.Now.ToString("HH:mm:ss") + " ";
+        var ts = DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss") + " ";
         try { await JS.InvokeVoidAsync("inserisciTestoACursore", collegamentoEditorRef, ts); } catch { }
     }
     private async Task CollegamentoInserisciSeparatore()
@@ -906,7 +1088,7 @@
     }
     private async Task DatiAmbienteInserisciTimestamp()
     {
-        var ts = DateTime.Now.ToString("HH:mm:ss") + " ";
+        var ts = DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss") + " ";
         try { await JS.InvokeVoidAsync("inserisciTestoACursore", datiAmbienteEditorRef, ts); } catch { }
     }
     private async Task DatiAmbienteInserisciSeparatore()

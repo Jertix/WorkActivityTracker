@@ -891,6 +891,13 @@ public class WorkActivityDto
     /// Nomi degli ambienti di rilascio compilati, separati da virgola (per la colonna griglia)
     /// </summary>
     public string? AmbientiRilascioNomi { get; set; }
+
+    /// <summary>
+    /// True se l'attività contiene un TODO (parola isolata) in Descrizione/UrlTicket/Note/Changeset.
+    /// Calcolato lato DB nella modalità griglia (leggera), dove Note/Changeset non vengono caricati,
+    /// così la riga può essere evidenziata e filtrata senza trasferire i campi pesanti.
+    /// </summary>
+    public bool HasTodo { get; set; }
 }
 
 /// <summary>

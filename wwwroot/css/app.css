@@ -313,6 +313,13 @@ tfoot.table-secondary td {
     font-weight: 700;
 }
 
+/* Anteprima readonly "lavoro dei giorni precedenti": rende l'HTML (screenshot inclusi).
+   Vincola le immagini alla larghezza del contenitore per evitare overflow eccessivi. */
+.note-preview-readonly img {
+    max-width: 100%;
+    height: auto;
+}
+
 /* Barra pulsanti editor (indent, bold) */
 .editor-toolbar {
     display: flex;

@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-5.0-blue)
+![Version](https://img.shields.io/badge/version-5.1-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -78,12 +78,15 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
   },
   "AppSettings": {
     "AppName": "Work Activity Tracker",
-    "Version": "4.4",
+    "Version": "5.1",
+    "NumeroMesiMantenimentoHistory": 3,
     "MostraModalitaAdmin": true,
     "PrivacyMode": false
   }
 }
 ```
+
+> `NumeroMesiMantenimentoHistory` (default 3): all'avvio le voci dello storico modifiche (`EditorHistory`) più vecchie di questo numero di mesi vengono eliminate automaticamente in background. Un valore `0` o negativo disattiva la pulizia.
 
 ### Eseguire l'applicazione
 
@@ -134,7 +137,7 @@ Per i tipi **Permesso** e **Ferie**, vengono mostrati solo i campi Data, Ore, De
 - **Colonna Azioni**: pulsanti Copia (📄), Esporta TXT (💾), Duplica (📋), Elimina (🗑️).
   - **📄 Copia**: genera testo plain dell'attività (HTML stripped) e lo copia negli appunti.
   - **💾 Esporta TXT**: salva il dettaglio dell'attività come file `.txt` nella cartella `Export/`.
-  - **📋 Duplica**: copia tutti i campi tranne la data (incluso NumeroTicket).
+  - **📋 Duplica**: copia tutti i campi tranne la data (incluso NumeroTicket e ChangesetCoinvolti). La **Descrizione dettagliata lavoro svolto (Note) NON viene copiata**: al suo posto viene inserito un header puntatore `**** Proseguo l'attività [Id]-[Descrizione]-[NumeroTicket] del [Data] ****` riferito all'attività di origine (evita di gonfiare il record su lavorazioni multi-giorno). Il lavoro dei giorni precedenti resta consultabile col pulsante "Mostra la descrizione del lavoro svolto nei giorni precedenti" (vedi §5).
   - **🗑️ Elimina**: mostra una **modale Blazor custom centrata** per la conferma.
 - **Pulsanti export sotto la griglia** (visibili se ci sono attività):
   - **📊 Esporta XLSX**: esporta la griglia visualizzata in Excel (`ElencoAttivitàAl[timestamp].xlsx`).
@@ -177,6 +180,8 @@ Campo `contenteditable` (non textarea) con toolbar di editing:
 - **Bordo rosso** se il campo contiene TODO.
 - Salva/carica **HTML** (`innerHTML`) per persistere il grassetto nel database.
 - La sincronizzazione avviene via `noteEditorHelper` (JS): `setContent`, `getHtml`, `getText`, `indent`, `rimuoviRigheVuote`.
+
+**Lavoro dei giorni precedenti (catena "Proseguo l'attività", v5.1):** quando la Note inizia con l'header `**** Proseguo l'attività [Id]... ****` (generato dalla Duplica), sopra la label compare il pulsante **"Mostra la descrizione del lavoro svolto nei giorni precedenti"**. Al click viene ricostruita on-demand la catena delle attività collegate — seguendo i puntatori `Id` nelle Note, di attività in attività — e il risultato è mostrato in un **riquadro di sola lettura** (stessa altezza dell'editor) che **renderizza l'HTML**: quindi **screenshot, grassetti ed evidenziazioni delle Note precedenti sono visibili** (è un `div` con `MarkupString`, non una `textarea` che mostrerebbe solo testo). Le sezioni sono in ordine cronologico (dalla data più vecchia alla più recente), ciascuna intestata `====== [Id]-[Descrizione]-[NumeroTicket] del [Data] ======`, con la riga "Proseguo" rimossa perché ridondante. Il pulsante diventa **"Nascondi..."**. Nessun dato viene duplicato nel DB: la cronologia è ricostruita seguendo i rimandi. Il caricamento è **on-demand con cache per-selezione**: la catena viene letta dal database solo al primo click, poi i successivi "Mostra/Nascondi" sono istantanei finché non si cambia attività.
 
 ### 6. Congelati (Ambienti di Rilascio)
 
@@ -309,6 +314,8 @@ I pulsanti sono disabilitati finché l'attività non è stata salvata almeno una
 - Pulsanti ↑ ↓ per navigare le righe con contatore "N di Totale".
 - Div di anteprima dettagliato con HTML renderizzato (readonly).
 - Bottoni "Annulla" (chiude senza modifiche) e "✔ Seleziona" (chiude e applica la versione all'editor).
+
+**Pulizia automatica (v5.1):** all'avvio dell'applicazione, in background, le voci di `EditorHistory` più vecchie di `NumeroMesiMantenimentoHistory` mesi (impostazione in `appsettings.json`, default 3) vengono eliminate automaticamente (`EditorHistoryService.EliminaVecchieAsync`), evitando la crescita illimitata della tabella. Se qualche voce viene eliminata, in testa al form appare un avviso informativo (che scompare dopo qualche secondo): *"L'History delle modifiche più vecchie di X mesi è stata eliminata. (Vedere il file appsetting per modificare questo automatismo)"*. Un valore `0` o negativo disattiva la pulizia.
 
 ---
 
@@ -447,6 +454,12 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ---
 
 ## Changelog
+
+### v5.1
+- 🧹 **Pulizia automatica storico modifiche**: nuovo parametro `NumeroMesiMantenimentoHistory` (default 3) in `appsettings.json`. All'avvio, in background, le voci di `EditorHistory` più vecchie del numero di mesi indicato vengono eliminate (`EditorHistoryService.EliminaVecchieAsync` via `ExecuteDeleteAsync`); se ne vengono eliminate, un avviso compare in testa al form e scompare dopo qualche secondo. Un valore `0`/negativo disattiva la pulizia.
+- 🪶 **Duplica attività più leggera**: la **Descrizione dettagliata lavoro svolto (Note) non viene più copiata**; al suo posto un header puntatore `**** Proseguo l'attività [Id]-[Descrizione]-[NumeroTicket] del [Data] ****`. Evita di gonfiare il record (e rallentare il caricamento) su lavorazioni che durano più giorni. `ChangesetCoinvolti` continua a essere copiato.
+- 🔎 **"Mostra/Nascondi la descrizione del lavoro svolto nei giorni precedenti"**: nuovo pulsante sopra l'editor Note (visibile solo quando la Note contiene l'header "Proseguo"). Ricostruisce on-demand la catena delle attività collegate seguendo i puntatori nelle Note e mostra il lavoro precedente in un riquadro di sola lettura che **renderizza l'HTML** (screenshot e formattazione delle Note precedenti inclusi — `div`/`MarkupString`, non `textarea`), in ordine cronologico, con intestazioni `====== Id-Descrizione-Ticket del Data ======`. Caricamento **on-demand con cache per-selezione** (catena letta dal DB solo al primo click). Protezione anti-loop. Nessun dato duplicato nel DB.
+- 📝 Nessuna modifica allo schema DB.
 
 ### v5.0
 - ⚡ **Performance griglia/ricerca**: la griglia non carica più i campi pesanti `Note` e `ChangesetCoinvolti` (HTML con screenshot base64). I contenuti vengono caricati **on-demand** alla selezione della riga, alla copia (📄), alla duplicazione (📋) e all'export TXT. Il ricaricamento dopo il salvataggio e la ricerca rapida risultano molto più veloci anche con molte immagini.

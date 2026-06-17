@@ -41,4 +41,12 @@ public class AppConfigService
     /// </summary>
     public bool PrivacyMode =>
         _configuration.GetValue<bool>("AppSettings:PrivacyMode", false);
+
+    /// <summary>
+    /// Numero di mesi di mantenimento dello storico modifiche (tabella EditorHistory).
+    /// All'avvio le voci più vecchie di questo numero di mesi vengono eliminate automaticamente.
+    /// Default: 3. Un valore <= 0 disattiva la pulizia automatica.
+    /// </summary>
+    public int NumeroMesiMantenimentoHistory =>
+        _configuration.GetValue<int>("AppSettings:NumeroMesiMantenimentoHistory", 3);
 }

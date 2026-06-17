@@ -163,6 +163,15 @@
         </div>
     }
 
+    @* ===== AVVISO PULIZIA AUTOMATICA STORICO MODIFICHE ===== *@
+    @if (!string.IsNullOrEmpty(messaggioHistoryPulita))
+    {
+        <div class="alert alert-info alert-dismissible fade show py-2 mb-2" role="alert">
+            @messaggioHistoryPulita
+            <button type="button" class="btn-close" @onclick="() => messaggioHistoryPulita = string.Empty"></button>
+        </div>
+    }
+
     @* ===== SEZIONE FILTRI ===== *@
     <div class="row mb-3">
         @* Filtro Anno *@
@@ -702,6 +711,23 @@
 
                 @* ===== QUINTA RIGA: Descrizione dettagliata lavoro svolto (contenteditable con indent+bold) ===== *@
                 <div class="col-12">
+                    @* Pulsante + anteprima del lavoro svolto nei giorni precedenti (catena "Proseguo l'attività") *@
+                    @if (NoteContieneProseguo())
+                    {
+                        <div class="mb-1">
+                            <button class="btn btn-outline-info btn-sm" type="button" @onclick="ToggleLavoroPrecedente">
+                                @(mostraLavoroPrecedente ? "Nascondi" : "Mostra") la descrizione del lavoro svolto nei giorni precedenti
+                            </button>
+                        </div>
+                        @if (mostraLavoroPrecedente)
+                        {
+                            @* Anteprima di sola lettura: div (non textarea) per renderizzare l'HTML — screenshot e formattazione inclusi *@
+                            <div class="form-control note-preview-readonly mb-2"
+                                 style="min-height: 200px; max-height: 500px; overflow: auto; white-space: pre-wrap; background-color: #f8f9fa;">
+                                @((MarkupString)htmlLavoroPrecedente)
+                            </div>
+                        }
+                    }
                     <label class="form-label">Descrizione dettagliata @(AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro ? "lavoro svolto" : "/ Note")</label>
                     @* Toolbar pulsanti editor Note *@
                     <div class="editor-toolbar">
@@ -1568,7 +1594,31 @@
     private bool isSaving = false;
     private string messaggio = string.Empty;
     private bool isErrore = false;
-    
+
+    /// <summary>Messaggio (auto-scomparsa) della pulizia automatica dello storico modifiche all'avvio</summary>
+    private string messaggioHistoryPulita = string.Empty;
+
+    /// <summary>True se l'anteprima readonly del lavoro dei giorni precedenti è visibile</summary>
+    private bool mostraLavoroPrecedente = false;
+
+    /// <summary>HTML dell'anteprima del lavoro dei giorni precedenti (catena "Proseguo l'attività"), immagini/formattazione incluse</summary>
+    private string htmlLavoroPrecedente = string.Empty;
+
+    /// <summary>
+    /// Cache: true se l'anteprima del lavoro precedente è già stata costruita per la selezione corrente.
+    /// Evita di rileggere la catena dal DB ad ogni "Mostra/Nascondi". Azzerato al cambio attività.
+    /// </summary>
+    private bool lavoroPrecedenteCaricato = false;
+
+    /// <summary>
+    /// Regex che individua l'header "**** Proseguo l'attività [Id]..." (cattura l'Id dell'attività collegata).
+    /// Usata sia per mostrare il pulsante sia per seguire la catena dei rimandi.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex ProseguoRegex =
+        new(@"\*{2,}\s*Proseguo l'attività\s+(\d+)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase |
+            System.Text.RegularExpressions.RegexOptions.Compiled);
+
     /// <summary>Modalità admin: permette di visualizzare le attività di tutti gli utenti</summary>
     private bool isAdminMode = false;
     
@@ -1741,6 +1791,9 @@
             // Inizializza il form con i valori di default corretti (Sviluppo auto-selezionato)
             // Va chiamato dopo il caricamento dei dati per avere clienteSviluppoId valorizzato
             NuovaAttivita();
+
+            // Avvia in background la pulizia dello storico modifiche (non blocca l'avvio)
+            _ = PulisciStoricoEditorInBackground();
         }
         catch (Exception ex)
         {
@@ -1878,6 +1931,11 @@
         _changesetHistoryIndex = -1;
         _changesetContenutoSalvato = null;
 
+        // Reset anteprima "lavoro dei giorni precedenti" (invalida anche la cache)
+        mostraLavoroPrecedente = false;
+        htmlLavoroPrecedente = string.Empty;
+        lavoroPrecedenteCaricato = false;
+
         // Segnala che i due editor contenteditable devono essere aggiornati
         changesetEditorNeedsUpdate = true;
         noteEditorNeedsUpdate = true;
@@ -1913,6 +1971,11 @@
         _changesetHistory = null;
         _changesetHistoryIndex = -1;
         _changesetContenutoSalvato = null;
+
+        // Reset anteprima "lavoro dei giorni precedenti" (invalida anche la cache)
+        mostraLavoroPrecedente = false;
+        htmlLavoroPrecedente = string.Empty;
+        lavoroPrecedenteCaricato = false;
 
         messaggio = string.Empty;
     }
@@ -2006,7 +2069,10 @@
             Versione = attivita.Versione,
             AmbientiSelezionatiIds = attivita.AmbientiSelezionatiIds?.ToList() ?? new List<int>(),
             Vedere = attivita.Vedere,
-            Note = attivita.Note,
+            // La Note NON viene copiata (eviterebbe di gonfiare il record su lavorazioni multi-giorno):
+            // al suo posto un header "Proseguo l'attività" che fa da puntatore all'attività di origine.
+            // Il contenuto dei giorni precedenti è ricostruibile col pulsante "Mostra la descrizione...".
+            Note = GeneraHeaderProseguo(attivita),
             ChangesetCoinvolti = attivita.ChangesetCoinvolti,
             UrlPatchRilasci = attivita.UrlPatchRilasci,
             TestoCheckIn = attivita.TestoCheckIn,
@@ -2033,11 +2099,164 @@
         // Reset della selezione "Sviluppo" nella tabella congelati
         isSviluppoSelezionato = false;
 
+        // Reset anteprima "lavoro dei giorni precedenti" (verrà ricostruita on-demand; invalida la cache)
+        mostraLavoroPrecedente = false;
+        htmlLavoroPrecedente = string.Empty;
+        lavoroPrecedenteCaricato = false;
+
         // Segnala aggiornamento editor changeset e note
         changesetEditorNeedsUpdate = true;
         noteEditorNeedsUpdate = true;
 
         MostraMessaggio($"Attività duplicata! Modifica la data e salva.", false);
+    }
+
+    /// <summary>
+    /// Genera l'header "Proseguo l'attività" da inserire nella Note della nuova attività duplicata.
+    /// Fa da puntatore all'attività di origine (Id, Descrizione, NumeroTicket, Data).
+    /// È testo semplice: setContent lo trasforma in HTML, HtmlToPlainText lo recupera per il parsing.
+    /// </summary>
+    private static string GeneraHeaderProseguo(WorkActivityDto origine)
+    {
+        var ticket = string.IsNullOrWhiteSpace(origine.NumeroTicket) ? "" : origine.NumeroTicket;
+        return $"**** Proseguo l'attività {origine.Id}-{origine.Descrizione}-{ticket} del {origine.Data:dd/MM/yyyy} ****";
+    }
+
+    /// <summary>
+    /// Indica se la Note dell'attività corrente contiene l'header "Proseguo l'attività",
+    /// quindi se mostrare il pulsante per visualizzare il lavoro dei giorni precedenti.
+    /// </summary>
+    private bool NoteContieneProseguo()
+    {
+        var note = AttivitaCorrente?.Note;
+        if (string.IsNullOrEmpty(note)) return false;
+        return ProseguoRegex.IsMatch(HtmlToPlainText(note));
+    }
+
+    /// <summary>
+    /// Mostra/nasconde l'anteprima readonly del lavoro svolto nei giorni precedenti.
+    /// Alla PRIMA apertura ricostruisce la catena delle attività collegate dal DB e la memorizza
+    /// (cache per-selezione); le aperture successive sono istantanee finché non si cambia attività.
+    /// </summary>
+    private async Task ToggleLavoroPrecedente()
+    {
+        // Se è già visibile, nascondi (la cache resta valida per una riapertura istantanea)
+        if (mostraLavoroPrecedente)
+        {
+            mostraLavoroPrecedente = false;
+            return;
+        }
+
+        // Cache: se già costruita per questa attività, riusa il risultato senza rileggere dal DB
+        if (lavoroPrecedenteCaricato)
+        {
+            mostraLavoroPrecedente = true;
+            return;
+        }
+
+        // Allinea la Note corrente al contenuto dell'editor (l'header è in cima e non cambia)
+        try
+        {
+            var html = await JS.InvokeAsync<string>("noteEditorHelper.getHtml", noteEditorRef);
+            if (!string.IsNullOrWhiteSpace(html)) AttivitaCorrente.Note = html;
+        }
+        catch { /* usa il valore già presente se la lettura JS fallisce */ }
+
+        var catena = await CostruisciCatenaProseguo(AttivitaCorrente.Note);
+        var ordinata = catena.OrderBy(a => a.Data).ToList();
+
+        // Compone l'anteprima come HTML: l'intestazione "====== ... ======" (HtmlEncode per sicurezza)
+        // seguita dalla Note in HTML (screenshot e formattazione preservati), togliendo la riga
+        // "Proseguo" iniziale perché ridondante con l'intestazione.
+        var sb = new System.Text.StringBuilder();
+        foreach (var a in ordinata)
+        {
+            var ticket = string.IsNullOrWhiteSpace(a.NumeroTicket) ? "" : a.NumeroTicket;
+            var intestazione = $"====== {a.Id}-{a.Descrizione}-{ticket} del {a.Data:dd/MM/yyyy} ======";
+            sb.Append("<div style=\"font-weight:700; color:#0d6efd; margin-top:12px;\">");
+            sb.Append(System.Net.WebUtility.HtmlEncode(intestazione));
+            sb.Append("</div><div style=\"margin-bottom:16px;\">");
+            sb.Append(RimuoviHeaderProseguoHtml(a.Note ?? string.Empty));
+            sb.Append("</div>");
+        }
+        htmlLavoroPrecedente = sb.ToString();
+        if (string.IsNullOrWhiteSpace(htmlLavoroPrecedente))
+            htmlLavoroPrecedente = "<span class=\"text-muted\">(Nessuna attività precedente collegata trovata.)</span>";
+
+        lavoroPrecedenteCaricato = true;   // cache valida fino al cambio attività
+        mostraLavoroPrecedente = true;
+    }
+
+    /// <summary>
+    /// Segue la catena delle attività collegate tramite l'header "Proseguo l'attività [Id]"
+    /// presente nelle Note. Restituisce le attività precedenti (esclusa quella corrente),
+    /// caricando per ciascuna la Note completa dal DB. Protetta contro i cicli.
+    /// </summary>
+    private async Task<List<WorkActivityDto>> CostruisciCatenaProseguo(string? notePartenza)
+    {
+        var risultato = new List<WorkActivityDto>();
+        var visitati = new HashSet<int>();
+        var noteCorrente = notePartenza;
+
+        while (!string.IsNullOrEmpty(noteCorrente))
+        {
+            var match = ProseguoRegex.Match(HtmlToPlainText(noteCorrente));
+            if (!match.Success) break;
+            if (!int.TryParse(match.Groups[1].Value, out var id)) break;
+            if (!visitati.Add(id) || visitati.Count > 500) break;   // anti-loop / limite di sicurezza
+
+            var att = await ActivityService.GetActivityByIdAsync(id, isAdminMode);
+            if (att == null) break;                                 // non trovata o di altro utente: stop
+            risultato.Add(att);
+            noteCorrente = att.Note;
+        }
+        return risultato;
+    }
+
+    /// <summary>
+    /// Rimuove dall'HTML il prefisso dell'header "**** Proseguo l'attività ... ****"
+    /// (ed eventuale separatore di riga successivo), preservando il resto dell'HTML — immagini incluse.
+    /// La rimozione avviene solo se l'header è all'inizio (preceduto solo da tag/spazi), per non
+    /// intaccare contenuto reale che contenesse per caso la frase "Proseguo l'attività".
+    /// </summary>
+    private static string RimuoviHeaderProseguoHtml(string html)
+    {
+        if (string.IsNullOrEmpty(html)) return html;
+        var m = System.Text.RegularExpressions.Regex.Match(
+            html,
+            @"^(?:\s|<[^>]+>)*\*{2,}\s*Proseguo l'attività\b.*?\*{2,}\s*(?:</(?:div|p)>|<br\s*/?>)?",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase |
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+        if (m.Success && m.Index == 0)
+            return html.Substring(m.Length);
+        return html;
+    }
+
+    /// <summary>
+    /// Pulizia automatica dello storico modifiche (EditorHistory) all'avvio, in background.
+    /// Elimina le voci più vecchie di NumeroMesiMantenimentoHistory mesi e, se ne elimina,
+    /// mostra un avviso in testa al form che scompare automaticamente dopo qualche secondo.
+    /// </summary>
+    private async Task PulisciStoricoEditorInBackground()
+    {
+        try
+        {
+            var mesi = AppConfig.NumeroMesiMantenimentoHistory;
+            if (mesi <= 0) return;
+
+            var eliminati = await EditorHistoryService.EliminaVecchieAsync(mesi);
+            if (eliminati > 0)
+            {
+                messaggioHistoryPulita =
+                    $"L'History delle modifiche più vecchie di {mesi} mesi è stata eliminata. (Vedere il file appsetting per modificare questo automatismo)";
+                await InvokeAsync(StateHasChanged);
+
+                await Task.Delay(12000);
+                messaggioHistoryPulita = string.Empty;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch { /* non bloccare l'avvio per errori di pulizia storico */ }
     }
 
     #endregion

@@ -78,4 +78,21 @@ public class EditorHistoryService
             .Select(e => e.Contenuto)
             .FirstOrDefaultAsync();
     }
+
+    /// <summary>
+    /// Elimina le voci di storico più vecchie di N mesi rispetto alla data attuale.
+    /// Restituisce il numero di righe eliminate. Un valore di mantenimento &lt;= 0 non elimina nulla.
+    /// Chiamato all'avvio dell'applicazione per evitare la crescita illimitata della tabella.
+    /// </summary>
+    /// <param name="mesiMantenimento">Numero di mesi di storico da conservare</param>
+    /// <returns>Numero di voci eliminate</returns>
+    public async Task<int> EliminaVecchieAsync(int mesiMantenimento)
+    {
+        if (mesiMantenimento <= 0) return 0;
+        var soglia = DateTime.Now.AddMonths(-mesiMantenimento);
+        using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.EditorHistory
+            .Where(e => e.DataSalvataggio < soglia)
+            .ExecuteDeleteAsync();
+    }
 }

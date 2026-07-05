@@ -17,6 +17,8 @@
 @inject TipiAttivitaService TipiAttivitaService
 @inject CalendarioService CalendarioService
 @inject EditorHistoryService EditorHistoryService
+@inject PdfExportService PdfExportService
+@inject ReadmeTemplateService ReadmeTemplateService
 @implements IDisposable
 
 @* 
@@ -363,8 +365,8 @@
                                         <td>@att.Data.ToString("dd/MM/yyyy")</td>
                                         <td>@GetTipoBadge(att.TipoAttivita)</td>
                                         <td>@TruncateText(att.NumeroTicket, 20)</td>
-                                        <td>
-                                            @TruncateText(att.Descrizione, 50)
+                                        <td title="@att.Descrizione">
+                                            @TruncateText(att.Descrizione, 100)
                                             @if (att.HasTodo)
                                             {
                                                 <span class="todo-badge">TODO</span>
@@ -398,6 +400,12 @@
                                                     @onclick:stopPropagation="true"
                                                     title="Esporta attività come testo su file txt">
                                                 💾
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger me-1"
+                                                    @onclick="() => EsportaAttivitaComePdf(att)"
+                                                    @onclick:stopPropagation="true"
+                                                    title="Esporta attività su file PDF (con immagini)">
+                                                🧾
                                             </button>
                                             <button class="btn btn-sm btn-info me-1"
                                                     @onclick="async () => await DuplicaAttivita(att)"
@@ -456,6 +464,10 @@
                             <button class="btn btn-outline-primary btn-sm" @onclick="EsportaDettagliTxt"
                                     title="Esporta il dettaglio di tutte le attività visualizzate in un file TXT">
                                 📄 Esporta dettagli TXT
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" @onclick="EsportaDettagliPdf"
+                                    title="Esporta il dettaglio di tutte le attività visualizzate in un file PDF (con immagini)">
+                                🧾 Esporta dettagli PDF
                             </button>
                             <button class="btn btn-outline-secondary btn-sm" @onclick="ApriCartellaExport"
                                     title="Apri la cartella Export del programma">
@@ -640,7 +652,7 @@
                     <div class="col-md-8">
                         <label class="form-label">URL Ticket / CR / Backlog, etc...</label>
                         <textarea class="form-control @(CampoHaTodo(AttivitaCorrente.UrlTicket) ? "campo-con-todo" : "")"
-                                  @bind="AttivitaCorrente.UrlTicket" rows="2"
+                                  @bind="AttivitaCorrente.UrlTicket" @onblur="AutoCompilaNumeroTicket" rows="2"
                                   placeholder="Inserisci URL, numeri CR, backlog item, etc..."></textarea>
                         @* Anteprima URL cliccabili: gli http(s):// vengono convertiti in link *@
                         @if (!string.IsNullOrWhiteSpace(AttivitaCorrente.UrlTicket) && ContienUrl(AttivitaCorrente.UrlTicket))
@@ -1049,13 +1061,18 @@
                                    @bind:event="oninput"
                                    @onchange="OnTestoCheckInChanged"
                                    placeholder="Inserisci il testo descrittivo del check-in..." />
+                            <button class="btn btn-outline-primary" type="button"
+                                    @onclick="AutocompilaTestoCheckIn"
+                                    title="Autocompila testo del check-in: Numero del ticket - Descrizione">
+                                ✨ Autocompila
+                            </button>
                             <button class="btn btn-outline-secondary" type="button"
                                     @onclick="CopiaCheckInInDescrizione"
                                     title="Copia questo testo nel campo descrizione">
                                 ⬇️📋
                             </button>
                         </div>
-                        <small class="text-muted">Il pulsante ⬇️📋 copia il testo nel campo "Descrizione"</small>
+                        <small class="text-muted">Il pulsante ✨ compila con "Numero del ticket - Descrizione"; ⬇️📋 copia il testo nel campo "Descrizione"</small>
                     </div>
 
                     @* ===== OTTAVA RIGA: Elenco Changeset e lista files coinvolti ===== *@
@@ -1298,6 +1315,21 @@
                     @* ===== NONA RIGA: URL Patch/Pacchetto nei rilasci ===== *@
                     <div class="col-12">
                         <label class="form-label">📦 URL Patch/Pacchetto nei rilasci</label>
+                        <button class="btn btn-sm btn-outline-primary ms-2" type="button"
+                                @onclick="AutopreparaStrutturaPatch"
+                                title="Crea la struttura di cartelle della patch in TmpPatch">
+                            🛠 Autoprepara struttura patch
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary ms-1" type="button"
+                                @onclick="ApriCartellaPatch"
+                                title="Apri la cartella del cliente in TmpPatch">
+                            📁
+                        </button>
+                        <button class="btn btn-sm btn-outline-info ms-1" type="button"
+                                @onclick="ApriInserisciReadme"
+                                title="Inserisci files Readme">
+                            TXT
+                        </button>
                         <textarea class="form-control" @bind="AttivitaCorrente.UrlPatchRilasci" rows="3"
                                   style="max-height: 100px; overflow-y: auto;"
                                   placeholder="Inserisci gli URL della patch o del pacchetto nei rilasci..."></textarea>
@@ -1336,11 +1368,12 @@
 </div>
 
 @* ===== MODALE DETTAGLI RICERCA ===== *@
-<SearchModal 
+<SearchModal
     IsVisible="@mostraModaleRicerca"
     TestoRicercaIniziale="@TestoRicerca"
-    AttivitaTutte="@attivitaTuttePerRicerca"
     IsAdminMode="@isAdminMode"
+    OnRicerca="@OnRicercaAvanzata"
+    OnCaricaDettaglio="@OnCaricaDettaglioRicerca"
     OnChiudi="@ChiudiModaleRicerca"
     OnSeleziona="@OnAttivitaSelezionataDaModale" />
 
@@ -1373,6 +1406,13 @@
     IsVisible="@mostraEditorClienti"
     OnChiudi="@ChiudiEditorClienti"
     OnClientiChanged="@OnClientiChanged" />
+
+@* ===== MODALE INSERIMENTO README ===== *@
+<ReadmeTemplatesModal
+    IsVisible="@mostraReadmeModal"
+    Templates="@readmeTemplatesFiltrati"
+    OnChiudi="@ChiudiReadmeModal"
+    OnInserisci="@OnInserisciReadme" />
 
 @* ===== MODALE SEGNALAZIONI ===== *@
 <SegnalazioniModal
@@ -1630,10 +1670,7 @@
     
     /// <summary>Filtro per visualizzare solo le attività che contengono TODO</summary>
     private bool filtroSoloTodo = false;
-    
-    /// <summary>Lista completa delle attività per la ricerca nella modale</summary>
-    private List<WorkActivityDto> attivitaTuttePerRicerca = new();
-    
+
     /// <summary>Controlla la visibilità della modale TODO List</summary>
     private bool mostraTodoList = false;
     
@@ -3166,33 +3203,48 @@
     #region Gestione Modale Ricerca Avanzata
 
     /// <summary>
-    /// Apre la modale di ricerca avanzata.
-    /// Carica tutte le attività (senza filtri data) per permettere una ricerca completa.
+    /// Apre la modale di ricerca avanzata. Non precarica nulla: la ricerca è eseguita lato
+    /// SQL Server (vedi <see cref="OnRicercaAvanzata"/>), così l'apertura è immediata anche
+    /// con storici grandi e ricchi di screenshot.
     /// </summary>
-    private async Task ApriDettagliRicerca()
+    private void ApriDettagliRicerca()
+    {
+        mostraModaleRicerca = true;
+    }
+
+    /// <summary>
+    /// Esegue la ricerca avanzata lato server con i criteri scelti nella modale.
+    /// Restituisce match LEGGERI (senza Note/Changeset). Applica anche il filtro "Solo TODO"
+    /// se attivo nella griglia principale.
+    /// </summary>
+    private async Task<List<WorkActivityDto>> OnRicercaAvanzata(RicercaAvanzataCriteri criteri)
     {
         try
         {
-            // Carica TUTTE le attività per la ricerca (senza filtri data)
-            attivitaTuttePerRicerca = await ActivityService.GetActivitiesAsync(
-                anno: null, 
-                mese: null, 
-                giorno: null, 
-                ricerca: null,  // Nessun filtro testo, la modale farà la ricerca
-                adminMode: isAdminMode,
-                includeContenuto: true);  // La ricerca avanzata cerca dentro Note/Changeset
-            
-            // Applica filtro "Solo TODO" se attivo
-            if (filtroSoloTodo)
-            {
-                attivitaTuttePerRicerca = attivitaTuttePerRicerca.Where(a => a.HasTodo).ToList();
-            }
-            
-            mostraModaleRicerca = true;
+            criteri.SoloTodo = filtroSoloTodo;
+            return await ActivityService.RicercaAvanzataAsync(criteri, isAdminMode);
         }
         catch (Exception ex)
         {
-            MostraMessaggio($"Errore nel caricamento: {ex.Message}", true);
+            MostraMessaggio($"Errore nella ricerca: {ex.Message}", true);
+            return new List<WorkActivityDto>();
+        }
+    }
+
+    /// <summary>
+    /// Carica on-demand il contenuto completo (Note/Changeset con immagini) di una singola
+    /// attività, quando viene selezionata nella modale di ricerca.
+    /// </summary>
+    private async Task<WorkActivityDto?> OnCaricaDettaglioRicerca(int id)
+    {
+        try
+        {
+            return await ActivityService.GetActivityByIdAsync(id, isAdminMode);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel caricamento del dettaglio: {ex.Message}", true);
+            return null;
         }
     }
 
@@ -3535,6 +3587,153 @@
     }
 
     /// <summary>
+    /// Esporta una singola attività come file PDF (rende le immagini incollate nei campi HTML).
+    /// </summary>
+    private async Task EsportaAttivitaComePdf(WorkActivityDto att)
+    {
+        try
+        {
+            // La griglia non carica Note/Changeset: ricarica il record completo per l'export.
+            if (att.Id > 0)
+            {
+                var completo = await ActivityService.GetActivityByIdAsync(att.Id, isAdminMode);
+                if (completo != null) att = completo;
+            }
+
+            var data = att.Data.ToString("yyyyMMdd");
+            var desc = string.Concat((att.Descrizione ?? "").Take(40)
+                .Where(c => !System.IO.Path.GetInvalidFileNameChars().Contains(c)));
+            var timestamp = DateTime.Now.ToString("HHmmss");
+            var nomeFile = $"DettaglioAttività_{data}_{desc}_{timestamp}.pdf";
+            var percorso = System.IO.Path.Combine(GetExportFolder(), nomeFile);
+
+            await PdfExportService.ExportHtmlToPdfAsync(GeneraDocumentoHtml(new[] { att }), percorso);
+            ultimoExport = percorso;
+            MostraMessaggio($"Esportato: {nomeFile}", false);
+        }
+        catch (Exception ex)
+        {
+            SegnalaErrorePdf(ex);
+        }
+    }
+
+    /// <summary>
+    /// Mostra un messaggio d'errore PDF dettagliato (tipo, HResult, inner) e scrive lo
+    /// stack completo su Export/pdf_error.log per diagnosi.
+    /// </summary>
+    private void SegnalaErrorePdf(Exception ex)
+    {
+        var msg = string.IsNullOrWhiteSpace(ex.Message) ? "(nessun messaggio)" : ex.Message;
+        var inner = ex.InnerException != null ? $" | inner: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}" : "";
+        var testo = $"Errore export PDF: {ex.GetType().Name} (HRESULT 0x{ex.HResult:X8}) — {msg}{inner}";
+        try
+        {
+            System.IO.File.WriteAllText(
+                System.IO.Path.Combine(GetExportFolder(), "pdf_error.log"),
+                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\n{ex}", System.Text.Encoding.UTF8);
+        }
+        catch { /* best effort */ }
+        MostraMessaggio(testo, true);
+    }
+
+    /// <summary>
+    /// Esporta il dettaglio di tutte le attività visualizzate in un unico file PDF
+    /// (una attività per pagina, con le immagini rese).
+    /// </summary>
+    private async Task EsportaDettagliPdf()
+    {
+        try
+        {
+            var dal = Attivita.Any() ? Attivita.Min(a => a.Data).ToString("yyyyMMdd") : "n_a";
+            var al  = Attivita.Any() ? Attivita.Max(a => a.Data).ToString("yyyyMMdd") : "n_a";
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var nomeFile = $"DettaglioTutteLeAttività_{dal}_{al}_{timestamp}.pdf";
+            var percorso = System.IO.Path.Combine(GetExportFolder(), nomeFile);
+
+            // La griglia è in modalità leggera (senza Note/Changeset): ricarica le stesse attività
+            // in modalità completa (con i contenuti) usando i filtri correnti, così l'export è completo.
+            var attivitaComplete = await ActivityService.GetActivitiesAsync(
+                FiltroAnno, FiltroMese, FiltroGiorno,
+                string.IsNullOrWhiteSpace(TestoRicerca) ? null : TestoRicerca,
+                isAdminMode, FiltroSettimana, includeContenuto: true);
+            if (filtroSoloTodo)
+                attivitaComplete = attivitaComplete.Where(a => a.HasTodo).ToList();
+
+            await PdfExportService.ExportHtmlToPdfAsync(GeneraDocumentoHtml(attivitaComplete), percorso);
+            ultimoExport = percorso;
+            MostraMessaggio($"Esportato: {nomeFile}", false);
+        }
+        catch (Exception ex)
+        {
+            SegnalaErrorePdf(ex);
+        }
+    }
+
+    /// <summary>
+    /// Costruisce un documento HTML completo con una sezione per ogni attività (una per pagina).
+    /// </summary>
+    private string GeneraDocumentoHtml(IEnumerable<WorkActivityDto> lista)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>");
+        sb.Append("body{font-family:'Segoe UI',sans-serif;font-size:13px;color:#212529;margin:16px;}");
+        sb.Append(".attivita{margin-bottom:24px;}");
+        sb.Append(".attivita + .attivita{page-break-before:always;}");
+        sb.Append(".campo-label{font-weight:bold;margin-top:10px;}");
+        sb.Append(".campo-valore{margin:2px 0 6px 0;}");
+        sb.Append("img{max-width:100%;height:auto;}");
+        sb.Append("hr{border:none;border-top:1px solid #ccc;margin:12px 0;}");
+        sb.Append("</style></head><body>");
+        foreach (var att in lista)
+            sb.Append(GeneraHtmlAttivitaSezione(att));
+        sb.Append("</body></html>");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Genera il frammento HTML di una singola attività. I campi testuali sono HtmlEncode-ati;
+    /// Note e ChangesetCoinvolti sono inseriti come HTML grezzo per preservare immagini e formattazione.
+    /// </summary>
+    private string GeneraHtmlAttivitaSezione(WorkActivityDto att)
+    {
+        // Campo plain: etichetta in grassetto + valore HtmlEncode con a capo preservati.
+        static string CampoPlain(string label, string? valore)
+        {
+            if (string.IsNullOrEmpty(valore)) return string.Empty;
+            var enc = System.Net.WebUtility.HtmlEncode(valore).Replace("\n", "<br>");
+            return $"<div class=\"campo-label\">{System.Net.WebUtility.HtmlEncode(label)}</div>" +
+                   $"<div class=\"campo-valore\">{enc}</div>";
+        }
+        // Campo HTML ricco: etichetta in grassetto + valore inserito grezzo (immagini/formattazione).
+        static string CampoHtml(string label, string? html)
+        {
+            if (string.IsNullOrEmpty(html)) return string.Empty;
+            return $"<div class=\"campo-label\">{System.Net.WebUtility.HtmlEncode(label)}</div>" +
+                   $"<div class=\"campo-valore\">{html}</div>";
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<div class=\"attivita\">");
+        sb.Append(CampoPlain("📅 Data", att.Data.ToString("dd/MM/yyyy")));
+        if (!string.IsNullOrEmpty(att.TipoAttivita) && att.TipoAttivita != TipiAttivita.Lavoro)
+            sb.Append(CampoPlain("🏷️ Tipo", att.TipoAttivita));
+        sb.Append(CampoPlain("📝 Descrizione", att.Descrizione ?? "-"));
+        sb.Append(CampoPlain("🎫 Numero del ticket", att.NumeroTicket));
+        sb.Append(CampoPlain("🔗 URL Ticket / CR / Backlog", att.UrlTicket));
+        sb.Append(CampoPlain("👤 Cliente", att.ClienteNome ?? "-"));
+        sb.Append(CampoPlain("⏱️ Ore Lavorate", att.OreLavorate.ToString()));
+        sb.Append(CampoPlain("🏷️ Versione", att.Versione));
+        sb.Append(CampoPlain("👀 Vedere", att.Vedere));
+        sb.Append(CampoPlain("📁 Cartella Documentazione", att.CartellaDocumentazione));
+        sb.Append(CampoHtml("📋 Descrizione dettagliata lavoro svolto", att.Note));
+        sb.Append(CampoPlain("✏️ Testo del check-in", att.TestoCheckIn));
+        sb.Append(CampoHtml("🔢 Elenco Changeset e lista files coinvolti", att.ChangesetCoinvolti));
+        sb.Append(CampoPlain("📦 URL Patch/Pacchetto nei rilasci", att.UrlPatchRilasci));
+        sb.Append("</div>");
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Apre la cartella Export in Esplora Risorse.
     /// </summary>
     private void ApriCartellaExport()
@@ -3552,6 +3751,342 @@
         catch (Exception ex)
         {
             MostraMessaggio($"Errore apertura cartella: {ex.Message}", true);
+        }
+    }
+
+    // ===== Autoprepara struttura patch =====
+
+    /// <summary>Radice cliente ({TmpPatchDir}\{Cliente}) dell'ultima struttura patch creata.</summary>
+    private string? ultimaCartellaPatchClientRoot;
+
+    /// <summary>
+    /// Nome cliente per la cartella patch: "Sviluppo" se è il cliente Sviluppo,
+    /// altrimenti il nome del cliente selezionato.
+    /// </summary>
+    private string NomeClientePatch()
+    {
+        if (AttivitaCorrente.ClienteId == clienteSviluppoId)
+            return "Sviluppo";
+        return clienti.FirstOrDefault(c => c.Id == AttivitaCorrente.ClienteId)?.Nome ?? "Sviluppo";
+    }
+
+    /// <summary>
+    /// Trasforma una versione "X.Y.Z" nel formato "X.Y_SP{Z}" (es. 3.2.61 → 3.2_SP61).
+    /// Usa solo il primo token numerico (prima di spazi o parentesi), es. "4.1.10 (3.2.60)" → "4.1_SP10".
+    /// Se il formato è inatteso restituisce il token grezzo.
+    /// </summary>
+    private static string FormatVersioneSP(string? versione)
+    {
+        if (string.IsNullOrWhiteSpace(versione)) return string.Empty;
+        var token = versione.Trim().Split(new[] { ' ', '(' }, StringSplitOptions.RemoveEmptyEntries)[0];
+        var idx = token.LastIndexOf('.');
+        if (idx <= 0 || idx == token.Length - 1) return token; // formato inatteso: usa il token grezzo
+        return $"{token[..idx]}_SP{token[(idx + 1)..]}";
+    }
+
+    /// <summary>
+    /// Sanitizza un segmento per un nome di cartella: rimuove accenti/diacritici (es. Qualità → Qualita),
+    /// spazi e caratteri non validi per un nome di file/cartella.
+    /// </summary>
+    private static string SanitizzaSegmentoCartella(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+
+        // Rimuove gli accenti scomponendo i caratteri (FormD) e scartando i segni diacritici.
+        var scomposto = s.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(scomposto.Length);
+        foreach (var c in scomposto)
+        {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
+                != System.Globalization.UnicodeCategory.NonSpacingMark)
+                sb.Append(c);
+        }
+        var senzaAccenti = sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
+
+        // Rimuove spazi e caratteri non validi per un nome di cartella.
+        var invalidi = System.IO.Path.GetInvalidFileNameChars();
+        return string.Concat(senzaAccenti.Where(c => !char.IsWhiteSpace(c) && !invalidi.Contains(c)));
+    }
+
+    /// <summary>
+    /// Calcola (senza creare) i percorsi della patch dallo stato corrente del form:
+    /// cartella-cliente radice, cartella patch datata, lingua struttura, nome cliente e versione grezza.
+    /// </summary>
+    private (string clientRoot, string full, string lingua, string clienteNome, string versioneRaw) CalcolaPercorsiPatch()
+    {
+        var isSviluppo = AttivitaCorrente.ClienteId == clienteSviluppoId;
+        var clienteNome = NomeClientePatch();
+
+        // VERSIONE
+        string versioneRaw;
+        if (isSviluppo)
+        {
+            versioneRaw = AttivitaCorrente.Versione ?? string.Empty;
+        }
+        else
+        {
+            var primaCoppia = AttivitaCorrente.AmbientiRilascio
+                .FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.TipoAmbiente));
+            versioneRaw = !string.IsNullOrWhiteSpace(primaCoppia?.Versione)
+                ? primaCoppia!.Versione!
+                : (AttivitaCorrente.Versione ?? string.Empty);
+        }
+        var versioneSeg = SanitizzaSegmentoCartella(FormatVersioneSP(versioneRaw));
+
+        // AMBIENTI
+        string ambientiSeg;
+        if (isSviluppo)
+        {
+            ambientiSeg = "Sviluppo";
+        }
+        else
+        {
+            var nomiAmbienti = AttivitaCorrente.AmbientiRilascio
+                .Where(a => !string.IsNullOrWhiteSpace(a.TipoAmbiente))
+                .Select(a => SanitizzaSegmentoCartella(a.TipoAmbiente))
+                .Where(n => n.Length > 0);
+            ambientiSeg = string.Join("_", nomiAmbienti);
+        }
+
+        // TICKET (virgole → underscore)
+        var ticketSeg = SanitizzaSegmentoCartella(
+            (AttivitaCorrente.NumeroTicket ?? string.Empty).Replace(",", "_"));
+
+        var dataSeg = DateTime.Now.ToString("yyyy-MM-dd");
+        var nomeProgrammaSeg = SanitizzaSegmentoCartella(AppConfig.NomeProgramma);
+
+        // Nome cartella = segmenti non vuoti uniti da "_"
+        var segmenti = new[] { dataSeg, nomeProgrammaSeg, versioneSeg, ambientiSeg, ticketSeg }
+            .Where(s => !string.IsNullOrEmpty(s));
+        var nomeCartella = string.Join("_", segmenti);
+
+        var clientRoot = System.IO.Path.Combine(AppConfig.TmpPatchDir, SanitizzaSegmentoCartella(clienteNome));
+        var full = System.IO.Path.Combine(clientRoot, nomeCartella);
+
+        // Lingua della struttura (dal cliente; "Sviluppo" e clienti senza valore → IT).
+        var lingua = (clienti.FirstOrDefault(c => c.Id == AttivitaCorrente.ClienteId)?.Lingua ?? "IT")
+            .Trim().ToUpperInvariant();
+
+        return (clientRoot, full, lingua, clienteNome, versioneRaw);
+    }
+
+    /// <summary>
+    /// Crea la struttura di cartelle della patch in TmpPatch:
+    /// {TmpPatchDir}\{Cliente}\{AAAA-MM-GG}_{NOMEPROGRAMMA}_{VERSIONE}_{AMBIENTI}_{TICKET}\
+    /// </summary>
+    private void AutopreparaStrutturaPatch()
+    {
+        try
+        {
+            var p = CalcolaPercorsiPatch();
+
+            // Se la cartella esiste già NON la ricrea né la tocca: si limita a segnalarlo.
+            if (System.IO.Directory.Exists(p.full))
+            {
+                ultimaCartellaPatchClientRoot = p.clientRoot;
+                MostraMessaggio($"La struttura patch esiste già (nessuna modifica): {p.full}", false);
+                return;
+            }
+
+            System.IO.Directory.CreateDirectory(p.full);
+            CreaStrutturaInternaPatch(p.full, p.lingua);
+            ultimaCartellaPatchClientRoot = p.clientRoot;
+
+            MostraMessaggio($"Struttura patch creata: {p.full}", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore creazione struttura patch: {ex.Message}", true);
+        }
+    }
+
+    /// <summary>
+    /// Crea la struttura interna di sottocartelle (tutte in MAIUSCOLO) dentro la cartella patch,
+    /// con i nomi nella lingua indicata ("IT" o "EN"):
+    ///   00_PREREQUISITI / 00_PREREQUISITES
+    ///   01_{NOMEPROGRAMMA}\01_DATABASE_SERVER
+    ///                      \02_APPLICATION_SERVER\01_COMPONENTI_SERVER / 01_SERVER_COMPONENTS
+    ///                                            \02_SETUP_WEB
+    ///                      \03_CLIENT
+    /// </summary>
+    private void CreaStrutturaInternaPatch(string radice, string lingua)
+    {
+        var isEn = string.Equals(lingua, "EN", StringComparison.OrdinalIgnoreCase);
+        var nomeProgramma = SanitizzaSegmentoCartella(AppConfig.NomeProgramma).ToUpperInvariant();
+
+        // Nomi che cambiano in base alla lingua
+        var prerequisiti = isEn ? "00_PREREQUISITES" : "00_PREREQUISITI";
+        var componentiServer = isEn ? "01_SERVER_COMPONENTS" : "01_COMPONENTI_SERVER";
+
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(radice, prerequisiti));
+
+        // 01_{NOMEPROGRAMMA} e relative sottocartelle
+        var prog = System.IO.Path.Combine(radice, $"01_{nomeProgramma}");
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(prog, "01_DATABASE_SERVER"));
+
+        var appServer = System.IO.Path.Combine(prog, "02_APPLICATION_SERVER");
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(appServer, componentiServer));
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(appServer, "02_SETUP_WEB"));
+
+        System.IO.Directory.CreateDirectory(System.IO.Path.Combine(prog, "03_CLIENT"));
+    }
+
+    // ===== Inserimento file Readme =====
+
+    /// <summary>Visibilità della popup di inserimento readme.</summary>
+    private bool mostraReadmeModal = false;
+    /// <summary>Template filtrati per la lingua del cliente, mostrati nella popup.</summary>
+    private List<ReadmeTemplate> readmeTemplatesFiltrati = new();
+
+    /// <summary>
+    /// Apre la popup di inserimento readme. Richiede che la cartella patch sia già stata creata
+    /// con "Autoprepara struttura patch".
+    /// </summary>
+    private void ApriInserisciReadme()
+    {
+        try
+        {
+            var p = CalcolaPercorsiPatch();
+            if (!System.IO.Directory.Exists(p.full))
+            {
+                MostraMessaggio("Premi prima 'Autoprepara struttura patch'.", true);
+                return;
+            }
+
+            readmeTemplatesFiltrati = ReadmeTemplateService.GetTemplates()
+                .Where(t => string.Equals(t.Lingua?.Trim(), p.lingua, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            // Sostituisce i token nel Titolo (usato sia per la label nella popup sia per il nome file).
+            foreach (var t in readmeTemplatesFiltrati)
+                t.Titolo = SostituisciTokenTesto(t.Titolo, p.clienteNome, p.versioneRaw);
+
+            if (readmeTemplatesFiltrati.Count == 0)
+            {
+                MostraMessaggio($"Nessun template Readme disponibile per la lingua '{p.lingua}'.", true);
+                return;
+            }
+
+            mostraReadmeModal = true;
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore apertura Readme: {ex.Message}", true);
+        }
+    }
+
+    private void ChiudiReadmeModal() => mostraReadmeModal = false;
+
+    /// <summary>
+    /// Scrive i file .txt per i template selezionati nella struttura patch. I file già presenti
+    /// non vengono sovrascritti. Sostituisce i token nel testo e nel percorso di destinazione.
+    /// </summary>
+    private void OnInserisciReadme(List<ReadmeTemplate> scelti)
+    {
+        try
+        {
+            var p = CalcolaPercorsiPatch();
+            if (!System.IO.Directory.Exists(p.full))
+            {
+                MostraMessaggio("Premi prima 'Autoprepara struttura patch'.", true);
+                mostraReadmeModal = false;
+                return;
+            }
+
+            // Raggruppa i readme selezionati per cartella di destinazione (path risolto).
+            // In ogni cartella viene creato un unico Readme.txt con le sezioni dei vari readme.
+            var gruppi = scelti.GroupBy(
+                t => SostituisciTokenPercorso(t.DirectoryDiSalvataggio) ?? string.Empty,
+                StringComparer.OrdinalIgnoreCase);
+
+            var sep = new string('=', 60);
+            int creati = 0, saltati = 0;
+
+            foreach (var g in gruppi)
+            {
+                var dir = System.IO.Path.Combine(p.full, g.Key);
+                var percorso = System.IO.Path.Combine(dir, "Readme.txt");
+
+                // Se il Readme.txt esiste già NON viene toccato.
+                if (System.IO.File.Exists(percorso))
+                {
+                    saltati++;
+                    continue;
+                }
+
+                var sb = new System.Text.StringBuilder();
+                var primo = true;
+                foreach (var t in g)
+                {
+                    if (!primo) sb.AppendLine().AppendLine();
+                    var contenuto = SostituisciTokenTesto(t.Descrizione, p.clienteNome, p.versioneRaw);
+                    sb.AppendLine(sep);
+                    sb.AppendLine(t.Titolo);   // Titolo già con token sostituiti (vedi ApriInserisciReadme)
+                    sb.AppendLine(sep);
+                    sb.AppendLine();
+                    sb.AppendLine(contenuto);
+                    primo = false;
+                }
+
+                System.IO.Directory.CreateDirectory(dir);
+                var testo = sb.ToString().Replace("\r\n", "\n").Replace("\n", Environment.NewLine);
+                System.IO.File.WriteAllText(percorso, testo, System.Text.Encoding.UTF8);
+                creati++;
+            }
+
+            mostraReadmeModal = false;
+            MostraMessaggio($"Readme.txt: {creati} creati, {saltati} già presenti (saltati).", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore inserimento Readme: {ex.Message}", true);
+        }
+    }
+
+    /// <summary>Sostituisce i token nel testo del readme.</summary>
+    private string SostituisciTokenTesto(string testo, string clienteNome, string versioneRaw)
+    {
+        if (string.IsNullOrEmpty(testo)) return string.Empty;
+        return testo
+            .Replace("{NOMEPROGRAMMA}", AppConfig.NomeProgramma)
+            .Replace("{NOMECOMPAGNIA}", AppConfig.NomeCompagnia)
+            .Replace("{CLIENTE}", clienteNome)
+            .Replace("{VERSIONE}", versioneRaw);
+    }
+
+    /// <summary>Sostituisce i token in un percorso di destinazione ({NOMEPROGRAMMA} in forma cartella MAIUSCOLA).</summary>
+    private string SostituisciTokenPercorso(string percorso)
+    {
+        if (string.IsNullOrEmpty(percorso)) return string.Empty;
+        var progFolder = SanitizzaSegmentoCartella(AppConfig.NomeProgramma).ToUpperInvariant();
+        return percorso
+            .Replace("{NOMEPROGRAMMA}", progFolder)
+            .Replace("{NOMECOMPAGNIA}", AppConfig.NomeCompagnia);
+    }
+
+    /// <summary>
+    /// Apre in Esplora Risorse la cartella-cliente radice in TmpPatch (l'ultima creata,
+    /// altrimenti quella calcolata dal cliente corrente).
+    /// </summary>
+    private void ApriCartellaPatch()
+    {
+        try
+        {
+            var target = !string.IsNullOrEmpty(ultimaCartellaPatchClientRoot)
+                ? ultimaCartellaPatchClientRoot!
+                : System.IO.Path.Combine(AppConfig.TmpPatchDir, SanitizzaSegmentoCartella(NomeClientePatch()));
+
+            System.IO.Directory.CreateDirectory(target);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = target,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore apertura cartella patch: {ex.Message}", true);
         }
     }
 
@@ -3708,6 +4243,59 @@
     private static bool ContienUrl(string? testo) =>
         !string.IsNullOrEmpty(testo) && UrlRegex.IsMatch(testo);
 
+    // ===== Regex per estrarre il numero del ticket dagli URL =====
+    private static readonly System.Text.RegularExpressions.Regex TicketServiceDeskRegex =
+        new(@"/Detail/([^/$?#\s]+)\$entity", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex TicketTfsPathRegex =
+        new(@"/_workitems/edit/([A-Za-z0-9]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static readonly System.Text.RegularExpressions.Regex TicketTfsQueryRegex =
+        new(@"[?&]id=([A-Za-z0-9]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Estrae il numero/codice ticket da un singolo URL, o null se il formato non è riconosciuto.
+    /// </summary>
+    private static string? EstraiNumeroDaUrl(string url)
+    {
+        var m = TicketServiceDeskRegex.Match(url);
+        if (m.Success) return m.Groups[1].Value;
+        m = TicketTfsPathRegex.Match(url);
+        if (m.Success) return m.Groups[1].Value;
+        m = TicketTfsQueryRegex.Match(url);
+        if (m.Success) return m.Groups[1].Value;
+        return null; // formato non noto → ignorato
+    }
+
+    /// <summary>
+    /// Estrae i numeri dei ticket dagli URL presenti in "URL Ticket" (nell'ordine di comparsa)
+    /// e aggiunge in coda a "Numero del ticket" solo quelli non ancora presenti, preservando
+    /// ordine e valori inseriti manualmente. Separatore: ", ".
+    /// </summary>
+    private void AutoCompilaNumeroTicket()
+    {
+        if (string.IsNullOrWhiteSpace(AttivitaCorrente.UrlTicket)) return;
+
+        // Numeri già presenti nel campo (split su virgola), per confronto case-insensitive.
+        var esistenti = (AttivitaCorrente.NumeroTicket ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        var presenti = new HashSet<string>(esistenti, StringComparer.OrdinalIgnoreCase);
+
+        var risultato = new List<string>(esistenti);
+        var aggiunti = false;
+        foreach (System.Text.RegularExpressions.Match m in UrlRegex.Matches(AttivitaCorrente.UrlTicket))
+        {
+            var n = EstraiNumeroDaUrl(m.Value);
+            if (n != null && presenti.Add(n)) // Add ritorna false se già presente → niente duplicati
+            {
+                risultato.Add(n);
+                aggiunti = true;
+            }
+        }
+
+        if (aggiunti)
+            AttivitaCorrente.NumeroTicket = string.Join(", ", risultato);
+    }
+
     /// <summary>
     /// Divide il testo in segmenti URL e non-URL per la visualizzazione cliccabile.
     /// </summary>
@@ -3753,6 +4341,19 @@
     {
         if (!string.IsNullOrWhiteSpace(AttivitaCorrente.TestoCheckIn))
             AttivitaCorrente.Descrizione = AttivitaCorrente.TestoCheckIn;
+    }
+
+    /// <summary>
+    /// Compila "Testo del check-in" come "Numero del ticket - Descrizione".
+    /// Se uno dei due campi è vuoto, usa solo quello valorizzato (senza il trattino).
+    /// </summary>
+    private void AutocompilaTestoCheckIn()
+    {
+        var ticket = (AttivitaCorrente.NumeroTicket ?? "").Trim();
+        var desc = (AttivitaCorrente.Descrizione ?? "").Trim();
+        AttivitaCorrente.TestoCheckIn = (ticket.Length > 0 && desc.Length > 0)
+            ? $"{ticket} - {desc}"
+            : (ticket.Length > 0 ? ticket : desc);
     }
 
     /// <summary>

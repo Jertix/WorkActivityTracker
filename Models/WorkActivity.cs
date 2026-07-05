@@ -174,8 +174,12 @@ public class Cliente
     [Required]
     [MaxLength(100)]
     public string Nome { get; set; } = string.Empty;
-    
+
     public bool Attivo { get; set; } = true;
+
+    /// <summary>Lingua della struttura patch generata per questo cliente: "IT" o "EN". Default "IT".</summary>
+    [MaxLength(2)]
+    public string Lingua { get; set; } = "IT";
 }
 
 /// <summary>
@@ -506,6 +510,8 @@ public class ClienteDto
     public int Id { get; set; }
     public string Nome { get; set; } = string.Empty;
     public bool Attivo { get; set; } = true;
+    /// <summary>Lingua struttura patch: "IT" o "EN".</summary>
+    public string Lingua { get; set; } = "IT";
 }
 
 /// <summary>
@@ -808,6 +814,43 @@ public class SegnalazioneDto
     public DateTime DataRichiesta { get; set; }
     public string Stato { get; set; } = StatiSegnalazione.InAttesa;
     public List<SegnalazioneRispostaDto> Risposte { get; set; } = new();
+}
+
+/// <summary>
+/// Criteri per la ricerca avanzata lato server (SQL): testo cercato + campi in cui cercare.
+/// Consente di NON precaricare in memoria tutto lo storico con gli screenshot base64.
+/// </summary>
+public class RicercaAvanzataCriteri
+{
+    public string Testo { get; set; } = string.Empty;
+    public bool Descrizione { get; set; } = true;
+    public bool UrlTicket { get; set; } = true;
+    public bool NumeroTicket { get; set; } = true;
+    public bool Vedere { get; set; } = true;
+    public bool Note { get; set; } = true;
+    public bool Changeset { get; set; } = true;
+    public bool UrlPatchRilasci { get; set; } = true;
+    public bool TestoCheckIn { get; set; } = true;
+    public bool Versione { get; set; } = true;
+    public bool Cliente { get; set; } = true;
+    public bool Cartella { get; set; } = true;
+    /// <summary>Se true, restituisce solo le attività che contengono un TODO.</summary>
+    public bool SoloTodo { get; set; } = false;
+}
+
+/// <summary>
+/// Template di file Readme per la struttura patch (definiti in ReadmeTmplates.json).
+/// </summary>
+public class ReadmeTemplate
+{
+    /// <summary>Titolo mostrato nella popup e usato come nome del file .txt.</summary>
+    public string Titolo { get; set; } = string.Empty;
+    /// <summary>Lingua del template: "IT" o "EN" (filtrato per la lingua del cliente).</summary>
+    public string Lingua { get; set; } = "IT";
+    /// <summary>Contenuto del file .txt (supporta i token {NOMEPROGRAMMA}, {CLIENTE}, {VERSIONE}).</summary>
+    public string Descrizione { get; set; } = string.Empty;
+    /// <summary>Percorso relativo (dentro la cartella patch) dove salvare il file. Supporta {NOMEPROGRAMMA}.</summary>
+    public string DirectoryDiSalvataggio { get; set; } = string.Empty;
 }
 
 /// <summary>DTO per SegnalazioneRisposta</summary>

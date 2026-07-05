@@ -384,6 +384,124 @@ public class ActivityService
     }
 
     /// <summary>
+    /// Ricerca avanzata lato server (SQL): filtra con LIKE sui soli campi selezionati e restituisce
+    /// DTO LEGGERI (senza Note/ChangesetCoinvolti), così NON trasferisce in memoria gli screenshot
+    /// base64 di tutto lo storico. Il contenuto completo di una singola attività va caricato
+    /// on-demand con <see cref="GetActivityByIdAsync"/> (es. alla selezione nella modale ricerca).
+    /// </summary>
+    public async Task<List<WorkActivityDto>> RicercaAvanzataAsync(RicercaAvanzataCriteri criteri, bool adminMode = false)
+    {
+        var dtos = new List<WorkActivityDto>();
+        if (criteri == null || string.IsNullOrWhiteSpace(criteri.Testo))
+            return dtos;
+
+        using var context = await _contextFactory.CreateDbContextAsync();
+        var currentUser = await _userService.GetOrCreateCurrentUserAsync();
+
+        IQueryable<Attivita> query = context.Attivita;
+
+        // Filtro utente / privacy (identico a GetActivitiesAsync)
+        if (!adminMode)
+        {
+            query = query.Where(a => a.UtenteId == currentUser.Id);
+        }
+        else
+        {
+            var utentiPrivacyIds = await context.Utenti
+                .Where(u => u.PrivacyMode && u.Id != currentUser.Id)
+                .Select(u => u.Id)
+                .ToListAsync();
+            if (utentiPrivacyIds.Any())
+                query = query.Where(a => !utentiPrivacyIds.Contains(a.UtenteId));
+        }
+
+        // LIKE sui SOLI campi selezionati (spazi multipli del termine compressi a uno solo).
+        var termine = Regex.Replace(criteri.Testo.Trim(), @"\s+", " ");
+        var like = "%" + EscapeLike(termine) + "%";
+        query = query.Where(a =>
+            (criteri.Descrizione && a.Descrizione != null && EF.Functions.Like(a.Descrizione, like)) ||
+            (criteri.UrlTicket && a.UrlTicket != null && EF.Functions.Like(a.UrlTicket, like)) ||
+            (criteri.NumeroTicket && a.NumeroTicket != null && EF.Functions.Like(a.NumeroTicket, like)) ||
+            (criteri.Vedere && a.Vedere != null && EF.Functions.Like(a.Vedere, like)) ||
+            (criteri.Note && a.Note != null && EF.Functions.Like(a.Note, like)) ||
+            (criteri.Changeset && a.ChangesetCoinvolti != null && EF.Functions.Like(a.ChangesetCoinvolti, like)) ||
+            (criteri.UrlPatchRilasci && a.UrlPatchRilasci != null && EF.Functions.Like(a.UrlPatchRilasci, like)) ||
+            (criteri.TestoCheckIn && a.TestoCheckIn != null && EF.Functions.Like(a.TestoCheckIn, like)) ||
+            (criteri.Versione && a.Versione != null && EF.Functions.Like(a.Versione, like)) ||
+            (criteri.Cartella && a.CartellaDocumentazione != null && EF.Functions.Like(a.CartellaDocumentazione, like)) ||
+            (criteri.Cliente && a.Cliente != null && EF.Functions.Like(a.Cliente.Nome, like)));
+
+        // Proiezione LEGGERA: niente Note/ChangesetCoinvolti (i campi pesanti con gli screenshot).
+        var lista = await query
+            .OrderByDescending(a => a.Data)
+            .ThenByDescending(a => a.Id)
+            .Select(a => new WorkActivityDto
+            {
+                Id = a.Id,
+                Data = a.Data,
+                TipoAttivita = a.TipoAttivita ?? TipiAttivita.Lavoro,
+                Descrizione = a.Descrizione,
+                UrlTicket = a.UrlTicket,
+                NumeroTicket = a.NumeroTicket,
+                ClienteId = a.ClienteId,
+                ClienteNome = a.Cliente != null ? a.Cliente.Nome : null,
+                OreLavorate = a.OreLavorate,
+                Versione = a.Versione,
+                AmbientiSelezionatiIds = a.AttivitaAmbienti.Select(aa => aa.AmbienteId).ToList(),
+                Vedere = a.Vedere,
+                UrlPatchRilasci = a.UrlPatchRilasci,
+                TestoCheckIn = a.TestoCheckIn,
+                CartellaDocumentazione = a.CartellaDocumentazione,
+                UtenteId = a.UtenteId,
+                UtenteUsername = a.Utente != null ? a.Utente.WindowsUsername : null
+            })
+            .ToListAsync();
+
+        // HasTodo lato SQL (batch, LIKE word-boundary) come nella griglia leggera.
+        if (lista.Count > 0)
+        {
+            var idsLista = lista.Select(d => d.Id).ToList();
+            var idsConTodo = (await context.Attivita
+                .Where(a => idsLista.Contains(a.Id) && (
+                    EF.Functions.Like(" " + a.Descrizione + " ", TodoLikePattern) ||
+                    (a.UrlTicket != null && EF.Functions.Like(" " + a.UrlTicket + " ", TodoLikePattern)) ||
+                    (a.Note != null && EF.Functions.Like(" " + a.Note + " ", TodoLikePattern)) ||
+                    (a.ChangesetCoinvolti != null && EF.Functions.Like(" " + a.ChangesetCoinvolti + " ", TodoLikePattern))))
+                .Select(a => a.Id)
+                .ToListAsync()).ToHashSet();
+            foreach (var d in lista)
+                d.HasTodo = idsConTodo.Contains(d.Id);
+        }
+
+        // Filtro "Solo TODO" (se attivo nella griglia principale).
+        if (criteri.SoloTodo)
+            lista = lista.Where(d => d.HasTodo).ToList();
+
+        dtos = lista;
+
+        // Nomi ambienti di rilascio (batch) per le sole attività trovate.
+        if (dtos.Count > 0)
+        {
+            var ids = dtos.Select(d => d.Id).ToList();
+            var ambienti = await context.AttivitaAmbientiRilascio
+                .Where(r => ids.Contains(r.AttivitaId) && r.TipoAmbiente != null)
+                .OrderBy(r => r.AttivitaId)
+                .ThenBy(r => r.Posizione)
+                .Select(r => new { r.AttivitaId, r.TipoAmbiente })
+                .ToListAsync();
+
+            var ambientiPerAttivita = ambienti
+                .GroupBy(r => r.AttivitaId)
+                .ToDictionary(g => g.Key, g => string.Join(", ", g.Select(r => r.TipoAmbiente)));
+
+            foreach (var dto in dtos)
+                dto.AmbientiRilascioNomi = ambientiPerAttivita.TryGetValue(dto.Id, out var nomi) ? nomi : null;
+        }
+
+        return dtos;
+    }
+
+    /// <summary>
     /// Recupera una singola attività per ID.
     /// In modalità normale, verifica che l'attività appartenga all'utente corrente.
     /// </summary>

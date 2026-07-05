@@ -104,6 +104,12 @@ public static class MauiProgram
         // UnsavedChangesService: Singleton per tracciare modifiche non salvate
         builder.Services.AddSingleton<UnsavedChangesService>();
 
+        // PdfExportService: Singleton per l'export PDF (rendering HTML via WebView2)
+        builder.Services.AddSingleton<PdfExportService>();
+
+        // ReadmeTemplateService: Singleton per i template dei file Readme (ReadmeTmplates.json)
+        builder.Services.AddSingleton<ReadmeTemplateService>();
+
         return builder.Build();
     }
 

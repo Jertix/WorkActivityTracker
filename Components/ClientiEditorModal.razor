@@ -39,6 +39,7 @@
                                     <thead class="table-dark sticky-top">
                                         <tr>
                                             <th>Nome</th>
+                                            <th style="width: 80px;">Lingua</th>
                                             <th style="width: 80px;">Attivo</th>
                                             <th style="width: 80px;">Azioni</th>
                                         </tr>
@@ -53,6 +54,9 @@
                                                     style="cursor: pointer;">
                                                     <td class="@(!cliente.Attivo ? "text-muted text-decoration-line-through" : "fw-bold")">
                                                         @cliente.Nome
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-info text-dark">@(string.IsNullOrWhiteSpace(cliente.Lingua) ? "IT" : cliente.Lingua)</span>
                                                     </td>
                                                     <td>
                                                         @if (cliente.Attivo)
@@ -78,7 +82,7 @@
                                         else
                                         {
                                             <tr>
-                                                <td colspan="3" class="text-center text-muted py-4">
+                                                <td colspan="4" class="text-center text-muted py-4">
                                                     Nessun cliente presente. Clicca "Nuovo" per aggiungerne uno!
                                                 </td>
                                             </tr>
@@ -105,6 +109,16 @@
                                     <label class="form-label">Nome <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" @bind="clienteCorrente.Nome"
                                            maxlength="100" placeholder="Es: Cattolica, Aviva, Axa..." />
+                                </div>
+
+                                @* Lingua struttura patch *@
+                                <div class="col-md-4">
+                                    <label class="form-label">Lingua struttura patch</label>
+                                    <select class="form-select" @bind="clienteCorrente.Lingua"
+                                            title="Lingua con cui viene creata la struttura di cartelle della patch">
+                                        <option value="IT">Italiano</option>
+                                        <option value="EN">Inglese</option>
+                                    </select>
                                 </div>
 
                                 @* Attivo (solo in modifica) *@
@@ -221,7 +235,7 @@
 
     private void NuovoCliente()
     {
-        clienteCorrente = new ClienteDto { Attivo = true };
+        clienteCorrente = new ClienteDto { Attivo = true, Lingua = "IT" };
         messaggio = string.Empty;
     }
 
@@ -231,7 +245,8 @@
         {
             Id = cliente.Id,
             Nome = cliente.Nome,
-            Attivo = cliente.Attivo
+            Attivo = cliente.Attivo,
+            Lingua = string.IsNullOrWhiteSpace(cliente.Lingua) ? "IT" : cliente.Lingua
         };
         messaggio = string.Empty;
     }

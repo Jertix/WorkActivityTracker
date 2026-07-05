@@ -1,0 +1,158 @@
+[
+  {
+    "Titolo": "Readme Angular",
+    "Lingua": "IT",
+    "Descrizione": "AGGIORNAMENTO FRONT-END ANGULAR\n\nCartella interessata:\n  <cartella di installazione sotto IIS di {NOMEPROGRAMMA}>\\AngularApp\\dist\n  (di norma: C:\\inetpub\\wwwroot\\{NOMEPROGRAMMA}\\AngularApp\\dist)\n\nProcedura:\n1. Sul server, svuota la cartella \"dist\" — ossia AngularApp\\dist sotto la\n   cartella di installazione IIS di {NOMEPROGRAMMA} — eliminando TUTTO il suo\n   contenuto.\n   IMPORTANTE: non eliminare la cartella \"dist\" stessa, ma solo il suo\n   contenuto, così da conservare i privilegi già assegnati alla cartella.\n\n2. Decomprimi il file dist*.zip allegato a questa patch (che trovi in\n   01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\AngularApp\\) direttamente dentro\n   la cartella \"dist\" appena svuotata.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Angular",
+    "Lingua": "EN",
+    "Descrizione": "ANGULAR FRONT-END UPDATE\n\nTarget folder:\n  <{NOMEPROGRAMMA} installation directory under IIS>\\AngularApp\\dist\n  (usually: C:\\inetpub\\wwwroot\\{NOMEPROGRAMMA}\\AngularApp\\dist)\n\nSteps:\n1. On the server, empty the \"dist\" folder — i.e. AngularApp\\dist under the\n   {NOMEPROGRAMMA} IIS installation directory — by removing ALL of its\n   contents.\n   IMPORTANT: do not delete the \"dist\" folder itself, only its contents, so\n   that the privileges already granted to the folder are preserved.\n\n2. Extract the dist*.zip file attached to this patch (found in\n   01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\AngularApp\\) directly into the\n   \"dist\" folder you have just emptied.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Componenti Server Client Server rottura compatibilità",
+    "Lingua": "IT",
+    "Descrizione": "AGGIORNAMENTO COMPONENTI SERVER (COM+)\n\nPrerequisiti:\n- Chiudi {NOMEPROGRAMMA} su tutti i client.\n- Deregistra tutti i componenti dal package COM+ di {NOMEPROGRAMMA}.\n\nProcedura sull'Application Server:\n1. Copia i file presenti nella cartella \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\01_COMPONENTI_SERVER\" di questa patch\n   nella cartella \"MTSComponents\" dell'Application Server, sovrascrivendo\n   quelli esistenti.\n2. Registra nuovamente i componenti .dll nel package COM+.\n\nAl termine:\n- Rilancia {NOMEPROGRAMMA} sui client.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Server Components Client Server compatibility break",
+    "Lingua": "EN",
+    "Descrizione": "SERVER COMPONENTS UPDATE (COM+)\n\nPrerequisites:\n- Close {NOMEPROGRAMMA} on all clients.\n- Unregister all components from the {NOMEPROGRAMMA} COM+ package.\n\nOn the Application Server:\n1. Copy the files from the \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\01_SERVER_COMPONENTS\" folder of this patch into the\n   \"MTSComponents\" folder on the Application Server, overwriting the existing ones.\n2. Register the .dll components in the COM+ package again.\n\nWhen finished:\n- Re-launch {NOMEPROGRAMMA} on the clients.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Componenti Server Client Server",
+    "Lingua": "IT",
+    "Descrizione": "AGGIORNAMENTO COMPONENTI SERVER\n\nPrerequisiti:\n- Chiudi {NOMEPROGRAMMA} su tutti i client.\n\nProcedura sull'Application Server:\n1. Copia i file presenti nella cartella \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\01_COMPONENTI_SERVER\" di questa patch\n   nella cartella \"MTSComponents\" dell'Application Server, sovrascrivendo\n   quelli esistenti.\n\nAl termine:\n- Rilancia {NOMEPROGRAMMA} sui client.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Server Components Client Server",
+    "Lingua": "EN",
+    "Descrizione": "SERVER COMPONENTS UPDATE\n\nPrerequisites:\n- Close {NOMEPROGRAMMA} on all clients.\n\nOn the Application Server:\n1. Copy the files from the \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\01_SERVER_COMPONENTS\" folder of this patch into the\n   \"MTSComponents\" folder on the Application Server, overwriting the existing ones.\n\nWhen finished:\n- Re-launch {NOMEPROGRAMMA} on the clients.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Package MSI {NOMEPROGRAMMA}",
+    "Lingua": "IT",
+    "Descrizione": "INSTALLAZIONE PACKAGE MSI\n\nPrerequisiti:\n- Esegui un IISRESET sull'Application Server.\n\nProcedura sull'Application Server:\n1. Lancia come eseguibile il package presente nella cartella\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\02_SETUP_WEB\" di questa patch.\n   L'eseguibile deve essere lanciato con un utente dotato di privilegi\n   amministrativi.\n   Il package sostituisce l'installazione di {NOMEPROGRAMMA} presente sulla\n   macchina con una nuova, preservando i file di configurazione\n   (Web.connectionStrings.config e Web.appSettings.config).\n\nDatabase:\n- Se sono presenti script per il database, eseguili tramite il programma\n  client del Database Server, come di consueto.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme MSI Package {NOMEPROGRAMMA}",
+    "Lingua": "EN",
+    "Descrizione": "MSI PACKAGE INSTALLATION\n\nPrerequisites:\n- Run an IISRESET on the Application Server.\n\nOn the Application Server:\n1. Run the package located in the\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\02_SETUP_WEB\" folder of this patch\n   as an executable. The executable must be run with a user that has\n   administrative privileges. The package replaces the existing {NOMEPROGRAMMA}\n   installation on the machine with a new one, preserving the configuration\n   files (Web.connectionStrings.config and Web.appSettings.config).\n\nDatabase:\n- If any database scripts are included, run them through the Database Server\n  client program, as usual.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Patch {NOMEPROGRAMMA}Cmd",
+    "Lingua": "IT",
+    "Descrizione": "AGGIORNAMENTO {NOMEPROGRAMMA}Cmd\n\nProcedura:\n1. Copia i file presenti nella cartella\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\Program Files (x86)\\{NOMECOMPAGNIA}\\{NOMEPROGRAMMA}Cmd\\\"\n   di questa patch nella directory di installazione di {NOMEPROGRAMMA}Cmd,\n   sovrascrivendo i file esistenti.\n   La directory di installazione si trova di norma in:\n   C:\\Program Files (x86)\\{NOMECOMPAGNIA}\\{NOMEPROGRAMMA}Cmd\\",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Patch {NOMEPROGRAMMA}Cmd",
+    "Lingua": "EN",
+    "Descrizione": "{NOMEPROGRAMMA}Cmd UPDATE\n\nProcedure:\n1. Copy the files in the\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\Program Files (x86)\\{NOMECOMPAGNIA}\\{NOMEPROGRAMMA}Cmd\\\"\n   folder of this patch into the {NOMEPROGRAMMA}Cmd installation directory,\n   overwriting the existing files.\n   The installation directory is usually located at:\n   C:\\Program Files (x86)\\{NOMECOMPAGNIA}\\{NOMEPROGRAMMA}Cmd\\",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Patch {NOMEPROGRAMMA} DLL",
+    "Lingua": "IT",
+    "Descrizione": "AGGIORNAMENTO DLL\n\nPrerequisiti:\n- È consigliabile eseguire il comando IISRESET da un prompt dei comandi\n  Windows con privilegi di amministratore, prima di sostituire i file.\n\nProcedura:\n1. Copia i file presenti nella cartella\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\bin\\\" di questa patch nella\n   sottocartella \"bin\" della directory di pubblicazione di {NOMEPROGRAMMA},\n   sovrascrivendo i file con lo stesso nome (le DLL omonime).\n   La directory di pubblicazione si trova di norma in:\n   C:\\inetpub\\wwwroot\\{NOMEPROGRAMMA}\\bin\\",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Patch {NOMEPROGRAMMA} DLL",
+    "Lingua": "EN",
+    "Descrizione": "DLL UPDATE\n\nPrerequisites:\n- It is recommended to run the IISRESET command from a Windows command prompt\n  with administrative privileges before replacing the files.\n\nProcedure:\n1. Copy the files in the\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\bin\\\" folder of this patch into\n   the \"bin\" subfolder of the {NOMEPROGRAMMA} publish directory, overwriting\n   the files with the same name (the matching DLLs).\n   The publish directory is usually located at:\n   C:\\inetpub\\wwwroot\\{NOMEPROGRAMMA}\\bin\\",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Patch {NOMEPROGRAMMA} files nella directory d'installazione",
+    "Lingua": "IT",
+    "Descrizione": "AGGIORNAMENTO FILE NELLA DIRECTORY DI INSTALLAZIONE\n\nProcedura:\n1. Copia il contenuto della cartella\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\Patch_Web\\\" di questa patch nella\n   directory di installazione di {NOMEPROGRAMMA}, rispettando la stessa\n   struttura di sottocartelle e sovrascrivendo i file con lo stesso nome.\n   La directory di installazione si trova di norma in:\n   C:\\inetpub\\wwwroot\\{NOMEPROGRAMMA}\\",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Patch {NOMEPROGRAMMA} files in the installation directory",
+    "Lingua": "EN",
+    "Descrizione": "INSTALLATION DIRECTORY FILES UPDATE\n\nProcedure:\n1. Copy the contents of the\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\Patch_Web\\\" folder of this patch\n   into the {NOMEPROGRAMMA} installation directory, keeping the same subfolder\n   structure and overwriting the files with the same name.\n   The installation directory is usually located at:\n   C:\\inetpub\\wwwroot\\{NOMEPROGRAMMA}\\",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Setup Client",
+    "Lingua": "IT",
+    "Descrizione": "SETUP DELLA PARTE CLIENT\n\nProcedura:\n1. Copia il file .exe presente nella cartella\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\\" di questa patch su ogni PC in cui\n   è installata la parte client di {NOMEPROGRAMMA}.\n2. Esegui il file .exe su ciascuno di questi PC.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Setup Client",
+    "Lingua": "EN",
+    "Descrizione": "CLIENT SETUP\n\nProcedure:\n1. Copy the .exe file located in the\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\\" folder of this patch to every PC\n   where the {NOMEPROGRAMMA} client is installed.\n2. Run the .exe file on each of those PCs.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Templates EC",
+    "Lingua": "IT",
+    "Descrizione": "AGGIORNAMENTO TEMPLATE DI RENDICONTAZIONE\n\nProcedura:\n1. Copia i file presenti nella cartella\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\Templates\" di questa patch nella\n   cartella Rendicontazione\\Templates della directory di installazione di\n   {NOMEPROGRAMMA}, sovrascrivendo i file con lo stesso nome.\n   La cartella si trova di norma in:\n   C:\\inetpub\\wwwroot\\{NOMEPROGRAMMA}\\Rendicontazione\\Templates\\",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Templates EC",
+    "Lingua": "EN",
+    "Descrizione": "REPORTING TEMPLATES UPDATE\n\nProcedure:\n1. Copy the files in the\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\Templates\" folder of this patch into\n   the Reporting\\Templates folder of the {NOMEPROGRAMMA} installation directory,\n   overwriting the files with the same name.\n   The folder is usually located at:\n   C:\\inetpub\\wwwroot\\{NOMEPROGRAMMA}\\Reporting\\Templates\\",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme {NOMEPROGRAMMA} DLL in GAC",
+    "Lingua": "IT",
+    "Descrizione": "INSTALLAZIONE DLL NELLA GAC (Global Assembly Cache)\n\nProcedura (eseguire con un utente amministratore):\n1. Decomprimi lo ZIP presente nella cartella\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\\" di questa patch in una cartella\n   provvisoria sull'Application Server.\n2. Apri un prompt dei comandi Windows con privilegi di amministratore e\n   posizionati nella cartella provvisoria in cui hai decompresso i file.\n3. Esegui il comando IISRESET.\n4. Esegui tutti i file .BAT presenti nella cartella: ciascuno installa la DLL\n   omonima nella Global Assembly Cache (GAC).\n5. Al termine, esegui nuovamente IISRESET.\n   Nota: ogni file .BAT ricorda di riavviare IIS; se i file .BAT sono più di\n   uno è sufficiente eseguire un solo IISRESET finale.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme {NOMEPROGRAMMA} DLL in GAC",
+    "Lingua": "EN",
+    "Descrizione": "DLL INSTALLATION INTO THE GAC (Global Assembly Cache)\n\nProcedure (run as an administrator):\n1. Extract the ZIP file located in the\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\\" folder of this patch into a\n   temporary folder on the Application Server.\n2. Open a Windows command prompt with administrative privileges and change the\n   current directory to the temporary folder where you extracted the files.\n3. Run the IISRESET command.\n4. Run all the .BAT files in the folder: each one installs the matching DLL\n   into the Global Assembly Cache (GAC).\n5. When finished, run IISRESET again.\n   Note: each .BAT file reminds you to restart IIS; if there is more than one\n   .BAT file, a single final IISRESET is enough.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme {NOMEPROGRAMMA} DLL in GAC con Revert",
+    "Lingua": "IT",
+    "Descrizione": "INSTALLAZIONE DLL NELLA GAC (Global Assembly Cache)\n\nProcedura (eseguire con un utente amministratore):\n1. Decomprimi lo ZIP presente nella cartella\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\\" di questa patch in una cartella\n   provvisoria sull'Application Server.\n2. Apri un prompt dei comandi Windows con privilegi di amministratore e\n   posizionati nella cartella provvisoria in cui hai decompresso i file.\n3. Esegui il comando IISRESET.\n4. Esegui tutti i file .BAT presenti nella cartella, tranne quelli con il\n   suffisso \"_revert\": ciascuno installa la DLL omonima nella Global Assembly\n   Cache (GAC).\n5. Al termine, esegui nuovamente IISRESET.\n   Nota: ogni file .BAT ricorda di riavviare IIS; se i file .BAT sono più di\n   uno è sufficiente eseguire un solo IISRESET finale.\n\nRipristino (revert):\n- Qualora fosse necessario ripristinare la situazione precedente, esegui\n  IISRESET e quindi i file .BAT con il suffisso \"_revert\" presenti nella\n  cartella: recupereranno le versioni precedenti delle DLL.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme {NOMEPROGRAMMA} DLL in GAC with Revert",
+    "Lingua": "EN",
+    "Descrizione": "DLL INSTALLATION INTO THE GAC (Global Assembly Cache)\n\nProcedure (run as an administrator):\n1. Extract the ZIP file located in the\n   \"01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER\\\" folder of this patch into a\n   temporary folder on the Application Server.\n2. Open a Windows command prompt with administrative privileges and change the\n   current directory to the temporary folder where you extracted the files.\n3. Run the IISRESET command.\n4. Run all the .BAT files in the folder, except those with the \"_revert\"\n   suffix: each one installs the matching DLL into the Global Assembly Cache\n   (GAC).\n5. When finished, run IISRESET again.\n   Note: each .BAT file reminds you to restart IIS; if there is more than one\n   .BAT file, a single final IISRESET is enough.\n\nRollback (revert):\n- If you need to restore the previous situation, run IISRESET and then the\n  .BAT files with the \"_revert\" suffix in the folder: they will restore the\n  previous versions of the DLLs.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}\\02_APPLICATION_SERVER"
+  },
+  {
+    "Titolo": "Readme Script Database SQL Server",
+    "Lingua": "IT",
+    "Descrizione": "ESECUZIONE SCRIPT DATABASE (SQL Server)\n\nProcedura:\n1. Esegui sul database di {NOMEPROGRAMMA} gli script SQL presenti nella cartella\n   \"01_{NOMEPROGRAMMA}\\01_DATABASE_SERVER\" di questa patch, rispettando il numero\n   d'ordine indicato nel nome dei file.\n2. Per ogni script segui le istruzioni riportate all'inizio del file, in\n   particolare sostituendo i tag indicati con i valori richiesti.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}"
+  },
+  {
+    "Titolo": "Readme Script Database SQL Server",
+    "Lingua": "EN",
+    "Descrizione": "DATABASE SCRIPTS EXECUTION (SQL Server)\n\nProcedure:\n1. Run the SQL scripts located in the\n   \"01_{NOMEPROGRAMMA}\\01_DATABASE_SERVER\" folder of this patch on the\n   {NOMEPROGRAMMA} database, following the order number indicated in the file\n   names.\n2. For each script, follow the instructions at the top of the file, in\n   particular replacing the indicated tags with the required values.",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}"
+  },
+  {
+    "Titolo": "Readme Script Database Oracle",
+    "Lingua": "IT",
+    "Descrizione": "ESECUZIONE SCRIPT DATABASE (Oracle)\n\nProcedura:\n1. Esegui sul database di {NOMEPROGRAMMA} gli script SQL presenti nella cartella\n   \"01_{NOMEPROGRAMMA}\\01_DATABASE_SERVER\" di questa patch, rispettando il numero\n   d'ordine indicato nel nome dei file.\n2. Per ogni script segui le istruzioni riportate all'inizio del file, in\n   particolare sostituendo i tag indicati con i valori richiesti.\n\nNota (SQL*Plus):\n- Se esegui gli script tramite SQL*Plus, imposta la variabile d'ambiente di\n  sistema NLS_LANG al valore \"WE8MSWIN1252\".",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}"
+  },
+  {
+    "Titolo": "Readme Script Database Oracle",
+    "Lingua": "EN",
+    "Descrizione": "DATABASE SCRIPTS EXECUTION (Oracle)\n\nProcedure:\n1. Run the SQL scripts located in the\n   \"01_{NOMEPROGRAMMA}\\01_DATABASE_SERVER\" folder of this patch on the\n   {NOMEPROGRAMMA} database, following the order number indicated in the file\n   names.\n2. For each script, follow the instructions at the top of the file, in\n   particular replacing the indicated tags with the required values.\n\nNote (SQL*Plus):\n- If you run the scripts through SQL*Plus, set the operating system environment\n  variable NLS_LANG to \"WE8MSWIN1252\".",
+    "DirectoryDiSalvataggio": "01_{NOMEPROGRAMMA}"
+  }
+]

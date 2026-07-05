@@ -49,4 +49,25 @@ public class AppConfigService
     /// </summary>
     public int NumeroMesiMantenimentoHistory =>
         _configuration.GetValue<int>("AppSettings:NumeroMesiMantenimentoHistory", 3);
+
+    /// <summary>
+    /// Nome del programma usato per comporre il nome della cartella patch.
+    /// Default: "MyProgram".
+    /// </summary>
+    public string NomeProgramma =>
+        _configuration.GetValue<string>("AppSettings:NomeProgramma") ?? "MyProgram";
+
+    /// <summary>
+    /// Nome della compagnia usato nei percorsi/testi dei readme (token {NOMECOMPAGNIA}).
+    /// Default: "MyCompany".
+    /// </summary>
+    public string NomeCompagnia =>
+        _configuration.GetValue<string>("AppSettings:NomeCompagnia") ?? "MyCompany";
+
+    /// <summary>
+    /// Cartella temporanea radice dove viene creata la struttura patch.
+    /// Default: C:\TmpPatch\
+    /// </summary>
+    public string TmpPatchDir =>
+        _configuration.GetValue<string>("AppSettings:TmpPatchDir") ?? @"C:\TmpPatch\";
 }

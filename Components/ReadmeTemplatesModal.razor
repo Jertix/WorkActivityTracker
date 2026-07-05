@@ -1,0 +1,110 @@
+@using WorkActivityTracker.Models
+
+@*
+    Popup per l'inserimento dei file Readme nella struttura patch.
+    Mostra una lista di checkbox (una per template della lingua del cliente);
+    "Inserisci" crea i file .txt per le voci selezionate.
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content" style="max-height: 85vh;">
+
+                @* ===== HEADER ===== *@
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">📄 Inserisci files Readme</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Chiudi"></button>
+                </div>
+
+                @* ===== BODY ===== *@
+                <div class="modal-body" style="overflow-y: auto;">
+                    @if (Templates == null || !Templates.Any())
+                    {
+                        <div class="alert alert-warning mb-0">
+                            Nessun template disponibile per la lingua del cliente.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-2 d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="SelezionaTutti">✅ Seleziona tutti</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="DeselezionaTutti">⬜ Deseleziona tutti</button>
+                        </div>
+                        <ul class="list-group">
+                            @for (int i = 0; i < Templates.Count; i++)
+                            {
+                                var idx = i;
+                                var t = Templates[idx];
+                                <li class="list-group-item">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="@($"chkReadme{idx}")"
+                                               checked="@selezionati.Contains(idx)"
+                                               @onchange="e => ToggleSelezione(idx, (bool)e.Value!)" />
+                                        <label class="form-check-label" for="@($"chkReadme{idx}")">
+                                            <span class="fw-bold">@t.Titolo</span>
+                                            <br />
+                                            <small class="text-muted">📁 @t.DirectoryDiSalvataggio</small>
+                                        </label>
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+
+                @* ===== FOOTER ===== *@
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="Chiudi">Chiudi</button>
+                    <button type="button" class="btn btn-success" @onclick="Inserisci"
+                            disabled="@(!selezionati.Any())">
+                        Inserisci
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public List<ReadmeTemplate> Templates { get; set; } = new();
+    [Parameter] public EventCallback OnChiudi { get; set; }
+    [Parameter] public EventCallback<List<ReadmeTemplate>> OnInserisci { get; set; }
+
+    private readonly HashSet<int> selezionati = new();
+
+    // Reset delle selezioni ad ogni apertura.
+    protected override void OnParametersSet()
+    {
+        if (!IsVisible)
+            selezionati.Clear();
+    }
+
+    private void ToggleSelezione(int idx, bool valore)
+    {
+        if (valore) selezionati.Add(idx);
+        else selezionati.Remove(idx);
+    }
+
+    private void SelezionaTutti()
+    {
+        selezionati.Clear();
+        for (int i = 0; i < Templates.Count; i++) selezionati.Add(i);
+    }
+
+    private void DeselezionaTutti() => selezionati.Clear();
+
+    private async Task Inserisci()
+    {
+        var scelti = selezionati.OrderBy(i => i).Select(i => Templates[i]).ToList();
+        await OnInserisci.InvokeAsync(scelti);
+    }
+
+    private async Task Chiudi()
+    {
+        selezionati.Clear();
+        await OnChiudi.InvokeAsync();
+    }
+}

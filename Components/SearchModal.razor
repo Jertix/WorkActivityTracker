@@ -319,9 +319,15 @@
     [Parameter]
     public string TestoRicercaIniziale { get; set; } = string.Empty;
 
-    /// <summary>Lista delle attività su cui cercare</summary>
+    /// <summary>Delegato per eseguire la ricerca lato server con i criteri scelti nella modale.
+    /// Restituisce match LEGGERI (senza Note/Changeset).</summary>
     [Parameter]
-    public List<WorkActivityDto> AttivitaTutte { get; set; } = new();
+    public Func<RicercaAvanzataCriteri, Task<List<WorkActivityDto>>>? OnRicerca { get; set; }
+
+    /// <summary>Delegato per caricare on-demand il contenuto completo (Note/Changeset con immagini)
+    /// dell'attività selezionata.</summary>
+    [Parameter]
+    public Func<int, Task<WorkActivityDto?>>? OnCaricaDettaglio { get; set; }
 
     /// <summary>Evento quando la modale viene chiusa</summary>
     [Parameter]
@@ -366,9 +372,14 @@
     private int totalHighlights = 0;
     private int currentHighlightIndex = 0;
     
-    // Cache per l'HTML del dettaglio (evita ri-generazione quando si naviga tra occorrenze)
+    // Cache per l'HTML del dettaglio (evita ri-generazione quando si naviga tra occorrenze).
+    // lastRenderedId contiene l'Id dell'attività di cui è attualmente generato il dettaglio.
     private string cachedDetailHtml = string.Empty;
-    private int lastRenderedIndex = -1;
+    private int lastRenderedId = -1;
+
+    // Contenuto completo (Note/Changeset) dell'elemento selezionato, caricato on-demand.
+    private WorkActivityDto? dettaglioCorrente;
+    private readonly Dictionary<int, WorkActivityDto> cacheDettagli = new();
 
     #endregion
 
@@ -418,12 +429,12 @@
 
     #region Lifecycle
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (IsVisible && !string.IsNullOrEmpty(TestoRicercaIniziale) && TestoRicerca != TestoRicercaIniziale)
         {
             TestoRicerca = TestoRicercaIniziale;
-            EseguiRicerca();
+            await EseguiRicerca();
         }
     }
 
@@ -444,97 +455,47 @@
     #region Ricerca
 
     /// <summary>
-    /// Normalizza una stringa rimuovendo spazi multipli e trasformando in lowercase.
-    /// </summary>
-    private static string NormalizeForSearch(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return string.Empty;
-        
-        return Regex.Replace(text.Trim(), @"\s+", " ").ToLower();
-    }
-
-    /// <summary>
-    /// Verifica se un testo normalizzato contiene la stringa di ricerca normalizzata.
-    /// </summary>
-    private static bool ContainsNormalized(string? text, string normalizedSearch)
-    {
-        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(normalizedSearch))
-            return false;
-        
-        return NormalizeForSearch(text).Contains(normalizedSearch);
-    }
-
-    /// <summary>
-    /// Esegue la ricerca applicando i filtri selezionati.
-    /// La ricerca normalizza gli spazi, quindi "oggi   sono" trova anche "oggi sono".
+    /// Esegue la ricerca lato server (SQL) con i campi selezionati. Non precarica lo storico:
+    /// il delegato <see cref="OnRicerca"/> restituisce solo i match, con DTO leggeri (senza
+    /// Note/Changeset). Il contenuto completo del selezionato è caricato on-demand.
     /// </summary>
     private async Task EseguiRicerca()
     {
         ricercaEseguita = true;
         indiceSelezionato = -1;
-        
+        dettaglioCorrente = null;
+
         // Invalida la cache perché il testo cercato potrebbe essere cambiato
         cachedDetailHtml = string.Empty;
-        lastRenderedIndex = -1;
+        lastRenderedId = -1;
 
-        if (string.IsNullOrWhiteSpace(TestoRicerca))
+        if (string.IsNullOrWhiteSpace(TestoRicerca) || OnRicerca == null)
         {
             Risultati = new List<WorkActivityDto>();
             return;
         }
 
-        // Normalizza la stringa di ricerca (spazi multipli → singolo)
-        var normalizedSearch = NormalizeForSearch(TestoRicerca);
-
-        Risultati = AttivitaTutte.Where(a =>
+        var criteri = new RicercaAvanzataCriteri
         {
-            bool match = false;
+            Testo = TestoRicerca,
+            Descrizione = cercaInDescrizione,
+            UrlTicket = cercaInUrlTicket,
+            NumeroTicket = cercaInNumeroTicket,
+            Vedere = cercaInVedere,
+            Note = cercaInNote,
+            Changeset = cercaInChangeset,
+            UrlPatchRilasci = cercaInUrlPatchRilasci,
+            TestoCheckIn = cercaInTestoCheckIn,
+            Versione = cercaInVersione,
+            Cliente = cercaInCliente,
+            Cartella = cercaInCartella
+        };
 
-            if (cercaInDescrizione)
-                match = match || ContainsNormalized(a.Descrizione, normalizedSearch);
+        Risultati = await OnRicerca(criteri);
 
-            if (cercaInUrlTicket)
-                match = match || ContainsNormalized(a.UrlTicket, normalizedSearch);
-
-            if (cercaInNumeroTicket)
-                match = match || ContainsNormalized(a.NumeroTicket, normalizedSearch);
-
-            if (cercaInVedere)
-                match = match || ContainsNormalized(a.Vedere, normalizedSearch);
-
-            if (cercaInNote)
-                match = match || ContainsNormalized(a.Note, normalizedSearch);
-
-            if (cercaInChangeset)
-                match = match || ContainsNormalized(a.ChangesetCoinvolti, normalizedSearch);
-
-            if (cercaInUrlPatchRilasci)
-                match = match || ContainsNormalized(a.UrlPatchRilasci, normalizedSearch);
-
-            if (cercaInTestoCheckIn)
-                match = match || ContainsNormalized(a.TestoCheckIn, normalizedSearch);
-
-            if (cercaInVersione)
-                match = match || ContainsNormalized(a.Versione, normalizedSearch);
-
-            if (cercaInCliente)
-                match = match || ContainsNormalized(a.ClienteNome, normalizedSearch);
-
-            if (cercaInCartella)
-                match = match || ContainsNormalized(a.CartellaDocumentazione, normalizedSearch);
-
-            return match;
-        })
-        .OrderByDescending(a => a.Data)
-        .ToList();
-
-        // Seleziona automaticamente il primo risultato se presente e scrolla all'evidenziazione
+        // Seleziona automaticamente il primo risultato (carica il dettaglio e scrolla).
         if (Risultati.Any())
-        {
-            indiceSelezionato = 0;
-            await ScrollToHighlight();
-        }
+            await SelezionaRisultato(0);
     }
 
     private async Task OnSearchKeyPress(KeyboardEventArgs e)
@@ -553,6 +514,7 @@
     {
         indiceSelezionato = indice;
         currentHighlightIndex = 0; // Reset alla prima occorrenza quando cambia elemento
+        await CaricaDettaglioCorrente();
         await ScrollToHighlight();
     }
 
@@ -562,6 +524,7 @@
         {
             indiceSelezionato--;
             currentHighlightIndex = 0; // Reset alla prima occorrenza quando cambia elemento
+            await CaricaDettaglioCorrente();
             await ScrollToHighlight();
         }
     }
@@ -572,7 +535,45 @@
         {
             indiceSelezionato++;
             currentHighlightIndex = 0; // Reset alla prima occorrenza quando cambia elemento
+            await CaricaDettaglioCorrente();
             await ScrollToHighlight();
+        }
+    }
+
+    /// <summary>
+    /// Carica (con cache) il contenuto completo dell'elemento selezionato per il pannello dettaglio.
+    /// I risultati della griglia sono leggeri (senza Note/Changeset): qui si recuperano i campi
+    /// completi solo per la voce che si sta effettivamente guardando.
+    /// </summary>
+    private async Task CaricaDettaglioCorrente()
+    {
+        // Invalida l'HTML del dettaglio: cambia l'elemento mostrato.
+        cachedDetailHtml = string.Empty;
+        lastRenderedId = -1;
+        dettaglioCorrente = null;
+
+        if (indiceSelezionato < 0 || indiceSelezionato >= Risultati.Count)
+            return;
+
+        var id = Risultati[indiceSelezionato].Id;
+
+        if (cacheDettagli.TryGetValue(id, out var cached))
+        {
+            dettaglioCorrente = cached;
+            return;
+        }
+
+        if (OnCaricaDettaglio != null)
+        {
+            var full = await OnCaricaDettaglio(id);
+            // Fallback al DTO leggero se il caricamento non riesce (mostra almeno i campi base).
+            dettaglioCorrente = full ?? Risultati[indiceSelezionato];
+            if (full != null)
+                cacheDettagli[id] = full;
+        }
+        else
+        {
+            dettaglioCorrente = Risultati[indiceSelezionato];
         }
     }
 
@@ -682,8 +683,10 @@
         totalHighlights = 0;
         currentHighlightIndex = 0;
         cachedDetailHtml = string.Empty;
-        lastRenderedIndex = -1;
-        
+        lastRenderedId = -1;
+        dettaglioCorrente = null;
+        cacheDettagli.Clear();
+
         await OnChiudi.InvokeAsync();
     }
 
@@ -707,11 +710,14 @@
     /// </summary>
     private string GetCachedDetailHtml()
     {
-        if (indiceSelezionato != lastRenderedIndex || string.IsNullOrEmpty(cachedDetailHtml))
+        if (dettaglioCorrente == null)
+            return "<em>Caricamento dettaglio...</em>";
+
+        if (dettaglioCorrente.Id != lastRenderedId || string.IsNullOrEmpty(cachedDetailHtml))
         {
             // L'elemento è cambiato, rigenera l'HTML
-            cachedDetailHtml = GeneraDettaglioFormattato(Risultati[indiceSelezionato]);
-            lastRenderedIndex = indiceSelezionato;
+            cachedDetailHtml = GeneraDettaglioFormattato(dettaglioCorrente);
+            lastRenderedId = dettaglioCorrente.Id;
         }
         return cachedDetailHtml;
     }
@@ -871,15 +877,10 @@
     }
 
     /// <summary>
-    /// Verifica se un'attività contiene la parola TODO nella descrizione o nelle note.
+    /// Indica se l'attività contiene un TODO. I risultati sono leggeri (senza Note): il flag
+    /// HasTodo è calcolato lato SQL (parola isolata "TODO" su Descrizione/URL/Note/Changeset).
     /// </summary>
-    private bool ContieneTodo(WorkActivityDto attivita)
-    {
-        var descrizione = attivita.Descrizione?.ToUpper() ?? "";
-        var note = attivita.Note?.ToUpper() ?? "";
-        
-        return descrizione.Contains("TODO") || note.Contains("TODO");
-    }
+    private bool ContieneTodo(WorkActivityDto attivita) => attivita.HasTodo;
 
     /// <summary>
     /// Determina la classe CSS per una riga della griglia.

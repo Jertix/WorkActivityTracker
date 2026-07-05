@@ -28,7 +28,7 @@ public class ClienteService
         return await context.Clienti
             .Where(c => c.Attivo)
             .OrderBy(c => c.Nome)
-            .Select(c => new ClienteDto { Id = c.Id, Nome = c.Nome, Attivo = c.Attivo })
+            .Select(c => new ClienteDto { Id = c.Id, Nome = c.Nome, Attivo = c.Attivo, Lingua = c.Lingua })
             .ToListAsync();
     }
 
@@ -40,7 +40,7 @@ public class ClienteService
         using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Clienti
             .OrderBy(c => c.Nome)
-            .Select(c => new ClienteDto { Id = c.Id, Nome = c.Nome, Attivo = c.Attivo })
+            .Select(c => new ClienteDto { Id = c.Id, Nome = c.Nome, Attivo = c.Attivo, Lingua = c.Lingua })
             .ToListAsync();
     }
 
@@ -56,7 +56,8 @@ public class ClienteService
         if (exists)
             throw new InvalidOperationException($"Esiste già un cliente con nome '{dto.Nome}'");
 
-        var cliente = new Cliente { Nome = dto.Nome, Attivo = true };
+        var lingua = string.IsNullOrWhiteSpace(dto.Lingua) ? "IT" : dto.Lingua;
+        var cliente = new Cliente { Nome = dto.Nome, Attivo = true, Lingua = lingua };
         context.Clienti.Add(cliente);
 
         context.ClientiLog.Add(new ClienteLog
@@ -64,13 +65,14 @@ public class ClienteService
             NomeUtente = currentUser.WindowsUsername,
             AzioneSvolta = "Nuovo",
             NomeCliente = dto.Nome,
-            NuovoValore = $"Nome: {dto.Nome}; Attivo: Sì",
+            NuovoValore = $"Nome: {dto.Nome}; Attivo: Sì; Lingua: {lingua}",
             Timestamp = DateTime.Now
         });
 
         await context.SaveChangesAsync();
         dto.Id = cliente.Id;
         dto.Attivo = true;
+        dto.Lingua = lingua;
         return dto;
     }
 
@@ -89,10 +91,12 @@ public class ClienteService
         if (nomeExists)
             throw new InvalidOperationException($"Esiste già un altro cliente con nome '{dto.Nome}'");
 
-        var vecchioValore = $"Nome: {cliente.Nome}; Attivo: {(cliente.Attivo ? "Sì" : "No")}";
+        var vecchioValore = $"Nome: {cliente.Nome}; Attivo: {(cliente.Attivo ? "Sì" : "No")}; Lingua: {cliente.Lingua}";
 
+        var lingua = string.IsNullOrWhiteSpace(dto.Lingua) ? "IT" : dto.Lingua;
         cliente.Nome = dto.Nome;
         cliente.Attivo = dto.Attivo;
+        cliente.Lingua = lingua;
 
         context.ClientiLog.Add(new ClienteLog
         {
@@ -100,7 +104,7 @@ public class ClienteService
             AzioneSvolta = "Modifica",
             NomeCliente = dto.Nome,
             VecchioValore = vecchioValore,
-            NuovoValore = $"Nome: {dto.Nome}; Attivo: {(dto.Attivo ? "Sì" : "No")}",
+            NuovoValore = $"Nome: {dto.Nome}; Attivo: {(dto.Attivo ? "Sì" : "No")}; Lingua: {lingua}",
             Timestamp = DateTime.Now
         });
 

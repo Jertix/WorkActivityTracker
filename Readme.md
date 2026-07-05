@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-5.1-blue)
+![Version](https://img.shields.io/badge/version-5.2-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -78,15 +78,20 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
   },
   "AppSettings": {
     "AppName": "Work Activity Tracker",
-    "Version": "5.1",
+    "Version": "5.2",
     "NumeroMesiMantenimentoHistory": 3,
     "MostraModalitaAdmin": true,
-    "PrivacyMode": false
+    "PrivacyMode": false,
+    "NomeProgramma": "MyProgram",
+    "NomeCompagnia": "MyCompany",
+    "TmpPatchDir": "C:\\TmpPatch\\"
   }
 }
 ```
 
 > `NumeroMesiMantenimentoHistory` (default 3): all'avvio le voci dello storico modifiche (`EditorHistory`) più vecchie di questo numero di mesi vengono eliminate automaticamente in background. Un valore `0` o negativo disattiva la pulizia.
+>
+> `NomeProgramma` / `NomeCompagnia` / `TmpPatchDir` (v5.2): usati dalle funzioni "Autoprepara struttura patch" e "Inserisci files Readme". `NomeProgramma`/`NomeCompagnia` sono i segnaposto (`{NOMEPROGRAMMA}`/`{NOMECOMPAGNIA}`) sostituiti nei nomi cartella e nei testi readme; `TmpPatchDir` (default `C:\TmpPatch\`) è la cartella radice dove viene creata la struttura patch.
 
 ### Eseguire l'applicazione
 
@@ -225,6 +230,7 @@ Modale per note rapide con sistema di tag (Titolo, Descrizione, Tag multi-valore
 
 Modale `ClientiEditorModal` aperta dal pulsante ✏️ accanto al campo Cliente:
 - CRUD completo: aggiungi, modifica, disattiva cliente.
+- **Lingua struttura patch (v5.2)**: select Italiano/Inglese (`Clienti.Lingua`, default IT) che determina la lingua dei nomi cartella nella funzione "Autoprepara struttura patch" e i readme proposti. Colonna "Lingua" mostrata anche nella griglia.
 - Ogni modifica è tracciata in `Clienti_Log`: NomeUtente, AzioneSvolta (Nuovo/Modifica/Elimina), VecchioValore, NuovoValore, Timestamp.
 
 ### 11. Editor Congelati (Modale)
@@ -239,6 +245,8 @@ Modale `CongelatiEditorModal` aperta dal pulsante "✏️ Modifica lista" sotto 
 ### 12. Ricerca Avanzata (Modale)
 
 Ricerca full-text su tutte le attività (senza filtri data) con griglia risultati, navigazione frecce, evidenziazione rossa, selezione attività nel form.
+
+**Ricerca lato server (v5.2):** la finestra **non precarica più** l'intero storico (che con Note ricche di screenshot base64 poteva richiedere 30–60 secondi ad aprirsi). La ricerca è eseguita su **SQL Server** (`ActivityService.RicercaAvanzataAsync`, `EF.Functions.Like` sui soli campi selezionati) e restituisce risultati **leggeri** (senza Note/Changeset); il contenuto completo della voce selezionata viene caricato **on-demand** (con cache). L'apertura è così **istantanea** anche su archivi grandi. Unica rinuncia rispetto a prima: la normalizzazione degli spazi multipli nel testo cercato.
 
 ### 13. Segnalazioni (Modale)
 
@@ -317,6 +325,31 @@ I pulsanti sono disabilitati finché l'attività non è stata salvata almeno una
 
 **Pulizia automatica (v5.1):** all'avvio dell'applicazione, in background, le voci di `EditorHistory` più vecchie di `NumeroMesiMantenimentoHistory` mesi (impostazione in `appsettings.json`, default 3) vengono eliminate automaticamente (`EditorHistoryService.EliminaVecchieAsync`), evitando la crescita illimitata della tabella. Se qualche voce viene eliminata, in testa al form appare un avviso informativo (che scompare dopo qualche secondo): *"L'History delle modifiche più vecchie di X mesi è stata eliminata. (Vedere il file appsetting per modificare questo automatismo)"*. Un valore `0` o negativo disattiva la pulizia.
 
+### 21. Export PDF delle Attività (v5.2)
+
+Oltre a TXT/XLSX, le attività possono essere esportate in **PDF** mantenendo le **immagini** incollate nei campi HTML (Descrizione dettagliata, Elenco Changeset):
+- **🧾 per riga**: esporta la singola attività.
+- **🧾 Esporta dettagli PDF** (sotto la griglia): esporta tutte le attività filtrate, una per pagina.
+
+Implementato in `PdfExportService`: costruisce un documento HTML (Note/Changeset inseriti come HTML grezzo, immagini incluse) e lo stampa in PDF via WebView2 (`CoreWebView2CompositionController.PrintToPdfAsync`), riusando l'environment WebView2 di BlazorWebView catturato in `MainPage`. I file finiscono in `Export/`.
+
+### 22. Autoprepara Struttura Patch (v5.2)
+
+Accanto al campo "📦 URL Patch/Pacchetto nei rilasci" due pulsanti:
+- **🛠 Autoprepara struttura patch**: crea in `TmpPatchDir` (default `C:\TmpPatch\`) la cartella del rilascio `{Cliente}\{AAAA-MM-GG}_{NOMEPROGRAMMA}_{VERSIONE}_{AMBIENTI}_{TICKET}\` (versione `X.Y.Z` → `X.Y_SPZ`; nomi senza spazi/accenti; ticket con virgole → `_`) e l'intera struttura di sottocartelle (Prerequisiti, Database Server, Application Server → Componenti Server / Setup Web, Client). È **idempotente**: se la cartella esiste già non viene toccata.
+- **📁**: apre la cartella-cliente radice in Esplora Risorse.
+
+I nomi delle sottocartelle sono in **italiano o inglese** in base alla **lingua del cliente** (`Clienti.Lingua`): es. `00_PREREQUISITI`/`00_PREREQUISITES`, `01_COMPONENTI_SERVER`/`01_SERVER_COMPONENTS`.
+
+### 23. Inserisci files Readme (v5.2)
+
+Pulsante **TXT** (tooltip "Inserisci files Readme") accanto ai pulsanti patch. Apre una popup (`ReadmeTemplatesModal`) con i modelli di istruzioni d'installazione filtrati per la lingua del cliente. I modelli sono definiti in **`ReadmeTmplates.json`** (root del progetto): array di voci `{Titolo, Lingua, Descrizione, DirectoryDiSalvataggio}`. Selezionando le voci e premendo **Inserisci**, viene creato un unico **`Readme.txt`** per ciascuna cartella di destinazione (sezioni separate da una linea `===` con il titolo di ciascun readme); i file già presenti non vengono sovrascritti. I segnaposto `{NOMEPROGRAMMA}`, `{NOMECOMPAGNIA}`, `{CLIENTE}`, `{VERSIONE}` vengono sostituiti (anche nel titolo). Richiede di aver prima premuto "Autoprepara struttura patch".
+
+### 24. Auto-compilazione Numero Ticket + Autocompila Check-in (v5.2)
+
+- **Numero ticket dai link**: uscendo dal campo "URL Ticket", i numeri dei ticket presenti nei link (ServiceDesk HDAPortal e TFS) vengono estratti e aggiunti in coda al campo "Numero del ticket" (solo i mancanti, senza duplicati).
+- **✨ Autocompila (Testo del check-in)**: pulsante accanto a ⬇️📋 che compila il check-in come `Numero ticket - Descrizione`.
+
 ---
 
 ## Modello Dati
@@ -389,6 +422,8 @@ SQL Server Database
 | `TipiAttivitaService` | Scoped | CRUD tipi attività dinamici (v4.2) |
 | `CalendarioService` | Scoped | CRUD eventi calendario + eventi imminenti (v4.2) |
 | `EditorHistoryService` | Scoped | Salvataggio e recupero storico versioni editor Note/Changeset (v4.5) |
+| `PdfExportService` | Singleton | Export PDF delle attività via WebView2 composition controller (v5.2) |
+| `ReadmeTemplateService` | Singleton | Carica i template readme da `ReadmeTmplates.json` (v5.2) |
 
 ### Script JS in `wwwroot/index.html`
 
@@ -435,6 +470,8 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 | `MigrateToV4.8.sql` | Aggiunta `DatiAmbiente`, `DirectoryInstallazione`, `InformazioniPool` in `ClientiAmbienti` |
 | `MigrateToV4.9.sql` | Aggiunta `Descrizione4`, `Descrizione5` in `Ambienti`; `TipoVersione`, `NumeroVersione` in `ClientiAmbienti` |
 | `MigrateToV5.0.sql` | Indici performance: `IX_Attivita_UtenteId_Data`, `IX_EditorHistory_Attivita_Campo`, `IX_AttivitaAmbientiRilascio_AttivitaId` |
+| _(v5.1)_ | Nessuna modifica allo schema |
+| `MigrateToV5.2.sql` | Aggiunta colonna `Lingua` (IT/EN, default `IT`) in `Clienti` |
 
 ---
 
@@ -454,6 +491,18 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ---
 
 ## Changelog
+
+### v5.2
+- 📄 **Export PDF delle attività (con immagini)**: nuovo pulsante 🧾 in ogni riga della griglia e **"🧾 Esporta dettagli PDF"** sotto la griglia. A differenza dell'export TXT, le immagini incollate nei campi HTML (Descrizione dettagliata, Elenco Changeset) vengono renderizzate nel PDF. Implementato con `PdfExportService` che stampa un documento HTML via WebView2 (`CoreWebView2CompositionController.PrintToPdfAsync`), riusando l'environment WebView2 di BlazorWebView catturato in `MainPage`.
+- ⚡ **Ricerca avanzata lato server**: la modale di Ricerca Avanzata non precarica più tutto lo storico (che con Note ricche di screenshot base64 poteva richiedere 30–60s); ora filtra su SQL Server (`ActivityService.RicercaAvanzataAsync`) e restituisce risultati leggeri, caricando il contenuto completo solo della voce selezionata. Apertura **istantanea** anche su archivi grandi.
+- 🎫 **Auto-compilazione "Numero del ticket"**: incollando i link nel campo URL Ticket, i numeri dei ticket (ServiceDesk HDAPortal e TFS) vengono estratti automaticamente e accodati al campo Numero (solo i mancanti, senza duplicati).
+- ✨ **Autocompila Testo del check-in**: nuovo pulsante ✨ accanto a ⬇️📋 che compone `Numero ticket - Descrizione`.
+- 🔎 **Descrizione in griglia** troncata a 100 caratteri (era 50) con tooltip del testo completo.
+- 🛠️ **Autoprepara struttura patch**: nuovi pulsanti 🛠/📁 accanto al campo "URL Patch". Crea in `TmpPatch` la cartella del rilascio (`AAAA-MM-GG_PROGRAMMA_VERSIONE_AMBIENTI_TICKET`) con l'intera struttura di sottocartelle. Idempotente. Config in `appsettings.json`: `TmpPatchDir`, `NomeProgramma`, `NomeCompagnia`.
+- 🌐 **Lingua struttura patch per cliente**: nuova colonna `Clienti.Lingua` (IT/EN, default IT) impostabile nell'editor clienti; la struttura patch usa i nomi cartella in italiano o inglese di conseguenza.
+- 📄 **Inserisci files Readme**: nuovo pulsante **TXT** che apre una popup con 13 modelli di istruzioni d'installazione (IT/EN, in `ReadmeTmplates.json`), filtrati per la lingua del cliente. Genera un unico `Readme.txt` per cartella con i segnaposto sostituiti (`{NOMEPROGRAMMA}`, `{NOMECOMPAGNIA}`, `{CLIENTE}`, `{VERSIONE}`, anche nel titolo).
+- 🆕 Nuovi servizi: `PdfExportService`, `ReadmeTemplateService`. Nuova modale: `ReadmeTemplatesModal`. Nuovo file: `ReadmeTmplates.json`.
+- 🆕 Nuova migrazione DB: `MigrateToV5.2.sql` (colonna `Clienti.Lingua`).
 
 ### v5.1
 - 🧹 **Pulizia automatica storico modifiche**: nuovo parametro `NumeroMesiMantenimentoHistory` (default 3) in `appsettings.json`. All'avvio, in background, le voci di `EditorHistory` più vecchie del numero di mesi indicato vengono eliminate (`EditorHistoryService.EliminaVecchieAsync` via `ExecuteDeleteAsync`); se ne vengono eliminate, un avviso compare in testa al form e scompare dopo qualche secondo. Un valore `0`/negativo disattiva la pulizia.
@@ -632,6 +681,7 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ```
 WorkActivityTracker/
 ├── appsettings.json                      # Connection string + config (NON in repo)
+├── ReadmeTmplates.json                    # Template readme patch IT/EN (v5.2)
 ├── Components/
 │   ├── Pages/
 │   │   └── Home.razor                    # Pagina principale (~2700 righe)
@@ -643,6 +693,7 @@ WorkActivityTracker/
 │   ├── SegnalazioniModal.razor           # Segnalazioni bug/richieste (v4.0)
 │   ├── TipiAttivitaEditorModal.razor     # Editor tipi attività dinamici (v4.2)
 │   ├── CalendarioModal.razor             # Calendario eventi (v4.2)
+│   ├── ReadmeTemplatesModal.razor        # Popup "Inserisci files Readme" (v5.2)
 │   ├── _Imports.razor
 │   └── Routes.razor
 ├── Data/
@@ -669,7 +720,9 @@ WorkActivityTracker/
 │   ├── UserService.cs
 │   ├── AmbientiRilascioService.cs        # (v4.1) CRUD tipi ambienti + versioni rilascio
 │   ├── TipiAttivitaService.cs            # (v4.2) CRUD tipi attività dinamici
-│   └── CalendarioService.cs              # (v4.2) CRUD eventi calendario
+│   ├── CalendarioService.cs              # (v4.2) CRUD eventi calendario
+│   ├── PdfExportService.cs               # (v5.2) Export PDF via WebView2
+│   └── ReadmeTemplateService.cs          # (v5.2) Carica ReadmeTmplates.json
 ├── wwwroot/
 │   ├── css/app.css                       # Stili custom (font 13px, TODO, editor toolbar)
 │   └── index.html                        # Entry point HTML + script JS custom

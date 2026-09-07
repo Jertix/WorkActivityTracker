@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-5.2-blue)
+![Version](https://img.shields.io/badge/version-5.4-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -78,13 +78,16 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
   },
   "AppSettings": {
     "AppName": "Work Activity Tracker",
-    "Version": "5.2",
+    "Version": "5.4",
     "NumeroMesiMantenimentoHistory": 3,
     "MostraModalitaAdmin": true,
     "PrivacyMode": false,
     "NomeProgramma": "MyProgram",
     "NomeCompagnia": "MyCompany",
-    "TmpPatchDir": "C:\\TmpPatch\\"
+    "TmpPatchDir": "C:\\TmpPatch\\",
+    "GiorniPreavvisoScadenzaArancione": 5,
+    "GiorniPreavvisoScadenzaRosso": 2,
+    "EsportaAttivitaCollegateInPdf": true
   }
 }
 ```
@@ -92,6 +95,10 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
 > `NumeroMesiMantenimentoHistory` (default 3): all'avvio le voci dello storico modifiche (`EditorHistory`) più vecchie di questo numero di mesi vengono eliminate automaticamente in background. Un valore `0` o negativo disattiva la pulizia.
 >
 > `NomeProgramma` / `NomeCompagnia` / `TmpPatchDir` (v5.2): usati dalle funzioni "Autoprepara struttura patch" e "Inserisci files Readme". `NomeProgramma`/`NomeCompagnia` sono i segnaposto (`{NOMEPROGRAMMA}`/`{NOMECOMPAGNIA}`) sostituiti nei nomi cartella e nei testi readme; `TmpPatchDir` (default `C:\TmpPatch\`) è la cartella radice dove viene creata la struttura patch.
+>
+> `GiorniPreavvisoScadenzaArancione` (default 5) / `GiorniPreavvisoScadenzaRosso` (default 2) (v5.3): giorni di preavviso entro i quali una riga della griglia con "Scadenza ticket" valorizzata viene evidenziata in arancione chiaro o in rosso. Le scadenze già passate usano un rosso più marcato. Un valore `0` o negativo disattiva il livello corrispondente.
+>
+> `EsportaAttivitaCollegateInPdf` (default `true`) (v5.3): se `true`, l'export PDF di una singola attività include anche le attività collegate dalla catena "Proseguo l'attività"; se `false` esporta la sola attività selezionata.
 
 ### Eseguire l'applicazione
 
@@ -222,6 +229,8 @@ Changeset XXX: [Testo del check-in]
 
 Modale separata per gestire TODO personali. Ogni TODO: Titolo, Descrizione, Data inserimento, Urgenza (1-5), Completato. Badge con contatore nel pulsante in alto. Pulsante **📥 Export MD** nel footer per esportare la lista in formato Markdown (tabella GFM) nella cartella `Export/`.
 
+**Nota di completamento (v5.4):** accanto alla spunta "Completato" c'è una textarea **"Nota di completamento"**, disabilitata finché il TODO è aperto e **obbligatoria** per salvarlo come completato. Per questo la checkbox nella griglia non chiude più il TODO al volo: selezionandola il TODO viene aperto nel form con la spunta già messa, in attesa della nota (riaprire un TODO resta invece immediato). Togliendo la spunta la nota viene azzerata. La nota compare come colonna in griglia e nell'Export MD.
+
 ### 9. Appunti / Knowledge Base (Modale)
 
 Modale per note rapide con sistema di tag (Titolo, Descrizione, Tag multi-valore). Badge con contatore nel pulsante in alto.
@@ -237,16 +246,21 @@ Modale `ClientiEditorModal` aperta dal pulsante ✏️ accanto al campo Cliente:
 
 Modale `CongelatiEditorModal` aperta dal pulsante "✏️ Modifica lista" sotto la tabella congelati. Log in `Ambienti_Log`.
 
-- Campi: Codice, Versione, Data Congelamento, **Data Dismissione**, Attivo.
+- Campi: Codice, Versione, Data Congelamento, **Data Dismissione**, Attivo, **Note** (v5.4).
 - **📋 Esporta MD**: esporta la griglia in formato Markdown (tabella GFM) nella cartella `Export/` (`Congelati_[timestamp].md`).
 - **Data Dismissione**: obbligatoria quando la checkbox "Attivo" viene deselezionata; il form mostra un errore di validazione se mancante. Mostrata come colonna nella griglia.
-- Il log `Ambienti_Log` include `DataDismissione` nei campi `VecchioValore` e `NuovoValore` per tracciabilità completa.
+- **Note (v5.4)**: testo libero per descrivere il Codice (a cosa serve, particolarità, riferimenti). Presente nel form, come colonna in griglia (troncata, testo completo nel tooltip) e nell'export MD.
+- Il log `Ambienti_Log` include `DataDismissione` nei campi `VecchioValore` e `NuovoValore` per tracciabilità completa; le `Note` vi entrano **troncate a 100 caratteri**, per non gonfiare la tabella di log a ogni modifica.
 
 ### 12. Ricerca Avanzata (Modale)
 
 Ricerca full-text su tutte le attività (senza filtri data) con griglia risultati, navigazione frecce, evidenziazione rossa, selezione attività nel form.
 
-**Ricerca lato server (v5.2):** la finestra **non precarica più** l'intero storico (che con Note ricche di screenshot base64 poteva richiedere 30–60 secondi ad aprirsi). La ricerca è eseguita su **SQL Server** (`ActivityService.RicercaAvanzataAsync`, `EF.Functions.Like` sui soli campi selezionati) e restituisce risultati **leggeri** (senza Note/Changeset); il contenuto completo della voce selezionata viene caricato **on-demand** (con cache). L'apertura è così **istantanea** anche su archivi grandi. Unica rinuncia rispetto a prima: la normalizzazione degli spazi multipli nel testo cercato.
+**Ricerca lato server (v5.2):** la finestra **non precarica più** l'intero storico (che con Note ricche di screenshot base64 poteva richiedere 30–60 secondi ad aprirsi). La ricerca è eseguita su **SQL Server** (`ActivityService.RicercaAvanzataAsync`, `EF.Functions.Like` sui soli campi selezionati) e restituisce risultati **leggeri** (senza Note/Changeset); il contenuto completo della voce selezionata viene caricato **on-demand** (con cache). L'apertura è così **istantanea** anche su archivi grandi.
+
+**Spazi come jolly (v5.3):** ogni sequenza di spazi, tabulazioni o a capo nel testo cercato diventa un jolly `%` nel `LIKE`. Serve perché con la ricerca su SQL un testo salvato con **doppio spazio** (o mandato a capo) non veniva più trovato scrivendolo con spazio singolo — `LIKE` non sa esprimere "uno o più spazi". Effetto collaterale accettato: tra due parole può comparire altro testo. La collation `Latin1_General_CI_AS` rende la ricerca **accent-sensitive**: `sigre` non trova `sigrè`.
+
+**Colonna "N° Ticket" e stato di attesa (v5.3/v5.4):** la griglia dei risultati mostra il numero del ticket dopo la data. Durante l'esecuzione della query compare **"Ricerca in corso, attendere…"** con rotellina, e il pulsante Cerca si disabilita: prima, per tutta la durata della ricerca, veniva mostrato "Nessun risultato trovato".
 
 ### 13. Segnalazioni (Modale)
 
@@ -337,18 +351,66 @@ Implementato in `PdfExportService`: costruisce un documento HTML (Note/Changeset
 
 Accanto al campo "📦 URL Patch/Pacchetto nei rilasci" due pulsanti:
 - **🛠 Autoprepara struttura patch**: crea in `TmpPatchDir` (default `C:\TmpPatch\`) la cartella del rilascio `{Cliente}\{AAAA-MM-GG}_{NOMEPROGRAMMA}_{VERSIONE}_{AMBIENTI}_{TICKET}\` (versione `X.Y.Z` → `X.Y_SPZ`; nomi senza spazi/accenti; ticket con virgole → `_`) e l'intera struttura di sottocartelle (Prerequisiti, Database Server, Application Server → Componenti Server / Setup Web, Client). È **idempotente**: se la cartella esiste già non viene toccata.
-- **📁**: apre la cartella-cliente radice in Esplora Risorse.
+- **📁**: apre in Esplora Risorse **tutte** le cartelle patch create, una finestra per versione.
 
 I nomi delle sottocartelle sono in **italiano o inglese** in base alla **lingua del cliente** (`Clienti.Lingua`): es. `00_PREREQUISITI`/`00_PREREQUISITES`, `01_COMPONENTI_SERVER`/`01_SERVER_COMPONENTS`.
+
+**Una cartella per versione (v5.3):** gli ambienti di rilascio che condividono la **stessa** versione vengono accorpati in un'unica cartella (`..._Test_Produzione_...`); se le versioni sono **diverse** viene creata una cartella separata per ciascuna, es. `2026-09-04_PROGRAMMA_3.2_SP50_Debug_1010C` e `2026-09-04_PROGRAMMA_3.2_SP60_Produzione_1010C`. Il raggruppamento avviene sulla versione già normalizzata, così due scritture equivalenti non generano cartelle doppie.
 
 ### 23. Inserisci files Readme (v5.2)
 
 Pulsante **TXT** (tooltip "Inserisci files Readme") accanto ai pulsanti patch. Apre una popup (`ReadmeTemplatesModal`) con i modelli di istruzioni d'installazione filtrati per la lingua del cliente. I modelli sono definiti in **`ReadmeTmplates.json`** (root del progetto): array di voci `{Titolo, Lingua, Descrizione, DirectoryDiSalvataggio}`. Selezionando le voci e premendo **Inserisci**, viene creato un unico **`Readme.txt`** per ciascuna cartella di destinazione (sezioni separate da una linea `===` con il titolo di ciascun readme); i file già presenti non vengono sovrascritti. I segnaposto `{NOMEPROGRAMMA}`, `{NOMECOMPAGNIA}`, `{CLIENTE}`, `{VERSIONE}` vengono sostituiti (anche nel titolo). Richiede di aver prima premuto "Autoprepara struttura patch".
 
+**Readme in tutte le strutture (v5.3):** quando gli ambienti hanno versioni diverse e sono state create più cartelle patch, i readme selezionati vengono scritti in **ognuna** di esse. Il segnaposto `{VERSIONE}` è risolto **per cartella**, quindi ogni `Readme.txt` riporta la versione della propria struttura.
+
 ### 24. Auto-compilazione Numero Ticket + Autocompila Check-in (v5.2)
 
 - **Numero ticket dai link**: uscendo dal campo "URL Ticket", i numeri dei ticket presenti nei link (ServiceDesk HDAPortal e TFS) vengono estratti e aggiunti in coda al campo "Numero del ticket" (solo i mancanti, senza duplicati).
 - **✨ Autocompila (Testo del check-in)**: pulsante accanto a ⬇️📋 che compila il check-in come `Numero ticket - Descrizione`.
+
+### 25. Scadenza dei Ticket (v5.3)
+
+Campo facoltativo **"Scadenza ticket"** accanto a "Numero del ticket". Quando è valorizzato, la riga in griglia viene evidenziata in base ai giorni mancanti:
+
+| Situazione | Colore riga |
+|---|---|
+| Scadenza già passata | Rosso marcato, testo in grassetto |
+| Entro `GiorniPreavvisoScadenzaRosso` giorni (default 2) | Rosso |
+| Entro `GiorniPreavvisoScadenzaArancione` giorni (default 5) | Arancione chiaro |
+
+L'evidenziazione ha la **precedenza sul colore delle righe TODO** (altrimenti sarebbe invisibile proprio nel caso d'uso principale); la riga selezionata resta comunque distinguibile. Nella colonna "N° Ticket" compare anche la data di scadenza con l'icona ⏳.
+
+**Filtro "⏳ Visualizza ticket in scadenza"**: spunta accanto a "Visualizza solo TODO". Attivandola viene spuntata automaticamente anche "solo TODO" e la griglia mostra le sole attività **con TODO e con scadenza valorizzata**, ordinate dalla **scadenza più vicina** in cima. Togliendo "solo TODO" si disattiva anche questo filtro.
+
+### 26. Autocompila Ambienti di Rilascio (v5.3)
+
+Pulsante **"✨ Ultimo ticket"** a destra delle tre coppie ambiente/versione. Compila ambienti **e** versioni copiandoli dall'**ultimo ticket lavorato per lo stesso cliente** che abbia almeno una coppia valorizzata. La ricerca spazia su **tutti gli utenti** (come in modalità admin) indipendentemente dalla spunta admin, escludendo però le attività degli utenti in `PrivacyMode`. L'attività aperta è esclusa, così il pulsante non ricopia sé stessa. Un messaggio riporta quante coppie sono state compilate e da quale ticket.
+
+### 27. Bozza di Emergenza su File (v5.3)
+
+Pensata per chi accede al database tramite **VPN**: se la connessione cade mentre si compila un'attività, il salvataggio fallisce e il lavoro — comprese le Note con gli screenshot — andrebbe perso.
+
+- Quando il salvataggio a database fallisce, l'intero contenuto del form viene serializzato in **`Bozze\bozza_attivita.json`** e il messaggio d'errore riporta il percorso.
+- Ripremendo 💾 Salva a connessione ripristinata, l'attività viene scritta nel database e il file **eliminato automaticamente**.
+- Se l'applicazione viene chiusa nel frattempo, al riavvio compare in testa al form un banner *"È presente una bozza non salvata del …"* con i pulsanti **♻️ Ripristina** e **🗑️ Elimina**. Il rilevamento avviene **prima** della connessione al database, quindi il banner compare anche a DB ancora irraggiungibile.
+- Ripristinare non cancella il file: solo un salvataggio riuscito lo fa, così un secondo tentativo fallito non lascia scoperti.
+
+### 28. Icone e Navigazione TODO negli Editor (v5.3)
+
+Nelle toolbar di **"Descrizione dettagliata lavoro svolto"** e **"Elenco Changeset"** (sia sopra sia sotto ogni editor):
+
+- **😊 Pannello icone**: apre un pannello con le icone raggruppate per categoria (Stati ed esiti, Frecce e flusso, Sviluppo e sistemi, Tempo, Persone, Analisi, Faccine). Il click **inserisce l'icona direttamente nel punto del cursore** — niente passaggio dagli appunti — e il pannello resta aperto per inserirne altre. Una riga "Usate di recente" (max 12) è condivisa fra tutti i pannelli.
+- **◀ ▶ Navigazione TODO**: salta da un TODO all'altro dentro il testo senza scorrerlo a mano, selezionando l'occorrenza e scrollando l'editor. Un badge mostra `n/tot` (o "nessun TODO"). Il contenuto **non viene modificato**: la ricerca avviene sui nodi di testo, senza inserire marcatori nell'HTML che finirebbe nel database. Il conteggio è ricalcolato a ogni salto, quindi resta corretto anche mentre si scrive.
+
+### 29. Export PDF: ambienti e attività collegate (v5.3)
+
+- Il PDF di un'attività include ora la voce **"🚀 Ambienti di rilascio"** con le coppie `Ambiente — Versione`.
+- L'etichetta "Versione" è stata rinominata in **"Versione attualmente in Sviluppo"** (anche negli export TXT).
+- Se `EsportaAttivitaCollegateInPdf` è `true`, l'export di una **singola** attività include anche tutte le attività collegate dalla catena "**** Proseguo l'attività … ****", in ordine cronologico crescente e una per pagina: il documento si legge come la progressione del lavoro. Vale solo per l'export della singola attività, dato che in "Esporta dettagli PDF" le attività ci sono già tutte.
+
+### 30. Indicatore di avanzamento negli Export (v5.3)
+
+Tutti gli export (XLSX, dettagli TXT/PDF, singola attività TXT/PDF) mostrano **"Generazione … in corso…"** con rotellina accanto a **📁 Apri Export**, e una rotellina al posto dell'icona sul pulsante della riga da cui è partito l'export. Gli altri pulsanti export si disabilitano: un export alla volta. Il lavoro pesante (generazione XLSX, composizione dell'HTML con gli screenshot in base64) gira su un thread di background, così l'interfaccia resta reattiva invece di apparire bloccata.
 
 ---
 
@@ -360,7 +422,7 @@ Pulsante **TXT** (tooltip "Inserisci files Readme") accanto ai pulsanti patch. A
 Utenti              — Utenti identificati da WindowsUsername
 Clienti             — Clienti (Es: Sviluppo, Cattolica, Aviva)
 Clienti_Log         — Log modifiche alla lista clienti
-Ambienti            — Congelati (Codice, Versione/Descrizione, DataCongelamento, DataDismissione)
+Ambienti            — Congelati (Codice, Versione/Descrizione, DataCongelamento, DataDismissione, Note)
 Ambienti_Log        — Log modifiche agli ambienti/congelati
 Attivita            — Attività lavorative principali
 AttivitaAmbienti    — Relazione N:N tra Attivita e Ambienti
@@ -424,6 +486,7 @@ SQL Server Database
 | `EditorHistoryService` | Scoped | Salvataggio e recupero storico versioni editor Note/Changeset (v4.5) |
 | `PdfExportService` | Singleton | Export PDF delle attività via WebView2 composition controller (v5.2) |
 | `ReadmeTemplateService` | Singleton | Carica i template readme da `ReadmeTmplates.json` (v5.2) |
+| `BozzaAttivitaService` | Singleton | Salvataggio di emergenza dell'attività su file quando il DB non risponde (v5.3) |
 
 ### Script JS in `wwwroot/index.html`
 
@@ -472,6 +535,8 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 | `MigrateToV5.0.sql` | Indici performance: `IX_Attivita_UtenteId_Data`, `IX_EditorHistory_Attivita_Campo`, `IX_AttivitaAmbientiRilascio_AttivitaId` |
 | _(v5.1)_ | Nessuna modifica allo schema |
 | `MigrateToV5.2.sql` | Aggiunta colonna `Lingua` (IT/EN, default `IT`) in `Clienti` |
+| `MigrateToV5.3.sql` | Aggiunta `DataScadenzaTicket` in `Attivita` (+ indice filtrato `IX_Attivita_DataScadenzaTicket`) e `NotaCompletamento` in `TodoItems` |
+| `MigrateToV5.4.sql` | Aggiunta colonna `Note` (NVARCHAR(MAX)) in `Ambienti` |
 
 ---
 
@@ -491,6 +556,23 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ---
 
 ## Changelog
+
+### v5.4
+- ⏰ **Scadenza dei ticket**: nuovo campo facoltativo "Scadenza ticket" nel form. Le righe della griglia si colorano all'avvicinarsi della scadenza (arancione entro 5 giorni, rosso entro 2, rosso marcato se già passata; soglie configurabili in `appsettings.json`). Nuova spunta **"⏳ Visualizza ticket in scadenza"** che mostra i soli TODO con scadenza valorizzata, ordinati dalla scadenza più vicina.
+- 💾 **Bozza di emergenza su file**: se il database non risponde (tipicamente per una caduta della VPN) il contenuto del form — Note e Changeset con gli screenshot inclusi — viene salvato in `Bozze\bozza_attivita.json` e cancellato al primo salvataggio riuscito. Se l'applicazione viene chiusa nel frattempo, al riavvio un banner permette di ripristinare la bozza.
+- 😊 **Pannello icone (emoji)** nelle toolbar di "Descrizione dettagliata" ed "Elenco Changeset": icone per categoria, inserimento diretto al cursore, sezione "usate di recente".
+- ◀▶ **Navigazione TODO negli editor**: frecce per saltare da un TODO all'altro con contatore `n/tot`, senza scorrere il testo e senza alterare il contenuto.
+- 🔍 **Fix ricerca**: gli spazi del termine cercato diventano jolly, così un testo salvato con spazi doppi o mandato a capo torna a essere trovato (regressione introdotta in v5.2 spostando la ricerca su SQL). In Ricerca Avanzata: nuova colonna "N° Ticket" e messaggio **"Ricerca in corso"** durante la query, al posto di "Nessun risultato trovato".
+- ⏳ **Rotellina su tutti gli export** e lavoro pesante spostato in background: l'interfaccia non appare più bloccata durante le generazioni lunghe.
+- 🧾 **PDF più completi**: gli export includono gli **ambienti di rilascio**; l'export di una singola attività può includere anche le **attività collegate** dalla catena "Proseguo l'attività" (configurabile). L'etichetta "Versione" è diventata "Versione attualmente in Sviluppo".
+- 📦 **Struttura patch per versione**: ambienti con versioni diverse generano cartelle separate (accorpate solo a parità di versione) e i file readme vengono creati in tutte le strutture. Il pulsante 📁 apre tutte le cartelle create.
+- ✨ **Autocompila ambienti di rilascio** dall'ultimo ticket lavorato per lo stesso cliente, cercando fra le attività di tutti gli utenti.
+- 🏢 **Gestione Clienti**: export **PDF per cliente** (con "Come collegarsi" e relativi screenshot), export **elenco XLSX**, pulsante "Apri Export"; messaggi spostati nel footer sempre visibile; griglia ordinata per nome cliente.
+- 🧊 **Congelati**: nuovo campo **"Note"** libero per descrivere il Codice, presente in griglia, form ed export MD.
+- ✅ **TODO List**: **"Nota di completamento" obbligatoria** per chiudere un TODO (la spunta in griglia porta al form invece di completare al volo), inclusa nell'Export MD.
+- 🔄 **"Reset Filtri"** torna al mese corrente invece che all'anno intero; nuovo pulsante ✖ per svuotare il campo Ricerca.
+- 🆕 Nuovo servizio `BozzaAttivitaService`, nuovo componente `EmojiPicker.razor`.
+- 🆕 Nuove migrazioni DB: `MigrateToV5.3.sql` (scadenza ticket, nota di completamento TODO) e `MigrateToV5.4.sql` (note sui congelati).
 
 ### v5.2
 - 📄 **Export PDF delle attività (con immagini)**: nuovo pulsante 🧾 in ogni riga della griglia e **"🧾 Esporta dettagli PDF"** sotto la griglia. A differenza dell'export TXT, le immagini incollate nei campi HTML (Descrizione dettagliata, Elenco Changeset) vengono renderizzate nel PDF. Implementato con `PdfExportService` che stampa un documento HTML via WebView2 (`CoreWebView2CompositionController.PrintToPdfAsync`), riusando l'environment WebView2 di BlazorWebView catturato in `MainPage`.
@@ -694,6 +776,8 @@ WorkActivityTracker/
 │   ├── TipiAttivitaEditorModal.razor     # Editor tipi attività dinamici (v4.2)
 │   ├── CalendarioModal.razor             # Calendario eventi (v4.2)
 │   ├── ReadmeTemplatesModal.razor        # Popup "Inserisci files Readme" (v5.2)
+│   ├── GestioneClientiModal.razor        # Ambienti per cliente (v4.7)
+│   ├── EmojiPicker.razor                 # Pannello icone per gli editor (v5.3)
 │   ├── _Imports.razor
 │   └── Routes.razor
 ├── Data/
@@ -722,7 +806,8 @@ WorkActivityTracker/
 │   ├── TipiAttivitaService.cs            # (v4.2) CRUD tipi attività dinamici
 │   ├── CalendarioService.cs              # (v4.2) CRUD eventi calendario
 │   ├── PdfExportService.cs               # (v5.2) Export PDF via WebView2
-│   └── ReadmeTemplateService.cs          # (v5.2) Carica ReadmeTmplates.json
+│   ├── ReadmeTemplateService.cs          # (v5.2) Carica ReadmeTmplates.json
+│   └── BozzaAttivitaService.cs           # (v5.3) Bozza di emergenza su file (VPN caduta)
 ├── wwwroot/
 │   ├── css/app.css                       # Stili custom (font 13px, TODO, editor toolbar)
 │   └── index.html                        # Entry point HTML + script JS custom

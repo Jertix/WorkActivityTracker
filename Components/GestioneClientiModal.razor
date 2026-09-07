@@ -3,6 +3,7 @@
 @inject ClienteService ClienteService
 @inject ClienteAmbienteService ClienteAmbienteService
 @inject AmbienteService AmbienteService
+@inject PdfExportService PdfExportService
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -63,7 +64,7 @@
                                             <th style="width: 160px;">Versione</th>
                                             <th style="width: 140px;">Data ultimo aggiornamento</th>
                                             <th style="width: 120px;">Utente</th>
-                                            <th style="width: 120px;">Azioni</th>
+                                            <th style="width: 160px;">Azioni</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -90,6 +91,20 @@
                                                         @(r.UltimoUtente ?? "-")
                                                     </td>
                                                     <td>
+                                                        <button class="btn btn-sm btn-outline-danger me-1"
+                                                                @onclick="() => EsportaClientePdf(r)"
+                                                                @onclick:stopPropagation="true"
+                                                                disabled="@IsExporting"
+                                                                title="Esporta in PDF tutte le info di questo cliente (tutti i suoi ambienti)">
+                                                            @if (exportClienteId == r.ClienteId && exportInCorso == "PDF")
+                                                            {
+                                                                <span class="spinner-border spinner-border-sm" role="status"></span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <text>🧾</text>
+                                                            }
+                                                        </button>
                                                         <button class="btn btn-sm btn-primary me-1"
                                                                 @onclick="() => Clona(r)"
                                                                 @onclick:stopPropagation="true"
@@ -118,6 +133,28 @@
                                 </table>
                             </div>
                         </div>
+                    </div>
+
+                    @* ===== BARRA EXPORT ===== *@
+                    <div class="d-flex gap-1 flex-wrap align-items-center justify-content-end mb-3">
+                        @* Rotellina prima dei pulsanti: comparendo cresce verso sinistra e non
+                           sposta i due pulsanti, che restano ancorati al bordo destro. *@
+                        @if (IsExporting)
+                        {
+                            <span class="text-primary d-inline-flex align-items-center me-2" role="status">
+                                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                                Generazione @exportInCorso in corso…
+                            </span>
+                        }
+                        <button class="btn btn-outline-success btn-sm" @onclick="EsportaElencoXlsx"
+                                disabled="@IsExporting"
+                                title="Esporta l'elenco degli ambienti cliente in formato Excel (.xlsx)">
+                            📊 Esporta elenco XLSX
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="ApriCartellaExport"
+                                title="Apri la cartella Export del programma">
+                            📁 Apri Export
+                        </button>
                     </div>
 
                     @* ===== FORM DETTAGLIO ===== *@
@@ -619,14 +656,6 @@
                         </div>
                     </div>
 
-                    @* ===== MESSAGGI ===== *@
-                    @if (!string.IsNullOrEmpty(messaggio))
-                    {
-                        <div class="alert @(isErrore ? "alert-danger" : "alert-success") alert-dismissible fade show mt-3" role="alert">
-                            @messaggio
-                            <button type="button" class="btn-close" @onclick="() => messaggio = string.Empty"></button>
-                        </div>
-                    }
                 </div>
 
                 @* ===== MINI STATUS BAR ===== *@
@@ -643,6 +672,17 @@
 
                 @* ===== FOOTER ===== *@
                 <div class="modal-footer">
+                    @* Messaggi nel footer, non in fondo al body: il footer resta sempre visibile,
+                       così un errore si vede subito senza dover scorrere la pagina.
+                       me-auto spinge l'avviso a sinistra lasciando i pulsanti a destra. *@
+                    @if (!string.IsNullOrEmpty(messaggio))
+                    {
+                        <div class="alert @(isErrore ? "alert-danger" : "alert-success") alert-dismissible fade show py-2 mb-0 me-auto"
+                             role="alert" style="max-width: 70%;">
+                            @messaggio
+                            <button type="button" class="btn-close" @onclick="() => messaggio = string.Empty"></button>
+                        </div>
+                    }
                     <button type="button" class="btn btn-secondary" @onclick="Chiudi">
                         ❌ Chiudi
                     </button>
@@ -1109,6 +1149,246 @@
     private async Task DatiAmbienteRimuoviRigheVuote()
     {
         try { await JS.InvokeVoidAsync("datiAmbienteEditorHelper.rimuoviRigheVuote", datiAmbienteEditorRef); } catch { }
+    }
+
+    #endregion
+
+    #region Export
+
+    /// <summary>Etichetta dell'export in corso ("XLSX"/"PDF"); stringa vuota = nessun export.</summary>
+    private string exportInCorso = string.Empty;
+
+    /// <summary>Id del cliente il cui PDF è in corso (0 = export non legato a una riga).</summary>
+    private int exportClienteId;
+
+    /// <summary>True mentre è in corso la generazione di un export.</summary>
+    private bool IsExporting => exportInCorso.Length > 0;
+
+    /// <summary>
+    /// Esegue un export mostrando la rotellina (accanto ai pulsanti e sulla riga di partenza).
+    /// Stessa logica del form principale: StateHasChanged + Task.Delay(1) per far comparire la
+    /// rotellina prima del lavoro pesante, che i singoli metodi spostano poi su Task.Run.
+    /// Un export alla volta: i click successivi vengono ignorati.
+    /// </summary>
+    private async Task EseguiExportAsync(string etichetta, Func<Task> lavoro, int clienteId = 0)
+    {
+        if (IsExporting) return;
+
+        exportInCorso = etichetta;
+        exportClienteId = clienteId;
+        StateHasChanged();
+        await Task.Delay(1);
+
+        try
+        {
+            await lavoro();
+        }
+        finally
+        {
+            exportInCorso = string.Empty;
+            exportClienteId = 0;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Esporta l'elenco degli ambienti cliente in XLSX. Include i soli campi "piatti":
+    /// "Come collegarsi" e "Dati ambiente" sono HTML con screenshot e finirebbero illeggibili
+    /// (oltre che oltre il limite di caratteri per cella) — quelli stanno nel PDF per cliente.
+    /// </summary>
+    private Task EsportaElencoXlsx() => EseguiExportAsync("XLSX", async () =>
+    {
+        try
+        {
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var nomeFile = $"ElencoAmbientiClienteAl{timestamp}.xlsx";
+            var percorso = System.IO.Path.Combine(AppConfigService.GetExportFolder(), nomeFile);
+
+            // Snapshot: la generazione gira su un thread di background.
+            var dati = righe.ToList();
+
+            await Task.Run(() =>
+            {
+                using var wb = new ClosedXML.Excel.XLWorkbook();
+                var ws = wb.Worksheets.Add("Ambienti Cliente");
+
+                var intestazioni = new[]
+                {
+                    "Cliente", "Ambiente", "Tipo versione", "Numero versione",
+                    "Application Server", "Database Server", "Directory installazione",
+                    "Informazioni pool", "Persone di riferimento",
+                    "Data ultimo aggiornamento", "Utente"
+                };
+                for (int i = 0; i < intestazioni.Length; i++)
+                    ws.Cell(1, i + 1).Value = intestazioni[i];
+
+                var headerRow = ws.Row(1);
+                headerRow.Style.Font.Bold = true;
+                headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.DarkGray;
+                headerRow.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+
+                int row = 2;
+                foreach (var r in dati)
+                {
+                    int col = 1;
+                    ws.Cell(row, col++).Value = r.NomeCliente;
+                    ws.Cell(row, col++).Value = r.Ambiente;
+                    ws.Cell(row, col++).Value = r.TipoVersione ?? string.Empty;
+                    ws.Cell(row, col++).Value = r.NumeroVersione ?? string.Empty;
+                    ws.Cell(row, col++).Value = r.ApplicationServer ?? string.Empty;
+                    ws.Cell(row, col++).Value = r.DatabaseServer ?? string.Empty;
+                    ws.Cell(row, col++).Value = r.DirectoryInstallazione ?? string.Empty;
+                    ws.Cell(row, col++).Value = r.InformazioniPool ?? string.Empty;
+                    ws.Cell(row, col++).Value = r.PersoneRiferimento ?? string.Empty;
+                    if (r.DataModifica.HasValue)
+                    {
+                        ws.Cell(row, col).Style.NumberFormat.Format = "dd/MM/yyyy HH:mm";
+                        ws.Cell(row, col++).Value = r.DataModifica.Value;
+                    }
+                    else
+                    {
+                        ws.Cell(row, col++).Value = string.Empty;
+                    }
+                    ws.Cell(row, col++).Value = r.UltimoUtente ?? string.Empty;
+                    row++;
+                }
+
+                ws.Columns().AdjustToContents();
+                wb.SaveAs(percorso);
+            });
+
+            MostraMessaggio($"Esportato: {nomeFile}", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore export XLSX: {ex.Message}", true);
+        }
+    });
+
+    /// <summary>
+    /// Esporta in PDF tutte le info del cliente della riga: una sezione per ogni suo ambiente,
+    /// con "Come collegarsi" e "Dati ambiente" resi come HTML (gli screenshot restano visibili).
+    /// Esporta i dati SALVATI: eventuali modifiche non salvate nel form non entrano nel PDF.
+    /// </summary>
+    private Task EsportaClientePdf(ClienteAmbienteDto riga) => EseguiExportAsync("PDF", async () =>
+    {
+        try
+        {
+            // Tutti gli ambienti dello stesso cliente, in ordine di nome ambiente.
+            var ambientiCliente = righe
+                .Where(r => r.ClienteId == riga.ClienteId)
+                .OrderBy(r => r.Ambiente)
+                .ToList();
+
+            if (ambientiCliente.Count == 0)
+            {
+                MostraMessaggio("Nessun ambiente da esportare per questo cliente.", true);
+                return;
+            }
+
+            var nomeCliente = string.Concat((riga.NomeCliente ?? "Cliente")
+                .Where(c => !System.IO.Path.GetInvalidFileNameChars().Contains(c)));
+            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var nomeFile = $"Cliente_{nomeCliente}_{timestamp}.pdf";
+            var percorso = System.IO.Path.Combine(AppConfigService.GetExportFolder(), nomeFile);
+
+            // Comporre l'HTML (immagini in base64) è la parte pesante: thread di background.
+            // La stampa vera resta sul thread UI: WebView2 non è utilizzabile da altri thread.
+            var html = await Task.Run(() => GeneraHtmlCliente(riga.NomeCliente ?? string.Empty, ambientiCliente));
+            await PdfExportService.ExportHtmlToPdfAsync(html, percorso);
+
+            MostraMessaggio($"Esportato: {nomeFile}", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore export PDF: {ex.Message}", true);
+        }
+    }, riga.ClienteId);
+
+    /// <summary>
+    /// Costruisce il documento HTML del cliente: intestazione + una sezione per ogni ambiente.
+    /// I campi semplici sono HtmlEncode-ati; "Come collegarsi" e "Dati ambiente" sono inseriti
+    /// come HTML grezzo perché contengono formattazione e screenshot incollati dall'utente.
+    /// </summary>
+    private string GeneraHtmlCliente(string nomeCliente, List<ClienteAmbienteDto> ambienti)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>");
+        sb.Append("body{font-family:'Segoe UI',sans-serif;font-size:13px;color:#212529;margin:16px;}");
+        sb.Append("h1{font-size:20px;margin:0 0 4px 0;}");
+        sb.Append("h2{font-size:16px;margin:0 0 8px 0;padding:6px 8px;background:#f1f3f5;border-left:4px solid #ffc107;}");
+        sb.Append(".ambiente{margin-bottom:24px;page-break-after:always;}");
+        sb.Append(".ambiente:last-child{page-break-after:auto;}");
+        sb.Append(".campo{margin-bottom:6px;}");
+        sb.Append(".et{font-weight:bold;color:#495057;}");
+        sb.Append(".blocco{border:1px solid #dee2e6;border-radius:4px;padding:8px;margin-top:4px;}");
+        sb.Append("img{max-width:100%;}");
+        sb.Append("table{border-collapse:collapse;}");
+        sb.Append("</style></head><body>");
+
+        var enc = new Func<string?, string>(v => System.Net.WebUtility.HtmlEncode(v ?? string.Empty));
+
+        sb.Append($"<h1>🏢 {enc(nomeCliente)}</h1>");
+        sb.Append($"<div class=\"campo\" style=\"color:#6c757d;\">Ambienti: {ambienti.Count} — documento generato il {DateTime.Now:dd/MM/yyyy HH:mm}</div><hr/>");
+
+        foreach (var a in ambienti)
+        {
+            sb.Append("<div class=\"ambiente\">");
+            sb.Append($"<h2>{enc(a.Ambiente)}</h2>");
+
+            var versione = string.Join(" ", new[] { TipoVersionePrefix(a.TipoVersione), a.NumeroVersione }
+                .Where(x => !string.IsNullOrWhiteSpace(x)));
+            sb.Append(CampoHtml("Cliente", a.NomeCliente));
+            sb.Append(CampoHtml("Ambiente", a.Ambiente));
+            sb.Append(CampoHtml("Versione", versione));
+            sb.Append(CampoHtml("Application Server", a.ApplicationServer));
+            sb.Append(CampoHtml("Database Server", a.DatabaseServer));
+            sb.Append(CampoHtml("Directory di installazione", a.DirectoryInstallazione));
+            sb.Append(CampoHtml("Informazioni sul pool", a.InformazioniPool));
+            sb.Append(CampoHtml("Persone di riferimento", a.PersoneRiferimento));
+            sb.Append(CampoHtml("Data ultimo aggiornamento",
+                a.DataModifica.HasValue ? a.DataModifica.Value.ToString("dd/MM/yyyy HH:mm") : null));
+            sb.Append(CampoHtml("Ultimo utente", a.UltimoUtente));
+
+            // Campi ricchi: HTML grezzo, così restano formattazione e screenshot.
+            if (!string.IsNullOrWhiteSpace(a.ComeCollegarsi))
+                sb.Append($"<div class=\"campo\"><span class=\"et\">Come collegarsi:</span><div class=\"blocco\">{a.ComeCollegarsi}</div></div>");
+            if (!string.IsNullOrWhiteSpace(a.DatiAmbiente))
+                sb.Append($"<div class=\"campo\"><span class=\"et\">Dati recuperati dall'ambiente:</span><div class=\"blocco\">{a.DatiAmbiente}</div></div>");
+
+            sb.Append("</div>");
+        }
+
+        sb.Append("</body></html>");
+        return sb.ToString();
+    }
+
+    /// <summary>Riga "Etichetta: valore" per il PDF (vuota se il valore manca).</summary>
+    private static string CampoHtml(string etichetta, string? valore)
+    {
+        if (string.IsNullOrWhiteSpace(valore)) return string.Empty;
+        var e = System.Net.WebUtility.HtmlEncode(etichetta);
+        var v = System.Net.WebUtility.HtmlEncode(valore).Replace("\n", "<br/>");
+        return $"<div class=\"campo\"><span class=\"et\">{e}:</span> {v}</div>";
+    }
+
+    /// <summary>Apre in Esplora Risorse la cartella Export (la stessa del form principale).</summary>
+    private void ApriCartellaExport()
+    {
+        try
+        {
+            var folder = AppConfigService.GetExportFolder();
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"\"{folder}\"",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore apertura cartella Export: {ex.Message}", true);
+        }
     }
 
     #endregion

@@ -18,6 +18,7 @@
 @inject CalendarioService CalendarioService
 @inject EditorHistoryService EditorHistoryService
 @inject PdfExportService PdfExportService
+@inject BozzaAttivitaService BozzaService
 @inject ReadmeTemplateService ReadmeTemplateService
 @implements IDisposable
 
@@ -165,6 +166,24 @@
         </div>
     }
 
+    @* ===== AVVISO BOZZA NON SALVATA (salvataggio a DB fallito) ===== *@
+    @if (bozzaPresente)
+    {
+        <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2 mb-2" role="alert">
+            <span>
+                💾 È presente una <strong>bozza non salvata</strong>@(dataBozza.HasValue ? $" del {dataBozza.Value:dd/MM/yyyy HH:mm}" : "")
+                (salvataggio nel database non riuscito). Ripristinala nel form e premi 💾 Salva.
+            </span>
+            <button class="btn btn-sm btn-warning" type="button" @onclick="RipristinaBozza">
+                ♻️ Ripristina
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="ScartaBozza"
+                    title="Elimina definitivamente il file della bozza">
+                🗑️ Elimina
+            </button>
+        </div>
+    }
+
     @* ===== AVVISO PULIZIA AUTOMATICA STORICO MODIFICHE ===== *@
     @if (!string.IsNullOrEmpty(messaggioHistoryPulita))
     {
@@ -279,6 +298,11 @@
             <div class="input-group">
                 <input type="text" class="form-control" @bind="TestoRicerca" @bind:event="oninput"
                        @onkeypress="OnSearchKeyPress" placeholder="Cerca..." />
+                <button class="btn btn-outline-danger" @onclick="SvuotaRicerca"
+                        disabled="@string.IsNullOrEmpty(TestoRicerca)"
+                        title="Svuota il campo di ricerca">
+                    ✖
+                </button>
                 <button class="btn btn-primary" @onclick="EseguiRicercaEAbilita" title="Cerca">
                     🔍
                 </button>
@@ -292,18 +316,19 @@
 
         @* Bottone Reset Filtri *@
         <div class="col-md-2 d-flex align-items-end">
-            <button class="btn btn-outline-secondary w-100" @onclick="ResetFiltri">
+            <button class="btn btn-outline-secondary w-100" @onclick="ResetFiltri"
+                    title="Azzera ricerca e filtri, tornando al mese corrente">
                 🔄 Reset Filtri
             </button>
         </div>
     </div>
     
-    @* ===== FILTRO SOLO TODO ===== *@
+    @* ===== FILTRI SOLO TODO / TICKET IN SCADENZA ===== *@
     <div class="row mb-3">
-        <div class="col-12">
+        <div class="col-12 d-flex flex-wrap align-items-center gap-4">
             <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="chkSoloTodo" 
-                       @bind="filtroSoloTodo" @bind:after="CaricaAttivita" 
+                <input class="form-check-input" type="checkbox" id="chkSoloTodo"
+                       @bind="filtroSoloTodo" @bind:after="OnCambiaFiltroSoloTodo"
                        style="transform: scale(1.3);" />
                 <label class="form-check-label fw-bold text-danger" for="chkSoloTodo" style="font-size: 1.1em;">
                     📌 Visualizza solo TODO
@@ -311,6 +336,19 @@
                 @if (filtroSoloTodo)
                 {
                     <span class="badge bg-danger ms-2">Filtro attivo</span>
+                }
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="chkTicketInScadenza"
+                       @bind="filtroTicketInScadenza" @bind:after="OnCambiaFiltroTicketInScadenza"
+                       style="transform: scale(1.3);" />
+                <label class="form-check-label fw-bold text-warning-emphasis" for="chkTicketInScadenza" style="font-size: 1.1em;"
+                       title="Mostra solo le attività con TODO e con la data di scadenza valorizzata, ordinate dalla scadenza più vicina">
+                    ⏳ Visualizza ticket in scadenza
+                </label>
+                @if (filtroTicketInScadenza)
+                {
+                    <span class="badge bg-warning text-dark ms-2">Filtro attivo</span>
                 }
             </div>
         </div>
@@ -364,7 +402,15 @@
                                         }
                                         <td>@att.Data.ToString("dd/MM/yyyy")</td>
                                         <td>@GetTipoBadge(att.TipoAttivita)</td>
-                                        <td>@TruncateText(att.NumeroTicket, 20)</td>
+                                        <td>
+                                            @TruncateText(att.NumeroTicket, 20)
+                                            @if (att.DataScadenzaTicket.HasValue)
+                                            {
+                                                <div class="small text-nowrap" title="Scadenza ticket">
+                                                    ⏳ @att.DataScadenzaTicket.Value.ToString("dd/MM/yyyy")
+                                                </div>
+                                            }
+                                        </td>
                                         <td title="@att.Descrizione">
                                             @TruncateText(att.Descrizione, 100)
                                             @if (att.HasTodo)
@@ -398,14 +444,30 @@
                                             <button class="btn btn-sm btn-outline-secondary me-1"
                                                     @onclick="() => EsportaAttivitaComeTxt(att)"
                                                     @onclick:stopPropagation="true"
+                                                    disabled="@IsExporting"
                                                     title="Esporta attività come testo su file txt">
-                                                💾
+                                                @if (exportRigaId == att.Id && exportInCorso == "TXT")
+                                                {
+                                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                                }
+                                                else
+                                                {
+                                                    <text>💾</text>
+                                                }
                                             </button>
                                             <button class="btn btn-sm btn-outline-danger me-1"
                                                     @onclick="() => EsportaAttivitaComePdf(att)"
                                                     @onclick:stopPropagation="true"
+                                                    disabled="@IsExporting"
                                                     title="Esporta attività su file PDF (con immagini)">
-                                                🧾
+                                                @if (exportRigaId == att.Id && exportInCorso == "PDF")
+                                                {
+                                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                                }
+                                                else
+                                                {
+                                                    <text>🧾</text>
+                                                }
                                             </button>
                                             <button class="btn btn-sm btn-info me-1"
                                                     @onclick="async () => await DuplicaAttivita(att)"
@@ -456,16 +518,19 @@
                     </div>
                     @if (Attivita.Any())
                     {
-                        <div class="d-flex gap-1 flex-wrap">
+                        <div class="d-flex gap-1 flex-wrap align-items-center">
                             <button class="btn btn-outline-success btn-sm" @onclick="EsportaGrigliaXlsx"
+                                    disabled="@IsExporting"
                                     title="Esporta la griglia visualizzata in formato Excel (.xlsx)">
                                 📊 Esporta XLSX
                             </button>
                             <button class="btn btn-outline-primary btn-sm" @onclick="EsportaDettagliTxt"
+                                    disabled="@IsExporting"
                                     title="Esporta il dettaglio di tutte le attività visualizzate in un file TXT">
                                 📄 Esporta dettagli TXT
                             </button>
                             <button class="btn btn-outline-danger btn-sm" @onclick="EsportaDettagliPdf"
+                                    disabled="@IsExporting"
                                     title="Esporta il dettaglio di tutte le attività visualizzate in un file PDF (con immagini)">
                                 🧾 Esporta dettagli PDF
                             </button>
@@ -473,6 +538,14 @@
                                     title="Apri la cartella Export del programma">
                                 📁 Apri Export
                             </button>
+                            @* Rotellina di avanzamento: la generazione può durare minuti sui PDF con screenshot *@
+                            @if (IsExporting)
+                            {
+                                <span class="text-primary d-inline-flex align-items-center ms-2" role="status">
+                                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                                    Generazione @exportInCorso in corso…
+                                </span>
+                            }
                         </div>
                     }
                 </div>
@@ -626,6 +699,20 @@
                                     }
                                 </div>
                             }
+                            @* Autocompilazione dall'ultimo ticket dello stesso cliente (tutti gli utenti) *@
+                            <button class="btn btn-sm btn-outline-primary ms-2" type="button"
+                                    @onclick="AutocompilaAmbientiRilascio"
+                                    disabled="@(isCaricamentoAmbientiRilascio || !(AttivitaCorrente.ClienteId > 0))"
+                                    title="Compila ambienti e versioni copiandoli dall'ultimo ticket lavorato per questo cliente (cerca anche tra le attività degli altri utenti)">
+                                @if (isCaricamentoAmbientiRilascio)
+                                {
+                                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                                }
+                                else
+                                {
+                                    <text>✨ Ultimo ticket</text>
+                                }
+                            </button>
                         </div>
                         <small class="text-muted">I valori inseriti verranno aggiunti automaticamente alla lista per i prossimi utilizzi.</small>
                     </div>
@@ -675,12 +762,18 @@
                             </div>
                         }
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-2">
                         <label class="form-label">Numero del ticket</label>
                         <input type="text" class="form-control"
                                @bind="AttivitaCorrente.NumeroTicket"
                                placeholder="Es: 12345"
                                title="Inserire il numero del ticket, usare la virgola se sono più di uno" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Scadenza ticket</label>
+                        <input type="date" class="form-control"
+                               @bind="AttivitaCorrente.DataScadenzaTicket"
+                               title="Data di scadenza del ticket (facoltativa): all'avvicinarsi la riga viene evidenziata nella griglia" />
                     </div>
                 }
 
@@ -837,7 +930,40 @@
                                 @onmousedown:preventDefault>
                             TODO
                         </button>
+                        <button class="btn btn-outline-warning btn-sm" type="button"
+                                @onclick="() => NavigaTodoNote(-1)"
+                                title="Vai al TODO precedente nel testo"
+                                @onmousedown:preventDefault>
+                            ◀
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" type="button"
+                                @onclick="() => NavigaTodoNote(1)"
+                                title="Vai al TODO successivo nel testo"
+                                @onmousedown:preventDefault>
+                            ▶
+                        </button>
+                        @if (noteTodoTotale > 0)
+                        {
+                            <span class="badge bg-warning text-dark align-self-center">
+                                @(noteTodoIndice + 1)/@noteTodoTotale
+                            </span>
+                        }
+                        else if (noteTodoTotale == 0 && noteTodoRicercato)
+                        {
+                            <span class="badge bg-secondary align-self-center">nessun TODO</span>
+                        }
+                        <div class="separator"></div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="() => ToggleEmojiPicker(1)"
+                                title="Inserisci un'icona nel punto del cursore"
+                                @onmousedown:preventDefault>
+                            😊
+                        </button>
                     </div>
+                    <EmojiPicker IsVisible="@(emojiPickerAperto == 1)"
+                                 Recenti="@emojiRecenti"
+                                 OnSelezione="InserisciEmojiNote"
+                                 OnChiudi="ChiudiEmojiPicker" />
                     <div style="position: relative;">
                         <div @ref="noteEditorRef"
                              id="note-editor-div" onkeydown="noteEditorHelper.handleTab(event,this)"
@@ -972,7 +1098,40 @@
                                 @onmousedown:preventDefault>
                             TODO
                         </button>
+                        <button class="btn btn-outline-warning btn-sm" type="button"
+                                @onclick="() => NavigaTodoNote(-1)"
+                                title="Vai al TODO precedente nel testo"
+                                @onmousedown:preventDefault>
+                            ◀
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" type="button"
+                                @onclick="() => NavigaTodoNote(1)"
+                                title="Vai al TODO successivo nel testo"
+                                @onmousedown:preventDefault>
+                            ▶
+                        </button>
+                        @if (noteTodoTotale > 0)
+                        {
+                            <span class="badge bg-warning text-dark align-self-center">
+                                @(noteTodoIndice + 1)/@noteTodoTotale
+                            </span>
+                        }
+                        else if (noteTodoTotale == 0 && noteTodoRicercato)
+                        {
+                            <span class="badge bg-secondary align-self-center">nessun TODO</span>
+                        }
+                        <div class="separator"></div>
+                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                @onclick="() => ToggleEmojiPicker(2)"
+                                title="Inserisci un'icona nel punto del cursore"
+                                @onmousedown:preventDefault>
+                            😊
+                        </button>
                     </div>
+                    <EmojiPicker IsVisible="@(emojiPickerAperto == 2)"
+                                 Recenti="@emojiRecenti"
+                                 OnSelezione="InserisciEmojiNote"
+                                 OnChiudi="ChiudiEmojiPicker" />
                 </div>
 
                 @* ===== SESTA RIGA: Modifica riportata sui congelati (solo per Lavoro) ===== *@
@@ -1174,7 +1333,40 @@
                                     @onmousedown:preventDefault>
                                 TODO
                             </button>
+                            <button class="btn btn-outline-warning btn-sm" type="button"
+                                    @onclick="() => NavigaTodoChangeset(-1)"
+                                    title="Vai al TODO precedente nel testo"
+                                    @onmousedown:preventDefault>
+                                ◀
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" type="button"
+                                    @onclick="() => NavigaTodoChangeset(1)"
+                                    title="Vai al TODO successivo nel testo"
+                                    @onmousedown:preventDefault>
+                                ▶
+                            </button>
+                            @if (changesetTodoTotale > 0)
+                            {
+                                <span class="badge bg-warning text-dark align-self-center">
+                                    @(changesetTodoIndice + 1)/@changesetTodoTotale
+                                </span>
+                            }
+                            else if (changesetTodoTotale == 0 && changesetTodoRicercato)
+                            {
+                                <span class="badge bg-secondary align-self-center">nessun TODO</span>
+                            }
+                            <div class="separator"></div>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="() => ToggleEmojiPickerChangeset(1)"
+                                    title="Inserisci un'icona nel punto del cursore"
+                                    @onmousedown:preventDefault>
+                                😊
+                            </button>
                         </div>
+                        <EmojiPicker IsVisible="@(emojiPickerChangesetAperto == 1)"
+                                     Recenti="@emojiRecenti"
+                                     OnSelezione="InserisciEmojiChangeset"
+                                     OnChiudi="ChiudiEmojiPickerChangeset" />
                         <div style="position: relative;">
                             <div @ref="changesetEditorRef"
                                  id="changeset-editor-div" onkeydown="changesetEditorHelper.handleTab(event,this)"
@@ -1309,7 +1501,40 @@
                                     @onmousedown:preventDefault>
                                 TODO
                             </button>
+                            <button class="btn btn-outline-warning btn-sm" type="button"
+                                    @onclick="() => NavigaTodoChangeset(-1)"
+                                    title="Vai al TODO precedente nel testo"
+                                    @onmousedown:preventDefault>
+                                ◀
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" type="button"
+                                    @onclick="() => NavigaTodoChangeset(1)"
+                                    title="Vai al TODO successivo nel testo"
+                                    @onmousedown:preventDefault>
+                                ▶
+                            </button>
+                            @if (changesetTodoTotale > 0)
+                            {
+                                <span class="badge bg-warning text-dark align-self-center">
+                                    @(changesetTodoIndice + 1)/@changesetTodoTotale
+                                </span>
+                            }
+                            else if (changesetTodoTotale == 0 && changesetTodoRicercato)
+                            {
+                                <span class="badge bg-secondary align-self-center">nessun TODO</span>
+                            }
+                            <div class="separator"></div>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="() => ToggleEmojiPickerChangeset(2)"
+                                    title="Inserisci un'icona nel punto del cursore"
+                                    @onmousedown:preventDefault>
+                                😊
+                            </button>
                         </div>
+                        <EmojiPicker IsVisible="@(emojiPickerChangesetAperto == 2)"
+                                     Recenti="@emojiRecenti"
+                                     OnSelezione="InserisciEmojiChangeset"
+                                     OnChiudi="ChiudiEmojiPickerChangeset" />
                     </div>
 
                     @* ===== NONA RIGA: URL Patch/Pacchetto nei rilasci ===== *@
@@ -1320,15 +1545,15 @@
                                 title="Crea la struttura di cartelle della patch in TmpPatch">
                             🛠 Autoprepara struttura patch
                         </button>
-                        <button class="btn btn-sm btn-outline-secondary ms-1" type="button"
-                                @onclick="ApriCartellaPatch"
-                                title="Apri la cartella del cliente in TmpPatch">
-                            📁
-                        </button>
                         <button class="btn btn-sm btn-outline-info ms-1" type="button"
                                 @onclick="ApriInserisciReadme"
                                 title="Inserisci files Readme">
                             TXT
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary ms-1" type="button"
+                                @onclick="ApriCartellaPatch"
+                                title="Apri tutte le cartelle patch create (una finestra per versione)">
+                            📁
                         </button>
                         <textarea class="form-control" @bind="AttivitaCorrente.UrlPatchRilasci" rows="3"
                                   style="max-height: 100px; overflow-y: auto;"
@@ -1582,6 +1807,41 @@
     /// <summary>Flag per forzare l'aggiornamento dell'editor Note al prossimo render</summary>
     private bool noteEditorNeedsUpdate = false;
 
+    /// <summary>
+    /// Pannello icone aperto: 0 = nessuno, 1 = toolbar sopra l'editor Note, 2 = toolbar sotto.
+    /// Due pannelli distinti così si apre sempre accanto alla toolbar che hai premuto.
+    /// </summary>
+    private int emojiPickerAperto = 0;
+
+    /// <summary>Ultime icone usate (max 12), condivise da tutti i pannelli (Note e Changeset).</summary>
+    private List<string> emojiRecenti = new();
+
+    // ===== Navigazione TODO dentro gli editor =====
+    // L'indice parte da -1 ("nessuna occorrenza ancora visitata"): il primo ▶ porta alla prima,
+    // il primo ◀ all'ultima. Il totale è ricalcolato dal JS a ogni salto, così resta corretto
+    // anche mentre si scrive. Il flag "ricercato" serve solo a mostrare "nessun TODO" dopo un
+    // tentativo, senza sporcare la toolbar all'apertura del form.
+    private int noteTodoIndice = -1;
+    private int noteTodoTotale = 0;
+    private bool noteTodoRicercato = false;
+
+    private int changesetTodoIndice = -1;
+    private int changesetTodoTotale = 0;
+    private bool changesetTodoRicercato = false;
+
+    /// <summary>Esito di una navigazione TODO restituito da todoNavHelper.naviga.</summary>
+    private sealed class TodoNavResult
+    {
+        public int Indice { get; set; } = -1;
+        public int Totale { get; set; }
+    }
+
+    /// <summary>
+    /// Pannello icone dell'editor Changeset: 0 = nessuno, 1 = toolbar sopra, 2 = toolbar sotto.
+    /// Separato da quello delle Note così i due editor non si aprono/chiudono a vicenda.
+    /// </summary>
+    private int emojiPickerChangesetAperto = 0;
+
     /// <summary>Riferimento .NET per il callback Ctrl+S da JavaScript</summary>
     private DotNetObjectReference<Home>? dotNetRef;
 
@@ -1638,6 +1898,12 @@
     /// <summary>Messaggio (auto-scomparsa) della pulizia automatica dello storico modifiche all'avvio</summary>
     private string messaggioHistoryPulita = string.Empty;
 
+    /// <summary>True se su disco c'è una bozza lasciata da un salvataggio fallito.</summary>
+    private bool bozzaPresente = false;
+
+    /// <summary>Data/ora della bozza su disco (per il testo del banner).</summary>
+    private DateTime? dataBozza = null;
+
     /// <summary>True se l'anteprima readonly del lavoro dei giorni precedenti è visibile</summary>
     private bool mostraLavoroPrecedente = false;
 
@@ -1671,6 +1937,12 @@
     /// <summary>Filtro per visualizzare solo le attività che contengono TODO</summary>
     private bool filtroSoloTodo = false;
 
+    /// <summary>
+    /// Filtro "Visualizza ticket in scadenza": mostra le sole attività con TODO E con la data di
+    /// scadenza valorizzata, ordinate dalla scadenza più vicina. Implica il filtro "solo TODO".
+    /// </summary>
+    private bool filtroTicketInScadenza = false;
+
     /// <summary>Controlla la visibilità della modale TODO List</summary>
     private bool mostraTodoList = false;
     
@@ -1703,6 +1975,9 @@
 
     /// <summary>Lista dei tipi ambienti di rilascio (per datalist)</summary>
     private List<TipoAmbienteRilascio> tipiAmbientiRilascio = new();
+
+    /// <summary>True mentre è in corso l'autocompilazione degli ambienti di rilascio.</summary>
+    private bool isCaricamentoAmbientiRilascio = false;
 
     /// <summary>Lista delle versioni di rilascio (per datalist)</summary>
     private List<VersioneRilascio> versioniRilascio = new();
@@ -1783,6 +2058,11 @@
     /// </summary>
     protected override async Task OnInitializedAsync()
     {
+        // Copia di emergenza lasciata da un salvataggio fallito: va rilevata PRIMA di toccare il
+        // database, così il banner compare anche quando il DB è ancora irraggiungibile.
+        bozzaPresente = BozzaService.Esiste();
+        dataBozza = BozzaService.DataBozza();
+
         try
         {
             // Carica utente corrente
@@ -1840,6 +2120,46 @@
     }
 
     /// <summary>
+    /// Ricarica nel form la bozza salvata su file da un precedente salvataggio fallito.
+    /// Il file NON viene eliminato qui: sparisce solo dopo un salvataggio a DB riuscito,
+    /// così un secondo tentativo andato male non lascia comunque l'utente senza rete.
+    /// </summary>
+    private void RipristinaBozza()
+    {
+        var bozza = BozzaService.Leggi();
+        if (bozza == null)
+        {
+            MostraMessaggio("Impossibile leggere il file della bozza.", true);
+            bozzaPresente = BozzaService.Esiste();
+            return;
+        }
+
+        AttivitaCorrente = bozza;
+
+        // Riallinea i due contenteditable al contenuto ripristinato (screenshot inclusi).
+        changesetEditorNeedsUpdate = true;
+        noteEditorNeedsUpdate = true;
+
+        // Invalida l'anteprima del lavoro dei giorni precedenti: si riferisce all'attività di prima.
+        mostraLavoroPrecedente = false;
+        htmlLavoroPrecedente = string.Empty;
+        lavoroPrecedenteCaricato = false;
+
+        MostraMessaggio("Bozza ripristinata nel form. Premi 💾 Salva per scriverla nel database.", false);
+    }
+
+    /// <summary>
+    /// Elimina il file della bozza senza ripristinarlo (l'utente non ne ha più bisogno).
+    /// </summary>
+    private void ScartaBozza()
+    {
+        BozzaService.Elimina();
+        bozzaPresente = false;
+        dataBozza = null;
+        MostraMessaggio("Bozza eliminata.", false);
+    }
+
+    /// <summary>
     /// Chiamato da JavaScript quando l'utente preme Ctrl+S.
     /// </summary>
     [Microsoft.JSInterop.JSInvokable]
@@ -1882,6 +2202,17 @@
             if (filtroSoloTodo)
             {
                 Attivita = Attivita.Where(a => a.HasTodo).ToList();
+            }
+
+            // Filtro "Ticket in scadenza": oltre al TODO (già applicato sopra, la spunta è forzata)
+            // tiene solo le attività con la scadenza valorizzata, dalla più vicina alla più lontana.
+            if (filtroTicketInScadenza)
+            {
+                Attivita = Attivita
+                    .Where(a => a.DataScadenzaTicket.HasValue)
+                    .OrderBy(a => a.DataScadenzaTicket!.Value)
+                    .ThenByDescending(a => a.Data)
+                    .ToList();
             }
             
             anniDisponibili = await ActivityService.GetAnniDisponibiliAsync(isAdminMode);
@@ -1931,6 +2262,7 @@
             Descrizione = attivita.Descrizione,
             UrlTicket = attivita.UrlTicket,
             NumeroTicket = attivita.NumeroTicket,
+            DataScadenzaTicket = attivita.DataScadenzaTicket,
             ClienteId = attivita.ClienteId,
             ClienteNome = attivita.ClienteNome,
             OreLavorate = attivita.OreLavorate,
@@ -2100,6 +2432,7 @@
             Descrizione = attivita.Descrizione,
             UrlTicket = attivita.UrlTicket,
             NumeroTicket = attivita.NumeroTicket,
+            DataScadenzaTicket = attivita.DataScadenzaTicket,
             ClienteId = attivita.ClienteId,
             ClienteNome = attivita.ClienteNome,
             OreLavorate = attivita.OreLavorate,
@@ -2349,6 +2682,11 @@
                 MostraMessaggio("Attività salvata con successo!", false);
             }
 
+            // Salvataggio riuscito: la copia di emergenza su file non serve più.
+            BozzaService.Elimina();
+            bozzaPresente = false;
+            dataBozza = null;
+
             // Registra l'orario dell'ultimo salvataggio (mostrato nella barra di stato)
             ultimoSalvataggio = DateTime.Now;
 
@@ -2413,7 +2751,19 @@
         }
         catch (Exception ex)
         {
-            MostraMessaggioConPopup($"Errore nel salvataggio: {ex.Message}", true);
+            // DB irraggiungibile (tipicamente VPN caduta): mette al sicuro su file il contenuto
+            // del form, screenshot inclusi. Il file viene cancellato al primo salvataggio riuscito.
+            var percorsoBozza = BozzaService.Salva(AttivitaCorrente);
+            bozzaPresente = percorsoBozza != null;
+            dataBozza = BozzaService.DataBozza();
+
+            var avviso = percorsoBozza != null
+                ? $"\n\nLe modifiche NON sono andate perse: sono state salvate in {percorsoBozza}. "
+                  + "Quando la connessione torna ripremi 💾 Salva: al salvataggio riuscito il file verrà eliminato."
+                : "\n\nATTENZIONE: non è stato possibile scrivere nemmeno la copia di emergenza su file. "
+                  + "Non chiudere il programma finché il salvataggio non riesce.";
+
+            MostraMessaggioConPopup($"Errore nel salvataggio: {ex.Message}{avviso}", true);
         }
         finally
         {
@@ -2751,6 +3101,27 @@
     }
 
     /// <summary>
+    /// Apre/chiude il pannello icone della toolbar Changeset indicata (1 = sopra, 2 = sotto).
+    /// </summary>
+    private void ToggleEmojiPickerChangeset(int quale)
+    {
+        emojiPickerChangesetAperto = emojiPickerChangesetAperto == quale ? 0 : quale;
+    }
+
+    private void ChiudiEmojiPickerChangeset() => emojiPickerChangesetAperto = 0;
+
+    /// <summary>
+    /// Inserisce l'icona scelta nel punto del cursore dell'editor Changeset.
+    /// </summary>
+    private async Task InserisciEmojiChangeset(string icona)
+    {
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", changesetEditorRef, icona); }
+        catch { /* Ignora errori JS */ }
+
+        AggiornaEmojiRecenti(icona);
+    }
+
+    /// <summary>
     /// Sostituisce le occorrenze di "TODO" (parola isolata) con "--" nel changeset editor,
     /// preservando la formattazione HTML.
     /// </summary>
@@ -2888,6 +3259,77 @@
     {
         try { await JS.InvokeVoidAsync("noteEditorHelper.rimuoviRigheVuote", noteEditorRef); }
         catch { /* Ignora errori JS */ }
+    }
+
+    /// <summary>
+    /// Porta la selezione sul TODO precedente (-1) o successivo (+1) dell'editor Note,
+    /// scrollando l'editor. Il contenuto non viene modificato.
+    /// </summary>
+    private async Task NavigaTodoNote(int direzione)
+    {
+        noteTodoRicercato = true;
+        try
+        {
+            var esito = await JS.InvokeAsync<TodoNavResult>(
+                "todoNavHelper.naviga", noteEditorRef, direzione, noteTodoIndice);
+            noteTodoIndice = esito.Indice;
+            noteTodoTotale = esito.Totale;
+        }
+        catch
+        {
+            noteTodoIndice = -1;
+            noteTodoTotale = 0;
+        }
+    }
+
+    /// <summary>
+    /// Come <see cref="NavigaTodoNote"/> ma sull'editor Changeset.
+    /// </summary>
+    private async Task NavigaTodoChangeset(int direzione)
+    {
+        changesetTodoRicercato = true;
+        try
+        {
+            var esito = await JS.InvokeAsync<TodoNavResult>(
+                "todoNavHelper.naviga", changesetEditorRef, direzione, changesetTodoIndice);
+            changesetTodoIndice = esito.Indice;
+            changesetTodoTotale = esito.Totale;
+        }
+        catch
+        {
+            changesetTodoIndice = -1;
+            changesetTodoTotale = 0;
+        }
+    }
+
+    /// <summary>
+    /// Apre/chiude il pannello icone della toolbar indicata (1 = sopra, 2 = sotto).
+    /// </summary>
+    private void ToggleEmojiPicker(int quale)
+    {
+        emojiPickerAperto = emojiPickerAperto == quale ? 0 : quale;
+    }
+
+    private void ChiudiEmojiPicker() => emojiPickerAperto = 0;
+
+    /// <summary>
+    /// Inserisce l'icona scelta nel punto del cursore dell'editor Note e la porta in cima
+    /// alle "usate di recente". Il pannello resta aperto, così se ne possono inserire più d'una.
+    /// </summary>
+    private async Task InserisciEmojiNote(string icona)
+    {
+        try { await JS.InvokeVoidAsync("inserisciTestoACursore", noteEditorRef, icona); }
+        catch { /* Ignora errori JS */ }
+
+        AggiornaEmojiRecenti(icona);
+    }
+
+    /// <summary>Porta l'icona in cima alle "usate di recente" (max 12, senza duplicati).</summary>
+    private void AggiornaEmojiRecenti(string icona)
+    {
+        emojiRecenti.Remove(icona);
+        emojiRecenti.Insert(0, icona);
+        if (emojiRecenti.Count > 12) emojiRecenti.RemoveAt(emojiRecenti.Count - 1);
     }
 
     /// <summary>
@@ -3137,18 +3579,27 @@
     #region Gestione Filtri
 
     /// <summary>
-    /// Resetta tutti i filtri e ricarica tutte le attività.
+    /// Resetta tutti i filtri riportandosi al MESE corrente e ricarica (comportamento del pulsante
+    /// "Reset Filtri"): caricare un anno intero è pesante sui DB con Note ricche di screenshot.
     /// </summary>
-    private async Task ResetFiltri()
+    private Task ResetFiltri() => ResetFiltri(limitaAlMeseCorrente: true);
+
+    /// <summary>
+    /// Resetta tutti i filtri e ricarica. Con <paramref name="limitaAlMeseCorrente"/> a false resta
+    /// sull'intero anno corrente: serve alle ricerche che devono spaziare oltre il mese in corso.
+    /// </summary>
+    private async Task ResetFiltri(bool limitaAlMeseCorrente)
     {
         // v4.7: mantiene l'anno corrente per non perdere il focus sull'anno di lavoro
-        FiltroAnno = DateTime.Now.Year;
-        FiltroMese = null;
+        var oggi = DateTime.Today;
+        FiltroAnno = oggi.Year;
+        FiltroMese = limitaAlMeseCorrente ? oggi.Month : null;
         FiltroGiorno = null;
         FiltroSettimana = null;
         TestoRicerca = string.Empty;
         ricercaEseguita = false;
         filtroSoloTodo = false;
+        filtroTicketInScadenza = false;
         await CaricaAttivita();
     }
 
@@ -3171,7 +3622,8 @@
     private async Task CercaPerQuestaDescrizione()
     {
         var desc = AttivitaCorrente?.Descrizione ?? string.Empty;
-        await ResetFiltri();
+        // Niente filtro sul mese: la stessa descrizione va cercata su tutto l'anno.
+        await ResetFiltri(limitaAlMeseCorrente: false);
         TestoRicerca = desc;
         await EseguiRicercaEAbilita();
     }
@@ -3185,6 +3637,38 @@
         {
             await EseguiRicercaEAbilita();
         }
+    }
+
+    /// <summary>
+    /// Svuota il campo di ricerca e ricarica la griglia. Gli altri filtri (Anno/Mese/Giorno,
+    /// settimana, "solo TODO") restano invariati: per azzerare tutto c'è "Reset Filtri".
+    /// </summary>
+    private async Task SvuotaRicerca()
+    {
+        TestoRicerca = string.Empty;
+        await EseguiRicercaEAbilita();
+    }
+
+    /// <summary>
+    /// Spunta "Visualizza solo TODO": se viene tolta disattiva anche "ticket in scadenza",
+    /// che senza il TODO non avrebbe più il significato voluto.
+    /// </summary>
+    private async Task OnCambiaFiltroSoloTodo()
+    {
+        if (!filtroSoloTodo)
+            filtroTicketInScadenza = false;
+        await CaricaAttivita();
+    }
+
+    /// <summary>
+    /// Spunta "Visualizza ticket in scadenza": attivandola viene spuntato automaticamente
+    /// anche "Visualizza solo TODO" (il filtro è l'intersezione dei due).
+    /// </summary>
+    private async Task OnCambiaFiltroTicketInScadenza()
+    {
+        if (filtroTicketInScadenza)
+            filtroSoloTodo = true;
+        await CaricaAttivita();
     }
 
     /// <summary>
@@ -3440,18 +3924,53 @@
 
     /// <summary>
     /// Cartella di destinazione degli export (creata se non esiste).
+    /// Delega all'helper condiviso: la stessa cartella è usata dalle modali (es. Gestione Clienti).
     /// </summary>
-    private string GetExportFolder()
+    private string GetExportFolder() => AppConfigService.GetExportFolder();
+
+    // ===== Stato "generazione export in corso" (rotellina) =====
+
+    /// <summary>Etichetta dell'export in corso ("XLSX"/"TXT"/"PDF"); stringa vuota = nessun export.</summary>
+    private string exportInCorso = string.Empty;
+
+    /// <summary>Id della riga il cui export è in corso (0 = export non partito dalla griglia).</summary>
+    private int exportRigaId;
+
+    /// <summary>True mentre è in corso la generazione di un export.</summary>
+    private bool IsExporting => exportInCorso.Length > 0;
+
+    /// <summary>
+    /// Esegue un export mostrando la rotellina accanto a "Apri Export" (e sul pulsante della riga,
+    /// se l'export parte dalla griglia). Lo <c>StateHasChanged</c> + <c>Task.Delay(1)</c> iniziali
+    /// servono a far comparire la rotellina PRIMA che inizi il lavoro pesante; il lavoro vero è poi
+    /// spostato su un thread di background dai singoli metodi, così la rotellina continua a girare.
+    /// Un export alla volta: i click successivi vengono ignorati.
+    /// </summary>
+    private async Task EseguiExportAsync(string etichetta, Func<Task> lavoro, int rigaId = 0)
     {
-        var folder = System.IO.Path.Combine(AppContext.BaseDirectory, "Export");
-        System.IO.Directory.CreateDirectory(folder);
-        return folder;
+        if (IsExporting) return;
+
+        exportInCorso = etichetta;
+        exportRigaId = rigaId;
+        StateHasChanged();
+        await Task.Delay(1);
+
+        try
+        {
+            await lavoro();
+        }
+        finally
+        {
+            exportInCorso = string.Empty;
+            exportRigaId = 0;
+            StateHasChanged();
+        }
     }
 
     /// <summary>
     /// Esporta la griglia visualizzata in formato Excel (.xlsx).
     /// </summary>
-    private async Task EsportaGrigliaXlsx()
+    private Task EsportaGrigliaXlsx() => EseguiExportAsync("XLSX", async () =>
     {
         try
         {
@@ -3459,45 +3978,52 @@
             var nomeFile = $"ElencoAttivitàAl{timestamp}.xlsx";
             var percorso = System.IO.Path.Combine(GetExportFolder(), nomeFile);
 
-            using var wb = new ClosedXML.Excel.XLWorkbook();
-            var ws = wb.Worksheets.Add("Attività");
+            // Snapshot dello stato UI: la generazione gira su un thread di background.
+            var righe = Attivita.ToList();
+            var admin = isAdminMode;
 
-            // Intestazioni
-            int col = 1;
-            if (isAdminMode) ws.Cell(1, col++).Value = "Utente";
-            ws.Cell(1, col++).Value = "Data";
-            ws.Cell(1, col++).Value = "Tipo";
-            ws.Cell(1, col++).Value = "Ticket";
-            ws.Cell(1, col++).Value = "Descrizione";
-            ws.Cell(1, col++).Value = "Cliente";
-            ws.Cell(1, col++).Value = "Ore";
-            ws.Cell(1, col++).Value = "Versione";
-
-            // Stile intestazioni
-            var headerRow = ws.Row(1);
-            headerRow.Style.Font.Bold = true;
-            headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.DarkGray;
-            headerRow.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
-
-            // Dati
-            int row = 2;
-            foreach (var att in Attivita)
+            await Task.Run(() =>
             {
-                col = 1;
-                if (isAdminMode) ws.Cell(row, col++).Value = att.UtenteUsername;
-                ws.Cell(row, col).Style.NumberFormat.Format = "dd/MM/yyyy";
-                ws.Cell(row, col++).Value = att.Data;
-                ws.Cell(row, col++).Value = att.TipoAttivita;
-                ws.Cell(row, col++).Value = att.NumeroTicket ?? string.Empty;
-                ws.Cell(row, col++).Value = att.Descrizione;
-                ws.Cell(row, col++).Value = att.ClienteNome;
-                ws.Cell(row, col++).Value = att.OreLavorate;
-                ws.Cell(row, col++).Value = att.Versione;
-                row++;
-            }
+                using var wb = new ClosedXML.Excel.XLWorkbook();
+                var ws = wb.Worksheets.Add("Attività");
 
-            ws.Columns().AdjustToContents();
-            wb.SaveAs(percorso);
+                // Intestazioni
+                int col = 1;
+                if (admin) ws.Cell(1, col++).Value = "Utente";
+                ws.Cell(1, col++).Value = "Data";
+                ws.Cell(1, col++).Value = "Tipo";
+                ws.Cell(1, col++).Value = "Ticket";
+                ws.Cell(1, col++).Value = "Descrizione";
+                ws.Cell(1, col++).Value = "Cliente";
+                ws.Cell(1, col++).Value = "Ore";
+                ws.Cell(1, col++).Value = "Versione";
+
+                // Stile intestazioni
+                var headerRow = ws.Row(1);
+                headerRow.Style.Font.Bold = true;
+                headerRow.Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.DarkGray;
+                headerRow.Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+
+                // Dati
+                int row = 2;
+                foreach (var att in righe)
+                {
+                    col = 1;
+                    if (admin) ws.Cell(row, col++).Value = att.UtenteUsername;
+                    ws.Cell(row, col).Style.NumberFormat.Format = "dd/MM/yyyy";
+                    ws.Cell(row, col++).Value = att.Data;
+                    ws.Cell(row, col++).Value = att.TipoAttivita;
+                    ws.Cell(row, col++).Value = att.NumeroTicket ?? string.Empty;
+                    ws.Cell(row, col++).Value = att.Descrizione;
+                    ws.Cell(row, col++).Value = att.ClienteNome;
+                    ws.Cell(row, col++).Value = att.OreLavorate;
+                    ws.Cell(row, col++).Value = att.Versione;
+                    row++;
+                }
+
+                ws.Columns().AdjustToContents();
+                wb.SaveAs(percorso);
+            });
 
             ultimoExport = percorso;
             MostraMessaggio($"Esportato: {nomeFile}", false);
@@ -3506,14 +4032,12 @@
         {
             MostraMessaggio($"Errore export XLSX: {ex.Message}", true);
         }
-
-        await Task.CompletedTask;
-    }
+    });
 
     /// <summary>
     /// Esporta il dettaglio di tutte le attività visualizzate in un file TXT.
     /// </summary>
-    private async Task EsportaDettagliTxt()
+    private Task EsportaDettagliTxt() => EseguiExportAsync("TXT", async () =>
     {
         try
         {
@@ -3532,16 +4056,21 @@
             if (filtroSoloTodo)
                 attivitaComplete = attivitaComplete.Where(a => a.HasTodo).ToList();
 
-            var sb = new System.Text.StringBuilder();
-            bool primo = true;
-            foreach (var att in attivitaComplete)
+            // Composizione del testo e scrittura su file: thread di background.
+            await Task.Run(() =>
             {
-                if (!primo) sb.AppendLine(new string('=', 60));
-                sb.AppendLine(GeneraTestoAttivitaPlain(att));
-                primo = false;
-            }
+                var sb = new System.Text.StringBuilder();
+                bool primo = true;
+                foreach (var att in attivitaComplete)
+                {
+                    if (!primo) sb.AppendLine(new string('=', 60));
+                    sb.AppendLine(GeneraTestoAttivitaPlain(att));
+                    primo = false;
+                }
 
-            System.IO.File.WriteAllText(percorso, sb.ToString(), System.Text.Encoding.UTF8);
+                System.IO.File.WriteAllText(percorso, sb.ToString(), System.Text.Encoding.UTF8);
+            });
+
             ultimoExport = percorso;
             MostraMessaggio($"Esportato: {nomeFile}", false);
         }
@@ -3549,14 +4078,12 @@
         {
             MostraMessaggio($"Errore export TXT: {ex.Message}", true);
         }
-
-        await Task.CompletedTask;
-    }
+    });
 
     /// <summary>
     /// Esporta una singola attività come file TXT.
     /// </summary>
-    private async Task EsportaAttivitaComeTxt(WorkActivityDto att)
+    private Task EsportaAttivitaComeTxt(WorkActivityDto att) => EseguiExportAsync("TXT", async () =>
     {
         try
         {
@@ -3574,7 +4101,9 @@
             var nomeFile = $"DettaglioAttività_{data}_{desc}_{timestamp}.txt";
             var percorso = System.IO.Path.Combine(GetExportFolder(), nomeFile);
 
-            System.IO.File.WriteAllText(percorso, GeneraTestoAttivitaPlain(att), System.Text.Encoding.UTF8);
+            var testo = GeneraTestoAttivitaPlain(att);
+            await Task.Run(() => System.IO.File.WriteAllText(percorso, testo, System.Text.Encoding.UTF8));
+
             ultimoExport = percorso;
             MostraMessaggio($"Esportato: {nomeFile}", false);
         }
@@ -3582,14 +4111,12 @@
         {
             MostraMessaggio($"Errore export TXT: {ex.Message}", true);
         }
-
-        await Task.CompletedTask;
-    }
+    }, att.Id);
 
     /// <summary>
     /// Esporta una singola attività come file PDF (rende le immagini incollate nei campi HTML).
     /// </summary>
-    private async Task EsportaAttivitaComePdf(WorkActivityDto att)
+    private Task EsportaAttivitaComePdf(WorkActivityDto att) => EseguiExportAsync("PDF", async () =>
     {
         try
         {
@@ -3607,15 +4134,55 @@
             var nomeFile = $"DettaglioAttività_{data}_{desc}_{timestamp}.pdf";
             var percorso = System.IO.Path.Combine(GetExportFolder(), nomeFile);
 
-            await PdfExportService.ExportHtmlToPdfAsync(GeneraDocumentoHtml(new[] { att }), percorso);
+            // Attività collegate dalla catena "Proseguo l'attività": incluse solo se abilitato
+            // in appsettings (EsportaAttivitaCollegateInPdf). Ordine cronologico crescente, così
+            // il documento si legge come la progressione del lavoro fino all'attività esportata.
+            var daEsportare = new List<WorkActivityDto> { att };
+            int collegate = 0;
+            if (AppConfig.EsportaAttivitaCollegateInPdf
+                && !string.IsNullOrEmpty(att.Note)
+                && ProseguoRegex.IsMatch(HtmlToPlainText(att.Note)))
+            {
+                var catena = await CostruisciCatenaProseguo(att.Note);
+                collegate = catena.Count;
+                if (collegate > 0)
+                {
+                    daEsportare = catena
+                        .Concat(daEsportare)
+                        .OrderBy(a => a.Data)
+                        .ThenBy(a => a.Id)
+                        .ToList();
+                }
+            }
+
+            // Gli ambienti di rilascio non sono nel DTO dell'attività: vanno letti a parte
+            // (una sola query per tutte le attività incluse nel documento).
+            var ambientiPerAttivita = await AmbientiRilascioService.GetAmbientiRilascioBatchAsync(
+                daEsportare.Select(a => a.Id));
+            foreach (var a in daEsportare)
+            {
+                a.AmbientiRilascio = ambientiPerAttivita.TryGetValue(a.Id, out var coppie)
+                    ? coppie
+                    : new List<AmbienteRilascioDto>();
+            }
+
+            // Comporre l'HTML (immagini in base64) è la parte pesante: thread di background.
+            // La stampa vera resta sul thread UI: WebView2 non è utilizzabile da altri thread.
+            var html = await Task.Run(() => GeneraDocumentoHtml(daEsportare));
+            await PdfExportService.ExportHtmlToPdfAsync(html, percorso);
+
             ultimoExport = percorso;
-            MostraMessaggio($"Esportato: {nomeFile}", false);
+            MostraMessaggio(
+                collegate > 0
+                    ? $"Esportato: {nomeFile} (con {collegate} attività collegate)"
+                    : $"Esportato: {nomeFile}",
+                false);
         }
         catch (Exception ex)
         {
             SegnalaErrorePdf(ex);
         }
-    }
+    }, att.Id);
 
     /// <summary>
     /// Mostra un messaggio d'errore PDF dettagliato (tipo, HResult, inner) e scrive lo
@@ -3640,7 +4207,7 @@
     /// Esporta il dettaglio di tutte le attività visualizzate in un unico file PDF
     /// (una attività per pagina, con le immagini rese).
     /// </summary>
-    private async Task EsportaDettagliPdf()
+    private Task EsportaDettagliPdf() => EseguiExportAsync("PDF", async () =>
     {
         try
         {
@@ -3659,7 +4226,21 @@
             if (filtroSoloTodo)
                 attivitaComplete = attivitaComplete.Where(a => a.HasTodo).ToList();
 
-            await PdfExportService.ExportHtmlToPdfAsync(GeneraDocumentoHtml(attivitaComplete), percorso);
+            // Ambienti di rilascio in un'unica query per tutte le attività esportate.
+            var ambientiPerAttivita = await AmbientiRilascioService.GetAmbientiRilascioBatchAsync(
+                attivitaComplete.Select(a => a.Id));
+            foreach (var a in attivitaComplete)
+            {
+                a.AmbientiRilascio = ambientiPerAttivita.TryGetValue(a.Id, out var coppie)
+                    ? coppie
+                    : new List<AmbienteRilascioDto>();
+            }
+
+            // Comporre l'HTML (immagini in base64) è la parte pesante: thread di background.
+            // La stampa vera resta sul thread UI: WebView2 non è utilizzabile da altri thread.
+            var html = await Task.Run(() => GeneraDocumentoHtml(attivitaComplete));
+            await PdfExportService.ExportHtmlToPdfAsync(html, percorso);
+
             ultimoExport = percorso;
             MostraMessaggio($"Esportato: {nomeFile}", false);
         }
@@ -3667,7 +4248,7 @@
         {
             SegnalaErrorePdf(ex);
         }
-    }
+    });
 
     /// <summary>
     /// Costruisce un documento HTML completo con una sezione per ogni attività (una per pagina).
@@ -3719,10 +4300,12 @@
             sb.Append(CampoPlain("🏷️ Tipo", att.TipoAttivita));
         sb.Append(CampoPlain("📝 Descrizione", att.Descrizione ?? "-"));
         sb.Append(CampoPlain("🎫 Numero del ticket", att.NumeroTicket));
+        sb.Append(CampoPlain("⏳ Scadenza ticket", att.DataScadenzaTicket?.ToString("dd/MM/yyyy")));
         sb.Append(CampoPlain("🔗 URL Ticket / CR / Backlog", att.UrlTicket));
         sb.Append(CampoPlain("👤 Cliente", att.ClienteNome ?? "-"));
         sb.Append(CampoPlain("⏱️ Ore Lavorate", att.OreLavorate.ToString()));
-        sb.Append(CampoPlain("🏷️ Versione", att.Versione));
+        sb.Append(CampoPlain("🏷️ Versione attualmente in Sviluppo", att.Versione));
+        sb.Append(CampoPlain("🚀 Ambienti di rilascio", FormattaAmbientiRilascio(att)));
         sb.Append(CampoPlain("👀 Vedere", att.Vedere));
         sb.Append(CampoPlain("📁 Cartella Documentazione", att.CartellaDocumentazione));
         sb.Append(CampoHtml("📋 Descrizione dettagliata lavoro svolto", att.Note));
@@ -3758,6 +4341,12 @@
 
     /// <summary>Radice cliente ({TmpPatchDir}\{Cliente}) dell'ultima struttura patch creata.</summary>
     private string? ultimaCartellaPatchClientRoot;
+
+    /// <summary>
+    /// Cartelle patch dell'ultimo "Autoprepara" (una per versione degli ambienti di rilascio).
+    /// Sono quelle aperte — tutte — dal pulsante 📁.
+    /// </summary>
+    private List<string> ultimeCartellePatch = new();
 
     /// <summary>
     /// Nome cliente per la cartella patch: "Sviluppo" se è il cliente Sviluppo,
@@ -3809,90 +4398,133 @@
     }
 
     /// <summary>
-    /// Calcola (senza creare) i percorsi della patch dallo stato corrente del form:
-    /// cartella-cliente radice, cartella patch datata, lingua struttura, nome cliente e versione grezza.
+    /// Percorsi calcolati per UNA cartella patch. Se gli ambienti di rilascio hanno versioni diverse
+    /// viene prodotto un <see cref="PercorsoPatch"/> per ogni versione distinta.
     /// </summary>
-    private (string clientRoot, string full, string lingua, string clienteNome, string versioneRaw) CalcolaPercorsiPatch()
+    private sealed record PercorsoPatch(
+        string ClientRoot,
+        string Full,
+        string Lingua,
+        string ClienteNome,
+        string VersioneRaw);
+
+    /// <summary>
+    /// Calcola (senza creare) i percorsi delle patch dallo stato corrente del form.
+    /// Gli ambienti di rilascio con la STESSA versione vengono accorpati nella stessa cartella
+    /// (nomi uniti da "_", es. "Test_Produzione"); ambienti con versioni DIVERSE generano
+    /// cartelle separate, una per versione.
+    /// </summary>
+    private List<PercorsoPatch> CalcolaPercorsiPatch()
     {
         var isSviluppo = AttivitaCorrente.ClienteId == clienteSviluppoId;
         var clienteNome = NomeClientePatch();
 
-        // VERSIONE
-        string versioneRaw;
-        if (isSviluppo)
-        {
-            versioneRaw = AttivitaCorrente.Versione ?? string.Empty;
-        }
-        else
-        {
-            var primaCoppia = AttivitaCorrente.AmbientiRilascio
-                .FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.TipoAmbiente));
-            versioneRaw = !string.IsNullOrWhiteSpace(primaCoppia?.Versione)
-                ? primaCoppia!.Versione!
-                : (AttivitaCorrente.Versione ?? string.Empty);
-        }
-        var versioneSeg = SanitizzaSegmentoCartella(FormatVersioneSP(versioneRaw));
-
-        // AMBIENTI
-        string ambientiSeg;
-        if (isSviluppo)
-        {
-            ambientiSeg = "Sviluppo";
-        }
-        else
-        {
-            var nomiAmbienti = AttivitaCorrente.AmbientiRilascio
-                .Where(a => !string.IsNullOrWhiteSpace(a.TipoAmbiente))
-                .Select(a => SanitizzaSegmentoCartella(a.TipoAmbiente))
-                .Where(n => n.Length > 0);
-            ambientiSeg = string.Join("_", nomiAmbienti);
-        }
-
+        // Segmenti comuni a tutte le cartelle
+        var dataSeg = DateTime.Now.ToString("yyyy-MM-dd");
+        var nomeProgrammaSeg = SanitizzaSegmentoCartella(AppConfig.NomeProgramma);
         // TICKET (virgole → underscore)
         var ticketSeg = SanitizzaSegmentoCartella(
             (AttivitaCorrente.NumeroTicket ?? string.Empty).Replace(",", "_"));
 
-        var dataSeg = DateTime.Now.ToString("yyyy-MM-dd");
-        var nomeProgrammaSeg = SanitizzaSegmentoCartella(AppConfig.NomeProgramma);
-
-        // Nome cartella = segmenti non vuoti uniti da "_"
-        var segmenti = new[] { dataSeg, nomeProgrammaSeg, versioneSeg, ambientiSeg, ticketSeg }
-            .Where(s => !string.IsNullOrEmpty(s));
-        var nomeCartella = string.Join("_", segmenti);
-
         var clientRoot = System.IO.Path.Combine(AppConfig.TmpPatchDir, SanitizzaSegmentoCartella(clienteNome));
-        var full = System.IO.Path.Combine(clientRoot, nomeCartella);
 
         // Lingua della struttura (dal cliente; "Sviluppo" e clienti senza valore → IT).
         var lingua = (clienti.FirstOrDefault(c => c.Id == AttivitaCorrente.ClienteId)?.Lingua ?? "IT")
             .Trim().ToUpperInvariant();
 
-        return (clientRoot, full, lingua, clienteNome, versioneRaw);
+        // Gruppi (versione grezza, segmento ambienti): uno per ogni cartella da creare.
+        var gruppi = new List<(string VersioneRaw, string AmbientiSeg)>();
+
+        if (isSviluppo)
+        {
+            gruppi.Add((AttivitaCorrente.Versione ?? string.Empty, "Sviluppo"));
+        }
+        else
+        {
+            var coppie = AttivitaCorrente.AmbientiRilascio
+                .Where(a => !string.IsNullOrWhiteSpace(a.TipoAmbiente))
+                .Select(a => new
+                {
+                    Nome = SanitizzaSegmentoCartella(a.TipoAmbiente),
+                    // Se la coppia non ha versione si usa quella dell'attività.
+                    VersioneRaw = !string.IsNullOrWhiteSpace(a.Versione)
+                        ? a.Versione!
+                        : (AttivitaCorrente.Versione ?? string.Empty)
+                })
+                .Where(a => a.Nome.Length > 0)
+                .ToList();
+
+            if (coppie.Count == 0)
+            {
+                // Nessun ambiente compilato: una sola cartella senza segmento ambienti.
+                gruppi.Add((AttivitaCorrente.Versione ?? string.Empty, string.Empty));
+            }
+            else
+            {
+                // Raggruppa per versione già normalizzata a segmento cartella (es. 3.2.50 → 3.2_SP50),
+                // così due scritture equivalenti della stessa versione non creano cartelle doppie.
+                foreach (var g in coppie.GroupBy(
+                             c => SanitizzaSegmentoCartella(FormatVersioneSP(c.VersioneRaw)),
+                             StringComparer.OrdinalIgnoreCase))
+                {
+                    gruppi.Add((g.First().VersioneRaw, string.Join("_", g.Select(x => x.Nome))));
+                }
+            }
+        }
+
+        var risultato = new List<PercorsoPatch>();
+        foreach (var (versioneRaw, ambientiSeg) in gruppi)
+        {
+            var versioneSeg = SanitizzaSegmentoCartella(FormatVersioneSP(versioneRaw));
+
+            // Nome cartella = segmenti non vuoti uniti da "_"
+            var segmenti = new[] { dataSeg, nomeProgrammaSeg, versioneSeg, ambientiSeg, ticketSeg }
+                .Where(s => !string.IsNullOrEmpty(s));
+            var full = System.IO.Path.Combine(clientRoot, string.Join("_", segmenti));
+
+            risultato.Add(new PercorsoPatch(clientRoot, full, lingua, clienteNome, versioneRaw));
+        }
+
+        return risultato;
     }
 
     /// <summary>
     /// Crea la struttura di cartelle della patch in TmpPatch:
     /// {TmpPatchDir}\{Cliente}\{AAAA-MM-GG}_{NOMEPROGRAMMA}_{VERSIONE}_{AMBIENTI}_{TICKET}\
+    /// Se gli ambienti di rilascio hanno versioni diverse crea una cartella per ogni versione.
     /// </summary>
     private void AutopreparaStrutturaPatch()
     {
         try
         {
-            var p = CalcolaPercorsiPatch();
+            var percorsi = CalcolaPercorsiPatch();
+            var create = new List<string>();
+            var esistenti = new List<string>();
 
-            // Se la cartella esiste già NON la ricrea né la tocca: si limita a segnalarlo.
-            if (System.IO.Directory.Exists(p.full))
+            foreach (var p in percorsi)
             {
-                ultimaCartellaPatchClientRoot = p.clientRoot;
-                MostraMessaggio($"La struttura patch esiste già (nessuna modifica): {p.full}", false);
-                return;
+                // Se la cartella esiste già NON la ricrea né la tocca: si limita a segnalarlo.
+                if (System.IO.Directory.Exists(p.Full))
+                {
+                    esistenti.Add(p.Full);
+                    continue;
+                }
+
+                System.IO.Directory.CreateDirectory(p.Full);
+                CreaStrutturaInternaPatch(p.Full, p.Lingua);
+                create.Add(p.Full);
             }
 
-            System.IO.Directory.CreateDirectory(p.full);
-            CreaStrutturaInternaPatch(p.full, p.lingua);
-            ultimaCartellaPatchClientRoot = p.clientRoot;
+            ultimaCartellaPatchClientRoot = percorsi.FirstOrDefault()?.ClientRoot;
+            ultimeCartellePatch = percorsi.Select(x => x.Full).ToList();
 
-            MostraMessaggio($"Struttura patch creata: {p.full}", false);
+            var parti = new List<string>();
+            if (create.Count > 0)
+                parti.Add($"create {create.Count}: {string.Join(" | ", create)}");
+            if (esistenti.Count > 0)
+                parti.Add($"già esistenti {esistenti.Count} (nessuna modifica): {string.Join(" | ", esistenti)}");
+
+            MostraMessaggio($"Struttura patch — {string.Join(" — ", parti)}", false);
         }
         catch (Exception ex)
         {
@@ -3937,35 +4569,46 @@
     private bool mostraReadmeModal = false;
     /// <summary>Template filtrati per la lingua del cliente, mostrati nella popup.</summary>
     private List<ReadmeTemplate> readmeTemplatesFiltrati = new();
+    /// <summary>
+    /// Titoli originali (con i token ancora da sostituire) allineati per indice a
+    /// <see cref="readmeTemplatesFiltrati"/>: servono a risolvere {VERSIONE} per ogni cartella patch,
+    /// dato che con più versioni il titolo può differire da cartella a cartella.
+    /// </summary>
+    private List<string> readmeTitoliOriginali = new();
 
     /// <summary>
-    /// Apre la popup di inserimento readme. Richiede che la cartella patch sia già stata creata
-    /// con "Autoprepara struttura patch".
+    /// Apre la popup di inserimento readme. Richiede che almeno una cartella patch sia già stata
+    /// creata con "Autoprepara struttura patch".
     /// </summary>
     private void ApriInserisciReadme()
     {
         try
         {
-            var p = CalcolaPercorsiPatch();
-            if (!System.IO.Directory.Exists(p.full))
+            var percorsi = CalcolaPercorsiPatch();
+            var esistenti = percorsi.Where(p => System.IO.Directory.Exists(p.Full)).ToList();
+            if (esistenti.Count == 0)
             {
                 MostraMessaggio("Premi prima 'Autoprepara struttura patch'.", true);
                 return;
             }
 
-            readmeTemplatesFiltrati = ReadmeTemplateService.GetTemplates()
-                .Where(t => string.Equals(t.Lingua?.Trim(), p.lingua, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            var lingua = esistenti[0].Lingua;
 
-            // Sostituisce i token nel Titolo (usato sia per la label nella popup sia per il nome file).
-            foreach (var t in readmeTemplatesFiltrati)
-                t.Titolo = SostituisciTokenTesto(t.Titolo, p.clienteNome, p.versioneRaw);
+            readmeTemplatesFiltrati = ReadmeTemplateService.GetTemplates()
+                .Where(t => string.Equals(t.Lingua?.Trim(), lingua, StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
             if (readmeTemplatesFiltrati.Count == 0)
             {
-                MostraMessaggio($"Nessun template Readme disponibile per la lingua '{p.lingua}'.", true);
+                MostraMessaggio($"Nessun template Readme disponibile per la lingua '{lingua}'.", true);
                 return;
             }
+
+            // Conserva i titoli grezzi, poi sostituisce i token per la label mostrata nella popup
+            // (usa la prima versione: nei file il titolo viene ricalcolato per ogni cartella).
+            readmeTitoliOriginali = readmeTemplatesFiltrati.Select(t => t.Titolo).ToList();
+            foreach (var t in readmeTemplatesFiltrati)
+                t.Titolo = SostituisciTokenTesto(t.Titolo, esistenti[0].ClienteNome, esistenti[0].VersioneRaw);
 
             mostraReadmeModal = true;
         }
@@ -3978,15 +4621,19 @@
     private void ChiudiReadmeModal() => mostraReadmeModal = false;
 
     /// <summary>
-    /// Scrive i file .txt per i template selezionati nella struttura patch. I file già presenti
-    /// non vengono sovrascritti. Sostituisce i token nel testo e nel percorso di destinazione.
+    /// Scrive i file .txt per i template selezionati in TUTTE le strutture patch esistenti
+    /// (una per versione degli ambienti di rilascio). I file già presenti non vengono sovrascritti.
+    /// Sostituisce i token nel testo, nel titolo e nel percorso di destinazione.
     /// </summary>
     private void OnInserisciReadme(List<ReadmeTemplate> scelti)
     {
         try
         {
-            var p = CalcolaPercorsiPatch();
-            if (!System.IO.Directory.Exists(p.full))
+            var percorsi = CalcolaPercorsiPatch()
+                .Where(p => System.IO.Directory.Exists(p.Full))
+                .ToList();
+
+            if (percorsi.Count == 0)
             {
                 MostraMessaggio("Premi prima 'Autoprepara struttura patch'.", true);
                 mostraReadmeModal = false;
@@ -3996,46 +4643,59 @@
             // Raggruppa i readme selezionati per cartella di destinazione (path risolto).
             // In ogni cartella viene creato un unico Readme.txt con le sezioni dei vari readme.
             var gruppi = scelti.GroupBy(
-                t => SostituisciTokenPercorso(t.DirectoryDiSalvataggio) ?? string.Empty,
-                StringComparer.OrdinalIgnoreCase);
+                    t => SostituisciTokenPercorso(t.DirectoryDiSalvataggio) ?? string.Empty,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             var sep = new string('=', 60);
             int creati = 0, saltati = 0;
 
-            foreach (var g in gruppi)
+            // Gli stessi readme vengono scritti in ogni struttura patch creata.
+            foreach (var p in percorsi)
             {
-                var dir = System.IO.Path.Combine(p.full, g.Key);
-                var percorso = System.IO.Path.Combine(dir, "Readme.txt");
-
-                // Se il Readme.txt esiste già NON viene toccato.
-                if (System.IO.File.Exists(percorso))
+                foreach (var g in gruppi)
                 {
-                    saltati++;
-                    continue;
-                }
+                    var dir = System.IO.Path.Combine(p.Full, g.Key);
+                    var percorso = System.IO.Path.Combine(dir, "Readme.txt");
 
-                var sb = new System.Text.StringBuilder();
-                var primo = true;
-                foreach (var t in g)
-                {
-                    if (!primo) sb.AppendLine().AppendLine();
-                    var contenuto = SostituisciTokenTesto(t.Descrizione, p.clienteNome, p.versioneRaw);
-                    sb.AppendLine(sep);
-                    sb.AppendLine(t.Titolo);   // Titolo già con token sostituiti (vedi ApriInserisciReadme)
-                    sb.AppendLine(sep);
-                    sb.AppendLine();
-                    sb.AppendLine(contenuto);
-                    primo = false;
-                }
+                    // Se il Readme.txt esiste già NON viene toccato.
+                    if (System.IO.File.Exists(percorso))
+                    {
+                        saltati++;
+                        continue;
+                    }
 
-                System.IO.Directory.CreateDirectory(dir);
-                var testo = sb.ToString().Replace("\r\n", "\n").Replace("\n", Environment.NewLine);
-                System.IO.File.WriteAllText(percorso, testo, System.Text.Encoding.UTF8);
-                creati++;
+                    var sb = new System.Text.StringBuilder();
+                    var primo = true;
+                    foreach (var t in g)
+                    {
+                        if (!primo) sb.AppendLine().AppendLine();
+                        // Titolo e testo risolti con la versione DI QUESTA cartella patch.
+                        var idx = readmeTemplatesFiltrati.IndexOf(t);
+                        var titoloRaw = idx >= 0 && idx < readmeTitoliOriginali.Count
+                            ? readmeTitoliOriginali[idx]
+                            : t.Titolo;
+                        var titolo = SostituisciTokenTesto(titoloRaw, p.ClienteNome, p.VersioneRaw);
+                        var contenuto = SostituisciTokenTesto(t.Descrizione, p.ClienteNome, p.VersioneRaw);
+                        sb.AppendLine(sep);
+                        sb.AppendLine(titolo);
+                        sb.AppendLine(sep);
+                        sb.AppendLine();
+                        sb.AppendLine(contenuto);
+                        primo = false;
+                    }
+
+                    System.IO.Directory.CreateDirectory(dir);
+                    var testo = sb.ToString().Replace("\r\n", "\n").Replace("\n", Environment.NewLine);
+                    System.IO.File.WriteAllText(percorso, testo, System.Text.Encoding.UTF8);
+                    creati++;
+                }
             }
 
             mostraReadmeModal = false;
-            MostraMessaggio($"Readme.txt: {creati} creati, {saltati} già presenti (saltati).", false);
+            MostraMessaggio(
+                $"Readme.txt in {percorsi.Count} struttura/e patch: {creati} creati, {saltati} già presenti (saltati).",
+                false);
         }
         catch (Exception ex)
         {
@@ -4065,29 +4725,68 @@
     }
 
     /// <summary>
-    /// Apre in Esplora Risorse la cartella-cliente radice in TmpPatch (l'ultima creata,
-    /// altrimenti quella calcolata dal cliente corrente).
+    /// Apre in Esplora Risorse TUTTE le cartelle patch (una finestra per versione): quelle dell'ultimo
+    /// "Autoprepara" o, se mancano, quelle calcolate dallo stato corrente del form che esistono su disco.
+    /// Se nessuna cartella patch esiste, ripiega sulla cartella cliente.
     /// </summary>
     private void ApriCartellaPatch()
     {
         try
         {
-            var target = !string.IsNullOrEmpty(ultimaCartellaPatchClientRoot)
-                ? ultimaCartellaPatchClientRoot!
-                : System.IO.Path.Combine(AppConfig.TmpPatchDir, SanitizzaSegmentoCartella(NomeClientePatch()));
+            // 1) le cartelle create dall'ultimo Autoprepara, se esistono ancora
+            var target = ultimeCartellePatch
+                .Where(System.IO.Directory.Exists)
+                .ToList();
 
-            System.IO.Directory.CreateDirectory(target);
-            Process.Start(new ProcessStartInfo
+            // 2) altrimenti le cartelle patch calcolate dal form che esistono su disco
+            if (target.Count == 0)
+                target = CalcolaPercorsiPatch()
+                    .Select(p => p.Full)
+                    .Where(System.IO.Directory.Exists)
+                    .ToList();
+
+            // 3) come ultima spiaggia la cartella cliente (creata se manca)
+            if (target.Count == 0)
             {
-                FileName = "explorer.exe",
-                Arguments = target,
-                UseShellExecute = true
-            });
+                var clientRoot = !string.IsNullOrEmpty(ultimaCartellaPatchClientRoot)
+                    ? ultimaCartellaPatchClientRoot!
+                    : System.IO.Path.Combine(AppConfig.TmpPatchDir, SanitizzaSegmentoCartella(NomeClientePatch()));
+                System.IO.Directory.CreateDirectory(clientRoot);
+                target.Add(clientRoot);
+            }
+
+            // Una finestra di Esplora Risorse per ogni cartella (percorso tra virgolette: può contenere spazi).
+            foreach (var cartella in target.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"\"{cartella}\"",
+                    UseShellExecute = true
+                });
+            }
         }
         catch (Exception ex)
         {
             MostraMessaggio($"Errore apertura cartella patch: {ex.Message}", true);
         }
+    }
+
+    /// <summary>
+    /// Compone le coppie "Ambiente — Versione" di un'attività, una per riga (CampoPlain converte
+    /// i "\n" in &lt;br&gt;). Restituisce stringa vuota se non ci sono ambienti compilati.
+    /// </summary>
+    private static string FormattaAmbientiRilascio(WorkActivityDto att)
+    {
+        if (att.AmbientiRilascio == null) return string.Empty;
+
+        var righe = att.AmbientiRilascio
+            .Where(c => !string.IsNullOrWhiteSpace(c.TipoAmbiente) || !string.IsNullOrWhiteSpace(c.Versione))
+            .OrderBy(c => c.Posizione)
+            .Select(c => string.Join(" — ", new[] { c.TipoAmbiente, c.Versione }
+                .Where(x => !string.IsNullOrWhiteSpace(x))));
+
+        return string.Join("\n", righe);
     }
 
     /// <summary>
@@ -4109,7 +4808,7 @@
         sb.AppendLine($"👤 Cliente: {att.ClienteNome ?? "-"}");
         sb.AppendLine($"⏱️ Ore Lavorate: {att.OreLavorate}");
         if (!string.IsNullOrEmpty(att.Versione))
-            sb.AppendLine($"🏷️ Versione: {att.Versione}");
+            sb.AppendLine($"🏷️ Versione attualmente in Sviluppo: {att.Versione}");
         if (!string.IsNullOrEmpty(att.Vedere))
         {
             sb.AppendLine();
@@ -4344,6 +5043,60 @@
     }
 
     /// <summary>
+    /// Compila le 3 coppie "Ambiente di rilascio / Versione" copiandole dall'ULTIMO ticket
+    /// lavorato per lo stesso cliente. La ricerca spazia su tutti gli utenti (come in modalità
+    /// admin), esclusi quelli in PrivacyMode, e ignora l'attività attualmente aperta.
+    /// I valori già presenti nel form vengono sovrascritti: è un'azione esplicita dell'utente.
+    /// </summary>
+    private async Task AutocompilaAmbientiRilascio()
+    {
+        if (!(AttivitaCorrente.ClienteId > 0))
+        {
+            MostraMessaggio("Seleziona prima un cliente.", true);
+            return;
+        }
+
+        try
+        {
+            isCaricamentoAmbientiRilascio = true;
+
+            var ultimo = await AmbientiRilascioService.GetUltimiAmbientiPerClienteAsync(
+                AttivitaCorrente.ClienteId!.Value, AttivitaCorrente.Id);
+
+            if (ultimo == null)
+            {
+                MostraMessaggio(
+                    $"Nessun ticket precedente con ambienti di rilascio per il cliente \"{NomeClientePatch()}\".", true);
+                return;
+            }
+
+            // Riscrive tutte e 3 le posizioni: quelle non presenti nell'origine restano vuote.
+            for (int i = 0; i < AttivitaCorrente.AmbientiRilascio.Count; i++)
+            {
+                var origine = ultimo.Coppie.FirstOrDefault(c => c.Posizione == i + 1);
+                AttivitaCorrente.AmbientiRilascio[i].TipoAmbiente = origine?.TipoAmbiente;
+                AttivitaCorrente.AmbientiRilascio[i].Versione = origine?.Versione;
+            }
+
+            var compilate = ultimo.Coppie.Count(c =>
+                !string.IsNullOrWhiteSpace(c.TipoAmbiente) || !string.IsNullOrWhiteSpace(c.Versione));
+            var ticket = string.IsNullOrWhiteSpace(ultimo.NumeroTicket) ? "senza numero" : ultimo.NumeroTicket;
+            var utente = string.IsNullOrWhiteSpace(ultimo.UtenteUsername) ? "" : $" — {ultimo.UtenteUsername}";
+
+            MostraMessaggio(
+                $"Compilate {compilate} coppie dal ticket {ticket} del {ultimo.Data:dd/MM/yyyy}{utente}.", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore autocompilazione ambienti di rilascio: {ex.Message}", true);
+        }
+        finally
+        {
+            isCaricamentoAmbientiRilascio = false;
+        }
+    }
+
+    /// <summary>
     /// Compila "Testo del check-in" come "Numero del ticket - Descrizione".
     /// Se uno dei due campi è vuoto, usa solo quello valorizzato (senza il trattino).
     /// </summary>
@@ -4376,7 +5129,7 @@
         sb.AppendLine($"👤 Cliente: {att.ClienteNome ?? "-"}");
         sb.AppendLine($"⏱️ Ore Lavorate: {att.OreLavorate}");
         if (!string.IsNullOrEmpty(att.Versione))
-            sb.AppendLine($"🏷️ Versione: {att.Versione}");
+            sb.AppendLine($"🏷️ Versione attualmente in Sviluppo: {att.Versione}");
         if (!string.IsNullOrEmpty(att.Vedere))
         {
             sb.AppendLine();
@@ -4458,6 +5211,28 @@
     /// Determina la classe CSS per una riga della griglia.
     /// Gestisce sia la selezione che l'evidenziazione TODO.
     /// </summary>
+    /// <summary>
+    /// Classe CSS per l'evidenziazione della scadenza del ticket, in base ai giorni mancanti:
+    /// già scaduta → rosso marcato, entro la soglia "rosso" → rosso, entro la soglia "arancione"
+    /// → arancione chiaro. Soglie configurabili in appsettings.json (default 2 e 5 giorni).
+    /// Una soglia <= 0 disattiva il relativo livello.
+    /// </summary>
+    private string GetClasseScadenza(DateTime? scadenza)
+    {
+        if (!scadenza.HasValue) return string.Empty;
+
+        // Confronto per data (non per orario): oggi conta come 0 giorni mancanti.
+        var giorniMancanti = (scadenza.Value.Date - DateTime.Today).Days;
+
+        if (giorniMancanti < 0) return "scadenza-scaduta";
+        if (giorniMancanti <= AppConfig.GiorniPreavvisoScadenzaRosso &&
+            AppConfig.GiorniPreavvisoScadenzaRosso > 0) return "scadenza-rossa";
+        if (giorniMancanti <= AppConfig.GiorniPreavvisoScadenzaArancione &&
+            AppConfig.GiorniPreavvisoScadenzaArancione > 0) return "scadenza-arancione";
+
+        return string.Empty;
+    }
+
     private string GetRowClass(WorkActivityDto attivita)
     {
         var classes = new List<string>();
@@ -4472,6 +5247,13 @@
         if (attivita.HasTodo)
         {
             classes.Add("todo-row");
+        }
+
+        // Scadenza ticket vicina: sovrascrive il colore TODO (vedi app.css)
+        var classeScadenza = GetClasseScadenza(attivita.DataScadenzaTicket);
+        if (classeScadenza.Length > 0)
+        {
+            classes.Add(classeScadenza);
         }
 
         // Riga con zero ore (testo grigio in corsivo)

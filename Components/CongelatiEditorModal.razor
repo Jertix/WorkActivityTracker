@@ -51,6 +51,7 @@
                                             <th style="width: 130px;">Data Congelamento</th>
                                             <th style="width: 130px;">Data Dismissione</th>
                                             <th style="width: 70px;">Attivo</th>
+                                            <th>Note</th>
                                             <th style="width: 70px;">Azioni</th>
                                         </tr>
                                     </thead>
@@ -104,8 +105,11 @@
                                                             <span class="badge bg-secondary">No</span>
                                                         }
                                                     </td>
+                                                    <td class="small text-muted" title="@ambiente.Note">
+                                                        @TruncaNote(ambiente.Note)
+                                                    </td>
                                                     <td>
-                                                        <button class="btn btn-sm btn-outline-danger" 
+                                                        <button class="btn btn-sm btn-outline-danger"
                                                                 @onclick="() => EliminaAmbiente(ambiente.Id)"
                                                                 @onclick:stopPropagation="true"
                                                                 title="Elimina (disattiva)">
@@ -118,7 +122,7 @@
                                         else
                                         {
                                             <tr>
-                                                <td colspan="8" class="text-center text-muted py-4">
+                                                <td colspan="9" class="text-center text-muted py-4">
                                                     Nessun congelato presente. Clicca "Nuovo" per aggiungerne uno!
                                                 </td>
                                             </tr>
@@ -199,7 +203,7 @@
                                 {
                                     <div class="col-md-2 d-flex align-items-end">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="chkAttivo" 
+                                            <input class="form-check-input" type="checkbox" id="chkAttivo"
                                                    @bind="ambienteCorrente.Attivo" />
                                             <label class="form-check-label" for="chkAttivo">
                                                 Attivo
@@ -207,6 +211,14 @@
                                         </div>
                                     </div>
                                 }
+
+                                @* Note libere sul congelato *@
+                                <div class="col-12">
+                                    <label class="form-label">Note</label>
+                                    <textarea class="form-control" rows="3"
+                                              @bind="ambienteCorrente.Note"
+                                              placeholder="Informazioni aggiuntive sul codice: a cosa serve, particolarità, riferimenti..."></textarea>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -321,6 +333,7 @@
         {
             Id = ambiente.Id,
             Codice = ambiente.Codice,
+            Note = ambiente.Note,
             Descrizione = ambiente.Descrizione,
             Descrizione4 = ambiente.Descrizione4,
             Descrizione5 = ambiente.Descrizione5,
@@ -413,14 +426,18 @@
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"# Congelati — Export del {DateTime.Now:dd/MM/yyyy HH:mm}");
             sb.AppendLine();
-            sb.AppendLine("| Codice | Versione | Versione 4 | Versione 5 | Data Congelamento | Data Dismissione | Attivo |");
-            sb.AppendLine("|--------|----------|-----------|-----------|-------------------|------------------|--------|");
+            sb.AppendLine("| Codice | Versione | Versione 4 | Versione 5 | Data Congelamento | Data Dismissione | Attivo | Note |");
+            sb.AppendLine("|--------|----------|-----------|-----------|-------------------|------------------|--------|------|");
             foreach (var a in ambienti)
             {
                 var dataCong = a.DataCongelamento.HasValue ? a.DataCongelamento.Value.ToString("dd/MM/yyyy") : "-";
                 var dataDism = a.DataDismissione.HasValue ? a.DataDismissione.Value.ToString("dd/MM/yyyy") : "-";
                 var attivo = a.Attivo ? "Sì" : "No";
-                sb.AppendLine($"| {a.Codice} | {a.Descrizione ?? "-"} | {a.Descrizione4 ?? "-"} | {a.Descrizione5 ?? "-"} | {dataCong} | {dataDism} | {attivo} |");
+                // Le note sono testo libero e multiriga: nella tabella MD vanno appiattite.
+                var note = string.IsNullOrWhiteSpace(a.Note)
+                    ? "-"
+                    : a.Note.Replace("\r\n", " ").Replace("\n", " ").Replace("|", "\\|");
+                sb.AppendLine($"| {a.Codice} | {a.Descrizione ?? "-"} | {a.Descrizione4 ?? "-"} | {a.Descrizione5 ?? "-"} | {dataCong} | {dataDism} | {attivo} | {note} |");
             }
 
             System.IO.File.WriteAllText(filePath, sb.ToString(), System.Text.Encoding.UTF8);
@@ -450,4 +467,14 @@
     }
 
     #endregion
+    /// <summary>
+    /// Riduce le Note a una riga breve per la cella di griglia (il testo completo resta nel title).
+    /// </summary>
+    private static string TruncaNote(string? note)
+    {
+        if (string.IsNullOrWhiteSpace(note)) return "-";
+        var unaRiga = note.Replace("\r\n", " ").Replace("\n", " ").Trim();
+        return unaRiga.Length <= 60 ? unaRiga : unaRiga.Substring(0, 60) + "…";
+    }
+
 }

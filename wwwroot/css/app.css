@@ -114,6 +114,73 @@ label {
 }
 
 /* =============================================
+   SCADENZA TICKET
+   Precedenza voluta: riga selezionata > scadenza > TODO.
+   Le regole ripetono il selettore con .todo-row perché nel caso d'uso tipico
+   (filtro "ticket in scadenza") ogni riga è anche una riga TODO.
+   ============================================= */
+
+/* Entro la soglia "arancione" (default 5 giorni) */
+.scadenza-arancione,
+.scadenza-arancione td,
+.todo-row.scadenza-arancione,
+.todo-row.scadenza-arancione td {
+    background-color: #ffe0b3 !important; /* Arancione chiaro */
+}
+
+.scadenza-arancione:hover,
+.scadenza-arancione:hover td,
+.todo-row.scadenza-arancione:hover,
+.todo-row.scadenza-arancione:hover td {
+    background-color: #ffd08a !important;
+}
+
+/* Entro la soglia "rosso" (default 2 giorni) */
+.scadenza-rossa,
+.scadenza-rossa td,
+.todo-row.scadenza-rossa,
+.todo-row.scadenza-rossa td {
+    background-color: #ff9999 !important; /* Rosso */
+}
+
+.scadenza-rossa:hover,
+.scadenza-rossa:hover td,
+.todo-row.scadenza-rossa:hover,
+.todo-row.scadenza-rossa:hover td {
+    background-color: #ff8080 !important;
+}
+
+/* Scadenza già passata: rosso più marcato, testo in grassetto */
+.scadenza-scaduta,
+.scadenza-scaduta td,
+.todo-row.scadenza-scaduta,
+.todo-row.scadenza-scaduta td {
+    background-color: #ff6b6b !important; /* Rosso marcato */
+    font-weight: 600;
+}
+
+.scadenza-scaduta:hover,
+.scadenza-scaduta:hover td,
+.todo-row.scadenza-scaduta:hover,
+.todo-row.scadenza-scaduta:hover td {
+    background-color: #fa5252 !important;
+}
+
+/* La riga selezionata resta riconoscibile anche quando ha una scadenza vicina:
+   giallo selezione virato verso l'arancione/rosso a seconda della gravità. */
+.row-selected.scadenza-arancione,
+.row-selected.scadenza-arancione td {
+    background-color: #ffcc66 !important;
+}
+
+.row-selected.scadenza-rossa,
+.row-selected.scadenza-rossa td,
+.row-selected.scadenza-scaduta,
+.row-selected.scadenza-scaduta td {
+    background-color: #ffa94d !important;
+}
+
+/* =============================================
    RIGHE CON ZERO ORE LAVORATE
    ============================================= */
 .zero-ore-row {
@@ -389,4 +456,43 @@ tfoot.table-secondary td {
 
 .modal-status-bar .text-muted {
     color: #adb5bd !important;
+}
+
+/* =============================================
+   PANNELLO ICONE (EmojiPicker)
+   ============================================= */
+.emoji-picker {
+    background-color: #f8f9fa;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.emoji-categoria {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #6c757d;
+    margin-top: 4px;
+}
+
+.emoji-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+}
+
+/* Pulsante icona: nessuna cornice finché non ci passi sopra, così la griglia resta pulita */
+.emoji-btn {
+    font-size: 1.15rem;
+    line-height: 1;
+    padding: 3px 5px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.emoji-btn:hover {
+    background-color: #e9ecef;
+    border-color: #ced4da;
 }

@@ -126,9 +126,10 @@
             activeEl._savedEndLine = lines.endLine;
         });
 
-        // Previene che i bottoni della toolbar rubino il focus al contenteditable editor
+        // Previene che i bottoni della toolbar (e del pannello icone) rubino il focus
+        // al contenteditable: senza questo il cursore si perderebbe al primo click.
         document.addEventListener('mousedown', function (e) {
-            if (e.target.closest('.editor-toolbar')) {
+            if (e.target.closest('.editor-toolbar') || e.target.closest('.emoji-picker')) {
                 e.preventDefault();
             }
         }, true);
@@ -163,6 +164,79 @@
             if (!el) return;
             el.focus();
             document.execCommand('insertHTML', false, html);
+        };
+    </script>
+
+    <!-- Navigazione dei TODO dentro un contenteditable.
+         Non altera il contenuto (niente marcatori inseriti nell'HTML, che finirebbero nel DB):
+         cerca le occorrenze nei text node e ci porta sopra la selezione, poi scrolla l'editor. -->
+    <script>
+        window.todoNavHelper = {
+            // Stessa nozione di "parola isolata" della TodoRegex lato C#.
+            _regex: function () { return /(?<![a-zA-Z])TODO(?![a-zA-Z])/gi; },
+
+            // Elenco delle occorrenze come { node, start }.
+            _trova: function (el) {
+                var occorrenze = [];
+                var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null, false);
+                var nodo;
+                while ((nodo = walker.nextNode())) {
+                    var testo = nodo.nodeValue || '';
+                    var re = this._regex();
+                    var m;
+                    while ((m = re.exec(testo)) !== null) {
+                        occorrenze.push({ node: nodo, start: m.index });
+                    }
+                }
+                return occorrenze;
+            },
+
+            // Quante occorrenze ci sono in questo momento.
+            conta: function (el) {
+                if (!el) return 0;
+                return this._trova(el).length;
+            },
+
+            // Sposta la selezione sull'occorrenza precedente/successiva (direzione -1 / +1),
+            // con wrap-around, e scrolla l'editor per renderla visibile.
+            // indiceCorrente = -1 significa "nessuna occorrenza ancora visitata".
+            // Ritorna { indice, totale } per aggiornare il contatore nella toolbar.
+            naviga: function (el, direzione, indiceCorrente) {
+                if (!el) return { indice: -1, totale: 0 };
+
+                var occ = this._trova(el);
+                if (occ.length === 0) return { indice: -1, totale: 0 };
+
+                var i;
+                if (indiceCorrente < 0) {
+                    i = direzione > 0 ? 0 : occ.length - 1;
+                } else {
+                    i = (indiceCorrente + direzione) % occ.length;
+                    if (i < 0) i += occ.length;
+                }
+
+                var o = occ[i];
+                var range = document.createRange();
+                range.setStart(o.node, o.start);
+                range.setEnd(o.node, o.start + 4); // "TODO" = 4 caratteri
+
+                el.focus();
+                var sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+
+                // Scroll manuale: scrollIntoView sposterebbe anche la pagina intera.
+                var r = range.getBoundingClientRect();
+                var e = el.getBoundingClientRect();
+                if (r.height > 0 || r.width > 0) {
+                    el.scrollTop += (r.top - e.top) - (el.clientHeight / 3);
+                    if (r.left < e.left || r.right > e.right) {
+                        el.scrollLeft += (r.left - e.left) - (el.clientWidth / 3);
+                    }
+                }
+
+                return { indice: i, totale: occ.length };
+            }
         };
     </script>
 

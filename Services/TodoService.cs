@@ -51,7 +51,8 @@ public class TodoService
             Descrizione = t.Descrizione,
             DataCompletamento = t.DataCompletamento,
             LivelloUrgenza = t.LivelloUrgenza,
-            Completato = t.Completato
+            Completato = t.Completato,
+            NotaCompletamento = t.NotaCompletamento
         }).ToList();
     }
 
@@ -84,6 +85,7 @@ public class TodoService
             Descrizione = dto.Descrizione,
             LivelloUrgenza = dto.LivelloUrgenza,
             Completato = false
+            // NotaCompletamento resta null: un TODO nasce sempre non completato
         };
 
         context.TodoItems.Add(todo);
@@ -114,6 +116,8 @@ public class TodoService
         todo.Descrizione = dto.Descrizione;
         todo.LivelloUrgenza = dto.LivelloUrgenza;
         todo.Completato = dto.Completato;
+        // La nota vale solo per i TODO completati: viene azzerata quando torna aperto.
+        todo.NotaCompletamento = dto.Completato ? dto.NotaCompletamento : null;
 
         // Imposta la data di completamento se è stato completato
         if (dto.Completato && !todo.DataCompletamento.HasValue)
@@ -147,6 +151,8 @@ public class TodoService
 
         todo.Completato = !todo.Completato;
         todo.DataCompletamento = todo.Completato ? DateTime.Now : null;
+        // Riaprendo un TODO la nota di completamento non ha più senso.
+        if (!todo.Completato) todo.NotaCompletamento = null;
 
         await context.SaveChangesAsync();
     }

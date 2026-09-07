@@ -110,6 +110,10 @@ public static class MauiProgram
         // ReadmeTemplateService: Singleton per i template dei file Readme (ReadmeTmplates.json)
         builder.Services.AddSingleton<ReadmeTemplateService>();
 
+        // BozzaAttivitaService: Singleton per il salvataggio di emergenza su file quando il DB
+        // non è raggiungibile (caduta della VPN)
+        builder.Services.AddSingleton<BozzaAttivitaService>();
+
         return builder.Build();
     }
 

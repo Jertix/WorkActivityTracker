@@ -48,8 +48,17 @@
                                        @bind="TestoRicerca" @bind:event="oninput"
                                        @onkeypress="OnSearchKeyPress"
                                        placeholder="Inserisci testo da cercare..." />
-                                <button class="btn btn-primary btn-lg" @onclick="EseguiRicerca">
-                                    🔍 Cerca
+                                <button class="btn btn-primary btn-lg" @onclick="EseguiRicerca"
+                                        disabled="@isRicercaInCorso">
+                                    @if (isRicercaInCorso)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                        <text>Ricerca…</text>
+                                    }
+                                    else
+                                    {
+                                        <text>🔍 Cerca</text>
+                                    }
                                 </button>
                                 <button class="btn @(mostraFiltriAvanzati ? "btn-warning" : "btn-outline-secondary") btn-lg" 
                                         @onclick="ToggleFiltriAvanzati">
@@ -179,6 +188,7 @@
                                         <tr>
                                             <th style="width: 40px;">#</th>
                                             <th style="width: 100px;">Data</th>
+                                            <th style="width: 110px;">N° Ticket</th>
                                             @if (IsAdminMode)
                                             {
                                                 <th style="width: 120px;">Utente</th>
@@ -200,6 +210,7 @@
                                                     style="cursor: pointer;">
                                                     <td><span class="badge bg-secondary">@(idx + 1)</span></td>
                                                     <td>@att.Data.ToString("dd/MM/yyyy")</td>
+                                                    <td title="@att.NumeroTicket">@TruncateText(att.NumeroTicket, 20)</td>
                                                     @if (IsAdminMode)
                                                     {
                                                         <td>@(att.UtenteUsername ?? "-")</td>
@@ -219,8 +230,15 @@
                                         else
                                         {
                                             <tr>
-                                                <td colspan="@(IsAdminMode ? 6 : 5)" class="text-center text-muted py-4">
-                                                    @if (ricercaEseguita)
+                                                <td colspan="@(IsAdminMode ? 7 : 6)" class="text-center text-muted py-4">
+                                                    @if (isRicercaInCorso)
+                                                    {
+                                                        <span class="text-primary d-inline-flex align-items-center">
+                                                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                            Ricerca in corso, attendere…
+                                                        </span>
+                                                    }
+                                                    else if (ricercaEseguita)
                                                     {
                                                         <span>Nessun risultato trovato per "<strong>@TestoRicerca</strong>"</span>
                                                     }
@@ -349,6 +367,12 @@
     private List<WorkActivityDto> Risultati { get; set; } = new();
     private int indiceSelezionato = -1;
     private bool ricercaEseguita = false;
+
+    /// <summary>
+    /// True mentre la query è in esecuzione su SQL. Serve a NON mostrare "Nessun risultato"
+    /// durante l'attesa: la ricerca è asincrona e può metterci qualche secondo sugli storici grandi.
+    /// </summary>
+    private bool isRicercaInCorso = false;
     private bool mostraFiltriAvanzati = false;
 
     // Filtri campi di ricerca (default tutti selezionati)
@@ -461,7 +485,6 @@
     /// </summary>
     private async Task EseguiRicerca()
     {
-        ricercaEseguita = true;
         indiceSelezionato = -1;
         dettaglioCorrente = null;
 
@@ -472,6 +495,7 @@
         if (string.IsNullOrWhiteSpace(TestoRicerca) || OnRicerca == null)
         {
             Risultati = new List<WorkActivityDto>();
+            ricercaEseguita = true;
             return;
         }
 
@@ -491,7 +515,22 @@
             Cartella = cercaInCartella
         };
 
-        Risultati = await OnRicerca(criteri);
+        // "ricercaEseguita" resta false durante l'attesa, altrimenti la griglia mostrerebbe
+        // "Nessun risultato trovato" per tutto il tempo della query, salvo poi popolarsi.
+        isRicercaInCorso = true;
+        ricercaEseguita = false;
+        Risultati = new List<WorkActivityDto>();
+        StateHasChanged();
+
+        try
+        {
+            Risultati = await OnRicerca(criteri);
+        }
+        finally
+        {
+            isRicercaInCorso = false;
+            ricercaEseguita = true;
+        }
 
         // Seleziona automaticamente il primo risultato (carica il dettaglio e scrolla).
         if (Risultati.Any())

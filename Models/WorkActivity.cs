@@ -48,7 +48,13 @@ public class Attivita
     /// </summary>
     [MaxLength(200)]
     public string? NumeroTicket { get; set; }
-    
+
+    /// <summary>
+    /// Data di scadenza del ticket (opzionale). Se valorizzata, la riga in griglia viene
+    /// evidenziata quando la scadenza si avvicina (soglie in appsettings.json).
+    /// </summary>
+    public DateTime? DataScadenzaTicket { get; set; }
+
     /// <summary>
     /// ID del cliente associato (foreign key verso Clienti)
     /// </summary>
@@ -226,6 +232,12 @@ public class Ambiente
     /// </summary>
     public DateTime? DataDismissione { get; set; }
 
+    /// <summary>
+    /// Note libere sul congelato: testo aggiuntivo per descrivere il Codice
+    /// (a cosa serve, particolarità, riferimenti). NVARCHAR(MAX), facoltativo.
+    /// </summary>
+    public string? Note { get; set; }
+
     public bool Attivo { get; set; } = true;
 }
 
@@ -353,7 +365,13 @@ public class TodoItem
     /// Indica se il TODO è stato completato
     /// </summary>
     public bool Completato { get; set; } = false;
-    
+
+    /// <summary>
+    /// Nota di completamento: obbligatoria quando il TODO viene marcato come completato,
+    /// azzerata quando torna non completato (come DataCompletamento).
+    /// </summary>
+    public string? NotaCompletamento { get; set; }
+
     // Navigation property
     [ForeignKey("UtenteId")]
     public virtual Utente? Utente { get; set; }
@@ -372,6 +390,9 @@ public class TodoItemDto
     public DateTime? DataCompletamento { get; set; }
     public int LivelloUrgenza { get; set; } = 3;
     public bool Completato { get; set; } = false;
+
+    /// <summary>Nota di completamento (obbligatoria se Completato).</summary>
+    public string? NotaCompletamento { get; set; }
 }
 
 /// <summary>
@@ -461,6 +482,10 @@ public class AmbienteDto
     public string? Descrizione5 { get; set; }
     public DateTime? DataCongelamento { get; set; }
     public DateTime? DataDismissione { get; set; }
+
+    /// <summary>Note libere sul congelato (facoltative).</summary>
+    public string? Note { get; set; }
+
     public bool Attivo { get; set; } = true;
 }
 
@@ -885,6 +910,9 @@ public class WorkActivityDto
     /// Numero/i del ticket (es: "12345" oppure "12345, 67890" se sono più di uno)
     /// </summary>
     public string? NumeroTicket { get; set; }
+
+    /// <summary>Data di scadenza del ticket (opzionale).</summary>
+    public DateTime? DataScadenzaTicket { get; set; }
 
     public int? ClienteId { get; set; }
     public string? ClienteNome { get; set; }

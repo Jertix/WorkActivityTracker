@@ -72,7 +72,13 @@ public class ClienteAmbienteService
                 dto.UltimoUtente = utente;
         }
 
-        return list;
+        // Ordinamento finale in memoria: la query ha già un ORDER BY, ma qui è indipendente
+        // dalla collation del database e neutralizza eventuali spazi iniziali nei nomi
+        // (un nome salvato come " Allianz" finirebbe altrimenti in cima all'elenco).
+        return list
+            .OrderBy(d => (d.NomeCliente ?? string.Empty).Trim(), StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(d => (d.Ambiente ?? string.Empty).Trim(), StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
     }
 
     /// <summary>

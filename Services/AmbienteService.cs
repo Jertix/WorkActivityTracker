@@ -38,6 +38,7 @@ public class AmbienteService
             Descrizione = a.Descrizione,
             Descrizione4 = a.Descrizione4,
             Descrizione5 = a.Descrizione5,
+            Note = a.Note,
             DataCongelamento = a.DataCongelamento,
             DataDismissione = a.DataDismissione,
             Attivo = a.Attivo
@@ -62,6 +63,7 @@ public class AmbienteService
             Descrizione = a.Descrizione,
             Descrizione4 = a.Descrizione4,
             Descrizione5 = a.Descrizione5,
+            Note = a.Note,
             DataCongelamento = a.DataCongelamento,
             DataDismissione = a.DataDismissione,
             Attivo = a.Attivo
@@ -87,6 +89,7 @@ public class AmbienteService
             Descrizione = dto.Descrizione,
             Descrizione4 = dto.Descrizione4,
             Descrizione5 = dto.Descrizione5,
+            Note = string.IsNullOrWhiteSpace(dto.Note) ? null : dto.Note,
             DataCongelamento = dto.DataCongelamento,
             DataDismissione = null,
             Attivo = true
@@ -133,17 +136,18 @@ public class AmbienteService
             throw new InvalidOperationException($"Esiste già un altro ambiente con codice '{dto.Codice}'");
 
         // Cattura i valori PRIMA della modifica per il log
-        var vecchioValore = $"Codice: {ambiente.Codice}; Versione: {ambiente.Descrizione ?? "-"}; Versione4: {ambiente.Descrizione4 ?? "-"}; Versione5: {ambiente.Descrizione5 ?? "-"}; DataCongelamento: {ambiente.DataCongelamento?.ToString("dd/MM/yyyy") ?? "-"}; DataDismissione: {ambiente.DataDismissione?.ToString("dd/MM/yyyy") ?? "-"}; Attivo: {(ambiente.Attivo ? "Sì" : "No")}";
+        var vecchioValore = $"Codice: {ambiente.Codice}; Versione: {ambiente.Descrizione ?? "-"}; Versione4: {ambiente.Descrizione4 ?? "-"}; Versione5: {ambiente.Descrizione5 ?? "-"}; DataCongelamento: {ambiente.DataCongelamento?.ToString("dd/MM/yyyy") ?? "-"}; DataDismissione: {ambiente.DataDismissione?.ToString("dd/MM/yyyy") ?? "-"}; Note: {TroncaPerLog(ambiente.Note)}; Attivo: {(ambiente.Attivo ? "Sì" : "No")}";
 
         ambiente.Codice = dto.Codice;
         ambiente.Descrizione = dto.Descrizione;
         ambiente.Descrizione4 = dto.Descrizione4;
         ambiente.Descrizione5 = dto.Descrizione5;
+        ambiente.Note = string.IsNullOrWhiteSpace(dto.Note) ? null : dto.Note;
         ambiente.DataCongelamento = dto.DataCongelamento;
         ambiente.DataDismissione = dto.DataDismissione;
         ambiente.Attivo = dto.Attivo;
 
-        var nuovoValore = $"Codice: {dto.Codice}; Versione: {dto.Descrizione ?? "-"}; Versione4: {dto.Descrizione4 ?? "-"}; Versione5: {dto.Descrizione5 ?? "-"}; DataCongelamento: {dto.DataCongelamento?.ToString("dd/MM/yyyy") ?? "-"}; DataDismissione: {dto.DataDismissione?.ToString("dd/MM/yyyy") ?? "-"}; Attivo: {(dto.Attivo ? "Sì" : "No")}";
+        var nuovoValore = $"Codice: {dto.Codice}; Versione: {dto.Descrizione ?? "-"}; Versione4: {dto.Descrizione4 ?? "-"}; Versione5: {dto.Descrizione5 ?? "-"}; DataCongelamento: {dto.DataCongelamento?.ToString("dd/MM/yyyy") ?? "-"}; DataDismissione: {dto.DataDismissione?.ToString("dd/MM/yyyy") ?? "-"}; Note: {TroncaPerLog(dto.Note)}; Attivo: {(dto.Attivo ? "Sì" : "No")}";
 
         // Log dell'azione con vecchio e nuovo valore
         var log = new AmbienteLog
@@ -207,4 +211,15 @@ public class AmbienteService
             .Take(maxRecords)
             .ToListAsync();
     }
+    /// <summary>
+    /// Riduce le Note a una riga breve per il log: sono testo libero e senza limite di lunghezza,
+    /// inserirle per intero gonfierebbe Ambienti_Log a ogni modifica.
+    /// </summary>
+    private static string TroncaPerLog(string? note)
+    {
+        if (string.IsNullOrWhiteSpace(note)) return "-";
+        var unaRiga = note.Replace("\r\n", " ").Replace("\n", " ").Trim();
+        return unaRiga.Length <= 100 ? unaRiga : unaRiga.Substring(0, 100) + "…";
+    }
+
 }

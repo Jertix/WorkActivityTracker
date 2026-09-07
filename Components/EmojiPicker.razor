@@ -1,0 +1,103 @@
+@*
+    Pannello di scelta icone per gli editor di testo ricco.
+    Cliccando un'icona questa viene inserita SUBITO nel punto del cursore dell'editor
+    (nessun passaggio dagli appunti) e il pannello resta aperto, così se ne possono
+    inserire più di una di seguito.
+
+    La classe "emoji-picker" è importante: il listener mousedown globale in index.html
+    la usa per NON far perdere il focus al contenteditable mentre si clicca qui dentro.
+*@
+
+@if (IsVisible)
+{
+    <div class="emoji-picker border rounded p-2 mb-1">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small text-muted">Clicca un'icona per inserirla nel punto del cursore</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" @onclick="Chiudi">
+                ✕
+            </button>
+        </div>
+
+        @if (Recenti != null && Recenti.Any())
+        {
+            <div class="emoji-categoria">Usate di recente</div>
+            <div class="emoji-grid mb-1">
+                @foreach (var e in Recenti)
+                {
+                    var icona = e;
+                    <button type="button" class="emoji-btn" @onclick="() => Seleziona(icona)">@icona</button>
+                }
+            </div>
+        }
+
+        @foreach (var categoria in Categorie)
+        {
+            <div class="emoji-categoria">@categoria.Key</div>
+            <div class="emoji-grid mb-1">
+                @foreach (var e in categoria.Value)
+                {
+                    var icona = e;
+                    <button type="button" class="emoji-btn" @onclick="() => Seleziona(icona)">@icona</button>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>Visibilità del pannello.</summary>
+    [Parameter] public bool IsVisible { get; set; }
+
+    /// <summary>Icone usate di recente (gestite dal componente padre, così sono condivise).</summary>
+    [Parameter] public List<string>? Recenti { get; set; }
+
+    /// <summary>Invocato con l'icona scelta.</summary>
+    [Parameter] public EventCallback<string> OnSelezione { get; set; }
+
+    /// <summary>Invocato alla chiusura del pannello.</summary>
+    [Parameter] public EventCallback OnChiudi { get; set; }
+
+    private async Task Seleziona(string icona) => await OnSelezione.InvokeAsync(icona);
+
+    private async Task Chiudi() => await OnChiudi.InvokeAsync();
+
+    /// <summary>
+    /// Catalogo delle icone, raggruppate per uso tipico in un diario di lavoro.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> Categorie = new()
+    {
+        ["Stati ed esiti"] = new[]
+        {
+            "✅", "❌", "⚠️", "❗", "❓", "✔️", "✖️", "🆗", "🚫", "⛔",
+            "🔴", "🟠", "🟡", "🟢", "🔵", "⚪", "⚫", "🔺", "🔻", "⏺️"
+        },
+        ["Frecce e flusso"] = new[]
+        {
+            "➡️", "⬅️", "⬆️", "⬇️", "↔️", "↩️", "↪️", "🔁", "🔃", "🔀",
+            "▶️", "⏸️", "⏹️", "⏭️", "⤴️", "⤵️"
+        },
+        ["Sviluppo e sistemi"] = new[]
+        {
+            "🐛", "🔧", "🔨", "🛠️", "⚙️", "💻", "🖥️", "🗄️", "🗃️", "💾",
+            "📦", "📁", "📂", "📄", "📋", "📝", "🔗", "🔍", "🔒", "🔑",
+            "🧪", "🚀", "🧹", "🩹", "🔥", "💡"
+        },
+        ["Tempo e pianificazione"] = new[]
+        {
+            "🕐", "⏱️", "⏳", "⌛", "⏰", "📅", "🗓️", "📌", "📍", "🏁"
+        },
+        ["Persone e comunicazione"] = new[]
+        {
+            "👤", "👥", "🙋", "🗣️", "💬", "📧", "📞", "☎️", "✍️", "🤝"
+        },
+        ["Analisi"] = new[]
+        {
+            "📊", "📈", "📉", "🧮", "🔢", "⭐", "🏆", "🎯", "🎉", "❤️"
+        },
+        ["Faccine"] = new[]
+        {
+            "🙂", "😀", "😅", "😐", "😕", "😞", "😡", "🤔", "😴", "🤯",
+            "👍", "👎", "👌", "🙏", "💪", "🤞"
+        }
+    };
+}

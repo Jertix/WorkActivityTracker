@@ -360,5 +360,94 @@ public class AmbientiRilascioService
         }
     }
 
+    /// <summary>
+    /// Recupera in UNA sola query le coppie ambiente/versione di più attività (usato dagli export,
+    /// per non fare una query per riga). Include solo le posizioni effettivamente compilate:
+    /// le attività senza ambienti non compaiono nel dizionario.
+    /// </summary>
+    public async Task<Dictionary<int, List<AmbienteRilascioDto>>> GetAmbientiRilascioBatchAsync(IEnumerable<int> attivitaIds)
+    {
+        var ids = attivitaIds.Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<int, List<AmbienteRilascioDto>>();
+
+        using var context = await _contextFactory.CreateDbContextAsync();
+
+        var righe = await context.AttivitaAmbientiRilascio
+            .Where(r => ids.Contains(r.AttivitaId)
+                        && (r.TipoAmbiente != null || r.Versione != null))
+            .OrderBy(r => r.AttivitaId)
+            .ThenBy(r => r.Posizione)
+            .ToListAsync();
+
+        return righe
+            .GroupBy(r => r.AttivitaId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(r => new AmbienteRilascioDto
+                {
+                    Posizione = r.Posizione,
+                    TipoAmbiente = r.TipoAmbiente,
+                    Versione = r.Versione
+                }).ToList());
+    }
+
+    /// <summary>
+    /// Coppie ambiente/versione recuperate dall'ultimo ticket lavorato per un cliente,
+    /// con i riferimenti all'attività di provenienza (per il messaggio all'utente).
+    /// </summary>
+    public record UltimiAmbientiRilascio(
+        int AttivitaId,
+        DateTime Data,
+        string? NumeroTicket,
+        string? Descrizione,
+        string? UtenteUsername,
+        List<AmbienteRilascioDto> Coppie);
+
+    /// <summary>
+    /// Recupera le coppie ambiente/versione dell'ULTIMA attività del cliente indicato che abbia
+    /// almeno un ambiente di rilascio compilato. La ricerca è fatta su TUTTI gli utenti (come in
+    /// modalità admin), escludendo però le attività degli utenti in PrivacyMode, coerentemente
+    /// con quanto fa la griglia in modalità admin.
+    /// Restituisce null se il cliente non ha ticket precedenti con ambienti di rilascio.
+    /// </summary>
+    /// <param name="clienteId">Cliente per cui cercare</param>
+    /// <param name="escludiAttivitaId">Attività da escludere (tipicamente quella aperta nel form)</param>
+    public async Task<UltimiAmbientiRilascio?> GetUltimiAmbientiPerClienteAsync(int clienteId, int escludiAttivitaId = 0)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+        var currentUser = await _userService.GetOrCreateCurrentUserAsync();
+
+        // Gli utenti in PrivacyMode restano invisibili agli altri anche qui.
+        var utentiPrivacyIds = await context.Utenti
+            .Where(u => u.PrivacyMode && u.Id != currentUser.Id)
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        var ultima = await context.Attivita
+            .Where(a => a.ClienteId == clienteId
+                        && a.Id != escludiAttivitaId
+                        && !utentiPrivacyIds.Contains(a.UtenteId)
+                        && context.AttivitaAmbientiRilascio.Any(r =>
+                               r.AttivitaId == a.Id
+                               && (r.TipoAmbiente != null || r.Versione != null)))
+            .OrderByDescending(a => a.Data)
+            .ThenByDescending(a => a.Id)
+            .Select(a => new
+            {
+                a.Id,
+                a.Data,
+                a.NumeroTicket,
+                a.Descrizione,
+                Username = a.Utente != null ? a.Utente.WindowsUsername : null
+            })
+            .FirstOrDefaultAsync();
+
+        if (ultima == null) return null;
+
+        var coppie = await GetAmbientiRilascioAsync(ultima.Id);
+        return new UltimiAmbientiRilascio(
+            ultima.Id, ultima.Data, ultima.NumeroTicket, ultima.Descrizione, ultima.Username, coppie);
+    }
+
     #endregion
 }

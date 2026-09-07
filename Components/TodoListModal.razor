@@ -68,6 +68,7 @@
                                             <th style="min-width: 350px;">Titolo</th>
                                             <th>Descrizione</th>
                                             <th style="width: 110px;">Data Compl.</th>
+                                            <th style="width: 200px;">Nota compl.</th>
                                             <th style="width: 50px;">Azioni</th>
                                         </tr>
                                     </thead>
@@ -107,8 +108,11 @@
                                                             <span class="text-muted">-</span>
                                                         }
                                                     </td>
+                                                    <td class="text-muted" title="@todo.NotaCompletamento">
+                                                        @TruncateText(todo.NotaCompletamento, 40)
+                                                    </td>
                                                     <td>
-                                                        <button class="btn btn-sm btn-outline-danger" 
+                                                        <button class="btn btn-sm btn-outline-danger"
                                                                 @onclick="() => EliminaTodo(todo.Id)"
                                                                 @onclick:stopPropagation="true"
                                                                 title="Elimina">
@@ -121,7 +125,7 @@
                                         else
                                         {
                                             <tr>
-                                                <td colspan="7" class="text-center text-muted py-4">
+                                                <td colspan="8" class="text-center text-muted py-4">
                                                     @if (mostraCompletati)
                                                     {
                                                         <span>Nessun TODO presente. Clicca "Nuovo" per aggiungerne uno!</span>
@@ -169,18 +173,34 @@
                                     </select>
                                 </div>
                                 
-                                @* Stato Completato (solo in modifica) *@
+                                @* Stato Completato + nota di completamento (solo in modifica) *@
                                 @if (IsModifica)
                                 {
                                     <div class="col-md-2">
                                         <label class="form-label">Stato</label>
                                         <div class="form-check mt-2">
-                                            <input class="form-check-input" type="checkbox" id="chkCompletato" 
-                                                   @bind="todoCorrente.Completato" />
+                                            <input class="form-check-input" type="checkbox" id="chkCompletato"
+                                                   @bind="todoCorrente.Completato"
+                                                   @bind:after="OnCambiaCompletato" />
                                             <label class="form-check-label" for="chkCompletato">
                                                 Completato
                                             </label>
                                         </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">
+                                            Nota di completamento
+                                            @if (todoCorrente.Completato)
+                                            {
+                                                <span class="text-danger">*</span>
+                                            }
+                                        </label>
+                                        <textarea class="form-control" rows="2"
+                                                  @bind="todoCorrente.NotaCompletamento"
+                                                  disabled="@(!todoCorrente.Completato)"
+                                                  placeholder="@(todoCorrente.Completato
+                                                      ? "Obbligatoria: descrivi come è stato completato..."
+                                                      : "Si abilita spuntando \"Completato\"")"></textarea>
                                     </div>
                                 }
                                 
@@ -334,9 +354,20 @@
             DataCompletamento = todo.DataCompletamento,
             LivelloUrgenza = todo.LivelloUrgenza,
             Completato = todo.Completato,
+            NotaCompletamento = todo.NotaCompletamento,
             UtenteId = todo.UtenteId
         };
         messaggio = string.Empty;
+    }
+
+    /// <summary>
+    /// Spunta "Completato" nel form: togliendola azzera la nota, che vale solo per i TODO chiusi
+    /// (così la textarea disabilitata non resta con del testo vecchio).
+    /// </summary>
+    private void OnCambiaCompletato()
+    {
+        if (!todoCorrente.Completato)
+            todoCorrente.NotaCompletamento = null;
     }
 
     private async Task SalvaTodo()
@@ -351,6 +382,12 @@
         if (string.IsNullOrWhiteSpace(todoCorrente.Descrizione))
         {
             MostraMessaggio("La descrizione è obbligatoria", true);
+            return;
+        }
+
+        if (todoCorrente.Completato && string.IsNullOrWhiteSpace(todoCorrente.NotaCompletamento))
+        {
+            MostraMessaggio("La nota di completamento è obbligatoria per un TODO completato", true);
             return;
         }
 
@@ -383,17 +420,31 @@
         }
     }
 
+    /// <summary>
+    /// Checkbox della griglia. Riaprire un TODO resta immediato; COMPLETARLO no: siccome la nota
+    /// di completamento è obbligatoria, il TODO viene selezionato nel form con la spunta già
+    /// messa, così l'utente scrive la nota e salva (altrimenti si aggirerebbe l'obbligo).
+    /// </summary>
     private async Task ToggleCompletato(TodoItemDto todo)
     {
         try
         {
+            if (!todo.Completato)
+            {
+                SelezionaTodo(todo);
+                todoCorrente.Completato = true;
+                MostraMessaggio("Inserisci la nota di completamento nel form qui sotto e premi 💾 Salva.", true);
+                return;
+            }
+
             await TodoService.ToggleCompletedAsync(todo.Id);
             await CaricaTodos();
             await NotifyTodoCountChanged();
-            
+
             if (todoCorrente.Id == todo.Id)
             {
-                todoCorrente.Completato = !todoCorrente.Completato;
+                todoCorrente.Completato = false;
+                todoCorrente.NotaCompletamento = null;
             }
         }
         catch (Exception ex)
@@ -510,8 +561,8 @@
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"# TODO List — Export del {DateTime.Now:dd/MM/yyyy HH:mm}");
             sb.AppendLine();
-            sb.AppendLine("| Stato | Urgenza | Data Ins. | Titolo | Descrizione | Data Compl. |");
-            sb.AppendLine("|-------|---------|-----------|--------|-------------|-------------|");
+            sb.AppendLine("| Stato | Urgenza | Data Ins. | Titolo | Descrizione | Data Compl. | Nota di completamento |");
+            sb.AppendLine("|-------|---------|-----------|--------|-------------|-------------|-----------------------|");
             foreach (var todo in todos)
             {
                 var stato = todo.Completato ? "✅" : "⬜";
@@ -522,7 +573,11 @@
                 var dataCompl = todo.DataCompletamento.HasValue
                     ? todo.DataCompletamento.Value.ToString("dd/MM/yyyy HH:mm")
                     : "-";
-                sb.AppendLine($"| {stato} | {urgenza} | {dataIns} | {titolo} | {desc} | {dataCompl} |");
+                // La nota può essere multiriga: nella tabella MD va appiattita su una riga.
+                var notaCompl = string.IsNullOrWhiteSpace(todo.NotaCompletamento)
+                    ? "-"
+                    : todo.NotaCompletamento.Replace("\r\n", " ").Replace("\n", " ").Replace("|", "\\|");
+                sb.AppendLine($"| {stato} | {urgenza} | {dataIns} | {titolo} | {desc} | {dataCompl} | {notaCompl} |");
             }
 
             System.IO.File.WriteAllText(filePath, sb.ToString(), System.Text.Encoding.UTF8);

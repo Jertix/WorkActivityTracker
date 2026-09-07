@@ -16,6 +16,18 @@ public class AppConfigService
     }
 
     /// <summary>
+    /// Cartella "Export" nella directory dell'eseguibile, creata se non esiste.
+    /// Statica e condivisa: la usano sia il form principale sia le modali, così il pulsante
+    /// "Apri Export" apre sempre la stessa cartella in cui vengono scritti gli export.
+    /// </summary>
+    public static string GetExportFolder()
+    {
+        var folder = System.IO.Path.Combine(AppContext.BaseDirectory, "Export");
+        System.IO.Directory.CreateDirectory(folder);
+        return folder;
+    }
+
+    /// <summary>
     /// Indica se mostrare la checkbox "Modalità admin".
     /// Default: true (visibile)
     /// </summary>
@@ -49,6 +61,28 @@ public class AppConfigService
     /// </summary>
     public int NumeroMesiMantenimentoHistory =>
         _configuration.GetValue<int>("AppSettings:NumeroMesiMantenimentoHistory", 3);
+
+    /// <summary>
+    /// Se true, l'export PDF di una singola attività include anche le attività collegate dalla
+    /// catena "**** Proseguo l'attività N ... ****" presente nelle Note. Se false esporta la sola
+    /// attività selezionata. Default: true.
+    /// </summary>
+    public bool EsportaAttivitaCollegateInPdf =>
+        _configuration.GetValue<bool>("AppSettings:EsportaAttivitaCollegateInPdf", true);
+
+    /// <summary>
+    /// Giorni di preavviso entro i quali un ticket in scadenza viene evidenziato in ARANCIONE
+    /// nella griglia delle attività. Default: 5. Un valore <= 0 disattiva l'evidenziazione arancione.
+    /// </summary>
+    public int GiorniPreavvisoScadenzaArancione =>
+        _configuration.GetValue<int>("AppSettings:GiorniPreavvisoScadenzaArancione", 5);
+
+    /// <summary>
+    /// Giorni di preavviso entro i quali un ticket in scadenza viene evidenziato in ROSSO
+    /// (ha la precedenza sull'arancione). Default: 2. Le scadenze già passate usano un rosso più marcato.
+    /// </summary>
+    public int GiorniPreavvisoScadenzaRosso =>
+        _configuration.GetValue<int>("AppSettings:GiorniPreavvisoScadenzaRosso", 2);
 
     /// <summary>
     /// Nome del programma usato per comporre il nome della cartella patch.

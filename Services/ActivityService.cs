@@ -68,6 +68,19 @@ public class ActivityService
     private static string EscapeLike(string input) =>
         input.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]");
 
+    /// <summary>
+    /// Costruisce il pattern LIKE per la ricerca testuale: ogni sequenza di spazi/tab/a-capo del
+    /// termine diventa un jolly "%", così il testo cercato viene trovato anche quando nel dato
+    /// gli spazi sono doppi o c'è un a capo (il LIKE non sa esprimere "uno o più spazi").
+    /// </summary>
+    private static string BuildLikePattern(string testo)
+    {
+        var parti = Regex.Split(testo.Trim(), @"\s+")
+            .Where(x => x.Length > 0)
+            .Select(EscapeLike);
+        return "%" + string.Join("%", parti) + "%";
+    }
+
     #endregion
 
     #region Metodi Lookup
@@ -217,8 +230,7 @@ public class ActivityService
         // completa la ricerca è fatta in memoria più sotto (con normalizzazione degli spazi multipli).
         if (!includeContenuto && !string.IsNullOrWhiteSpace(ricerca))
         {
-            var termine = Regex.Replace(ricerca.Trim(), @"\s+", " ");
-            var like = "%" + EscapeLike(termine) + "%";
+            var like = BuildLikePattern(ricerca);
             query = query.Where(a =>
                 EF.Functions.Like(a.Descrizione, like) ||
                 (a.UrlTicket != null && EF.Functions.Like(a.UrlTicket, like)) ||
@@ -283,6 +295,7 @@ public class ActivityService
                 Descrizione = a.Descrizione,
                 UrlTicket = a.UrlTicket,
                 NumeroTicket = a.NumeroTicket,
+                DataScadenzaTicket = a.DataScadenzaTicket,
                 ClienteId = a.ClienteId,
                 ClienteNome = a.Cliente?.Nome,
                 OreLavorate = a.OreLavorate,
@@ -315,6 +328,7 @@ public class ActivityService
                     Descrizione = a.Descrizione,
                     UrlTicket = a.UrlTicket,
                     NumeroTicket = a.NumeroTicket,
+                    DataScadenzaTicket = a.DataScadenzaTicket,
                     ClienteId = a.ClienteId,
                     ClienteNome = a.Cliente != null ? a.Cliente.Nome : null,
                     OreLavorate = a.OreLavorate,
@@ -415,9 +429,8 @@ public class ActivityService
                 query = query.Where(a => !utentiPrivacyIds.Contains(a.UtenteId));
         }
 
-        // LIKE sui SOLI campi selezionati (spazi multipli del termine compressi a uno solo).
-        var termine = Regex.Replace(criteri.Testo.Trim(), @"\s+", " ");
-        var like = "%" + EscapeLike(termine) + "%";
+        // LIKE sui SOLI campi selezionati (gli spazi del termine diventano jolly: vedi BuildLikePattern).
+        var like = BuildLikePattern(criteri.Testo);
         query = query.Where(a =>
             (criteri.Descrizione && a.Descrizione != null && EF.Functions.Like(a.Descrizione, like)) ||
             (criteri.UrlTicket && a.UrlTicket != null && EF.Functions.Like(a.UrlTicket, like)) ||
@@ -443,6 +456,7 @@ public class ActivityService
                 Descrizione = a.Descrizione,
                 UrlTicket = a.UrlTicket,
                 NumeroTicket = a.NumeroTicket,
+                DataScadenzaTicket = a.DataScadenzaTicket,
                 ClienteId = a.ClienteId,
                 ClienteNome = a.Cliente != null ? a.Cliente.Nome : null,
                 OreLavorate = a.OreLavorate,
@@ -538,6 +552,7 @@ public class ActivityService
             Descrizione = attivita.Descrizione,
             UrlTicket = attivita.UrlTicket,
             NumeroTicket = attivita.NumeroTicket,
+            DataScadenzaTicket = attivita.DataScadenzaTicket,
             ClienteId = attivita.ClienteId,
             ClienteNome = attivita.Cliente?.Nome,
             OreLavorate = attivita.OreLavorate,
@@ -574,6 +589,7 @@ public class ActivityService
             Descrizione = dto.Descrizione,
             UrlTicket = dto.UrlTicket,
             NumeroTicket = dto.NumeroTicket,
+            DataScadenzaTicket = dto.DataScadenzaTicket,
             ClienteId = dto.ClienteId,
             OreLavorate = dto.OreLavorate,
             Versione = dto.Versione,
@@ -636,6 +652,7 @@ public class ActivityService
         attivita.Descrizione = dto.Descrizione;
         attivita.UrlTicket = dto.UrlTicket;
         attivita.NumeroTicket = dto.NumeroTicket;
+        attivita.DataScadenzaTicket = dto.DataScadenzaTicket;
         attivita.ClienteId = dto.ClienteId;
         attivita.OreLavorate = dto.OreLavorate;
         attivita.Versione = dto.Versione;

@@ -51,9 +51,14 @@ public static class MauiProgram
         var connectionString = configuration.GetConnectionString("DefaultConnection") 
             ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found in appsettings.json");
         
+        // Timeout dei comandi SQL (secondi). Il default di SqlClient è 30s: sugli archivi grandi
+        // la ricerca full-text con LIKE su Note/Changeset lo supera, quindi è configurabile.
+        var timeoutQuery = configuration.GetValue<int>("AppSettings:TimeoutQuerySecondi", 30);
+        if (timeoutQuery <= 0) timeoutQuery = 30;
+
         // Registra il DbContext come factory (per supporto multi-thread)
         builder.Services.AddDbContextFactory<AppDbContext>(options =>
-            options.UseSqlServer(connectionString));
+            options.UseSqlServer(connectionString, sql => sql.CommandTimeout(timeoutQuery)));
 
         // =============================================
         // REGISTRAZIONE SERVIZI

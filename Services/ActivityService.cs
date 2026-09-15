@@ -83,6 +83,66 @@ public class ActivityService
 
     #endregion
 
+    #region Testo ricercabile (backfill)
+
+    /// <summary>
+    /// Converte un blocco di attività non ancora processate popolando `NoteTesto`/`ChangesetTesto`
+    /// dal contenuto HTML di `Note`/`ChangesetCoinvolti`.
+    ///
+    /// Lavora a lotti perché deve leggere i campi pesanti (con gli screenshot) e su archivi grandi,
+    /// via VPN, un unico giro sarebbe insostenibile. Le righe già convertite non vengono ritoccate,
+    /// quindi la procedura è **riprendibile**: se l'applicazione viene chiusa a metà, riparte da dove
+    /// era rimasta al prossimo avvio. Finché una riga non è convertita la ricerca ricade sulle
+    /// colonne originali, quindi non si perdono risultati durante la transizione.
+    ///
+    /// Restituisce il numero di righe convertite in questa chiamata (0 = lavoro finito).
+    /// </summary>
+    /// <param name="dimensioneLotto">Quante attività processare in questa chiamata.</param>
+    public async Task<int> AggiornaTestoRicercabileAsync(int dimensioneLotto = 50)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+
+        // Solo Id + i due campi HTML: niente Note di altre attività, niente join inutili.
+        var lotto = await context.Attivita
+            .Where(a => a.NoteTesto == null)
+            .OrderBy(a => a.Id)
+            .Take(dimensioneLotto)
+            .Select(a => new { a.Id, a.Note, a.ChangesetCoinvolti })
+            .ToListAsync();
+
+        if (lotto.Count == 0) return 0;
+
+        foreach (var riga in lotto)
+        {
+            // Stub agganciato al change tracker: aggiorna le due colonne senza rileggere l'entità
+            // intera (che si porterebbe dietro di nuovo Note e Changeset).
+            var stub = new Attivita { Id = riga.Id };
+            context.Attivita.Attach(stub);
+
+            // Stringa vuota (non null) anche quando non c'è contenuto: NULL significa
+            // "riga ancora da convertire" ed è la condizione usata qui sopra.
+            stub.NoteTesto = HtmlTextHelper.ToPlainText(riga.Note);
+            stub.ChangesetTesto = HtmlTextHelper.ToPlainText(riga.ChangesetCoinvolti);
+
+            context.Entry(stub).Property(x => x.NoteTesto).IsModified = true;
+            context.Entry(stub).Property(x => x.ChangesetTesto).IsModified = true;
+        }
+
+        await context.SaveChangesAsync();
+        return lotto.Count;
+    }
+
+    /// <summary>
+    /// Quante attività devono ancora essere convertite dal backfill del testo ricercabile.
+    /// </summary>
+    public async Task<int> ContaDaConvertireAsync()
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+        return await context.Attivita.CountAsync(a => a.NoteTesto == null);
+    }
+
+    #endregion
+
     #region Metodi Lookup
 
     /// <summary>
@@ -236,8 +296,13 @@ public class ActivityService
                 (a.UrlTicket != null && EF.Functions.Like(a.UrlTicket, like)) ||
                 (a.NumeroTicket != null && EF.Functions.Like(a.NumeroTicket, like)) ||
                 (a.Vedere != null && EF.Functions.Like(a.Vedere, like)) ||
-                (a.Note != null && EF.Functions.Like(a.Note, like)) ||
-                (a.ChangesetCoinvolti != null && EF.Functions.Like(a.ChangesetCoinvolti, like)) ||
+                // Note/Changeset: si cerca sul testo ripulito (pochi KB) invece che sull'HTML con
+                // gli screenshot (centinaia di KB). Finché il backfill non ha convertito una riga
+                // (NoteTesto NULL) si ricade sulla colonna originale, così non si perde nulla.
+                (a.NoteTesto != null && EF.Functions.Like(a.NoteTesto, like)) ||
+                (a.NoteTesto == null && a.Note != null && EF.Functions.Like(a.Note, like)) ||
+                (a.ChangesetTesto != null && EF.Functions.Like(a.ChangesetTesto, like)) ||
+                (a.ChangesetTesto == null && a.ChangesetCoinvolti != null && EF.Functions.Like(a.ChangesetCoinvolti, like)) ||
                 (a.UrlPatchRilasci != null && EF.Functions.Like(a.UrlPatchRilasci, like)) ||
                 (a.Versione != null && EF.Functions.Like(a.Versione, like)) ||
                 (a.CartellaDocumentazione != null && EF.Functions.Like(a.CartellaDocumentazione, like)) ||
@@ -363,8 +428,11 @@ public class ActivityService
                     .Where(a => idsLista.Contains(a.Id) && (
                         EF.Functions.Like(" " + a.Descrizione + " ", TodoLikePattern) ||
                         (a.UrlTicket != null && EF.Functions.Like(" " + a.UrlTicket + " ", TodoLikePattern)) ||
-                        (a.Note != null && EF.Functions.Like(" " + a.Note + " ", TodoLikePattern)) ||
-                        (a.ChangesetCoinvolti != null && EF.Functions.Like(" " + a.ChangesetCoinvolti + " ", TodoLikePattern))))
+                        // Testo ripulito, con fallback sulle righe non ancora convertite dal backfill
+                        (a.NoteTesto != null && EF.Functions.Like(" " + a.NoteTesto + " ", TodoLikePattern)) ||
+                        (a.NoteTesto == null && a.Note != null && EF.Functions.Like(" " + a.Note + " ", TodoLikePattern)) ||
+                        (a.ChangesetTesto != null && EF.Functions.Like(" " + a.ChangesetTesto + " ", TodoLikePattern)) ||
+                        (a.ChangesetTesto == null && a.ChangesetCoinvolti != null && EF.Functions.Like(" " + a.ChangesetCoinvolti + " ", TodoLikePattern))))
                     .Select(a => a.Id)
                     .ToListAsync()).ToHashSet();
 
@@ -436,8 +504,12 @@ public class ActivityService
             (criteri.UrlTicket && a.UrlTicket != null && EF.Functions.Like(a.UrlTicket, like)) ||
             (criteri.NumeroTicket && a.NumeroTicket != null && EF.Functions.Like(a.NumeroTicket, like)) ||
             (criteri.Vedere && a.Vedere != null && EF.Functions.Like(a.Vedere, like)) ||
-            (criteri.Note && a.Note != null && EF.Functions.Like(a.Note, like)) ||
-            (criteri.Changeset && a.ChangesetCoinvolti != null && EF.Functions.Like(a.ChangesetCoinvolti, like)) ||
+            // Vedi la nota in GetActivitiesAsync: testo ripulito, con fallback sulle righe
+            // non ancora convertite dal backfill.
+            (criteri.Note && a.NoteTesto != null && EF.Functions.Like(a.NoteTesto, like)) ||
+            (criteri.Note && a.NoteTesto == null && a.Note != null && EF.Functions.Like(a.Note, like)) ||
+            (criteri.Changeset && a.ChangesetTesto != null && EF.Functions.Like(a.ChangesetTesto, like)) ||
+            (criteri.Changeset && a.ChangesetTesto == null && a.ChangesetCoinvolti != null && EF.Functions.Like(a.ChangesetCoinvolti, like)) ||
             (criteri.UrlPatchRilasci && a.UrlPatchRilasci != null && EF.Functions.Like(a.UrlPatchRilasci, like)) ||
             (criteri.TestoCheckIn && a.TestoCheckIn != null && EF.Functions.Like(a.TestoCheckIn, like)) ||
             (criteri.Versione && a.Versione != null && EF.Functions.Like(a.Versione, like)) ||
@@ -479,8 +551,12 @@ public class ActivityService
                 .Where(a => idsLista.Contains(a.Id) && (
                     EF.Functions.Like(" " + a.Descrizione + " ", TodoLikePattern) ||
                     (a.UrlTicket != null && EF.Functions.Like(" " + a.UrlTicket + " ", TodoLikePattern)) ||
-                    (a.Note != null && EF.Functions.Like(" " + a.Note + " ", TodoLikePattern)) ||
-                    (a.ChangesetCoinvolti != null && EF.Functions.Like(" " + a.ChangesetCoinvolti + " ", TodoLikePattern))))
+                    // Anche il flag TODO gira sul testo ripulito, con fallback sulle righe
+                    // non ancora convertite: è una scansione che avviene a ogni caricamento griglia.
+                    (a.NoteTesto != null && EF.Functions.Like(" " + a.NoteTesto + " ", TodoLikePattern)) ||
+                    (a.NoteTesto == null && a.Note != null && EF.Functions.Like(" " + a.Note + " ", TodoLikePattern)) ||
+                    (a.ChangesetTesto != null && EF.Functions.Like(" " + a.ChangesetTesto + " ", TodoLikePattern)) ||
+                    (a.ChangesetTesto == null && a.ChangesetCoinvolti != null && EF.Functions.Like(" " + a.ChangesetCoinvolti + " ", TodoLikePattern))))
                 .Select(a => a.Id)
                 .ToListAsync()).ToHashSet();
             foreach (var d in lista)
@@ -590,6 +666,9 @@ public class ActivityService
             UrlTicket = dto.UrlTicket,
             NumeroTicket = dto.NumeroTicket,
             DataScadenzaTicket = dto.DataScadenzaTicket,
+            // Testo ricercabile: HTML e screenshot rimossi (vedi Attivita.NoteTesto)
+            NoteTesto = HtmlTextHelper.ToPlainText(dto.Note),
+            ChangesetTesto = HtmlTextHelper.ToPlainText(dto.ChangesetCoinvolti),
             ClienteId = dto.ClienteId,
             OreLavorate = dto.OreLavorate,
             Versione = dto.Versione,
@@ -653,6 +732,9 @@ public class ActivityService
         attivita.UrlTicket = dto.UrlTicket;
         attivita.NumeroTicket = dto.NumeroTicket;
         attivita.DataScadenzaTicket = dto.DataScadenzaTicket;
+        // Testo ricercabile tenuto allineato ai campi ricchi
+        attivita.NoteTesto = HtmlTextHelper.ToPlainText(dto.Note);
+        attivita.ChangesetTesto = HtmlTextHelper.ToPlainText(dto.ChangesetCoinvolti);
         attivita.ClienteId = dto.ClienteId;
         attivita.OreLavorate = dto.OreLavorate;
         attivita.Versione = dto.Versione;

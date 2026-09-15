@@ -184,6 +184,15 @@
         </div>
     }
 
+    @* ===== AVVISO CONVERSIONE TESTO RICERCABILE ===== *@
+    @if (!string.IsNullOrEmpty(messaggioTestoRicercabile))
+    {
+        <div class="alert alert-info alert-dismissible fade show py-2 mb-2" role="alert">
+            ⚙️ @messaggioTestoRicercabile
+            <button type="button" class="btn-close" @onclick="() => messaggioTestoRicercabile = string.Empty"></button>
+        </div>
+    }
+
     @* ===== AVVISO PULIZIA AUTOMATICA STORICO MODIFICHE ===== *@
     @if (!string.IsNullOrEmpty(messaggioHistoryPulita))
     {
@@ -1898,6 +1907,9 @@
     /// <summary>Messaggio (auto-scomparsa) della pulizia automatica dello storico modifiche all'avvio</summary>
     private string messaggioHistoryPulita = string.Empty;
 
+    /// <summary>Banner informativo sull'avanzamento della conversione del testo ricercabile.</summary>
+    private string messaggioTestoRicercabile = string.Empty;
+
     /// <summary>True se su disco c'è una bozza lasciata da un salvataggio fallito.</summary>
     private bool bozzaPresente = false;
 
@@ -2111,6 +2123,9 @@
 
             // Avvia in background la pulizia dello storico modifiche (non blocca l'avvio)
             _ = PulisciStoricoEditorInBackground();
+
+            // Converte a lotti le attività il cui testo ricercabile non è ancora stato calcolato
+            _ = ConvertiTestoRicercabileInBackground();
         }
         catch (Exception ex)
         {
@@ -2607,6 +2622,54 @@
     /// Elimina le voci più vecchie di NumeroMesiMantenimentoHistory mesi e, se ne elimina,
     /// mostra un avviso in testa al form che scompare automaticamente dopo qualche secondo.
     /// </summary>
+    /// <summary>
+    /// Popola a lotti `NoteTesto`/`ChangesetTesto` delle attività ancora da convertire (vedi
+    /// `ActivityService.AggiornaTestoRicercabileAsync`). Gira in background, a lotti, con una pausa
+    /// fra l'uno e l'altro: deve leggere i campi con gli screenshot, quindi non deve competere con
+    /// l'uso normale del programma. Se l'applicazione viene chiusa a metà riprende al prossimo avvio.
+    /// Durante la conversione la ricerca resta corretta perché ricade sulle colonne originali.
+    /// </summary>
+    private async Task ConvertiTestoRicercabileInBackground()
+    {
+        try
+        {
+            var daFare = await ActivityService.ContaDaConvertireAsync();
+            if (daFare == 0) return;
+
+            messaggioTestoRicercabile =
+                $"Ottimizzazione della ricerca in corso: {daFare} attività da convertire. " +
+                "Puoi continuare a lavorare, la ricerca funziona normalmente.";
+            await InvokeAsync(StateHasChanged);
+
+            var convertite = 0;
+            while (true)
+            {
+                // Lotto volutamente piccolo: ogni riga porta con sé l'HTML con gli screenshot,
+                // quindi 20 righe possono già essere diversi MB su una sola andata e ritorno.
+                var n = await ActivityService.AggiornaTestoRicercabileAsync(20);
+                if (n == 0) break;
+
+                convertite += n;
+                // Respiro fra un lotto e l'altro: l'ottimizzazione non deve rallentare l'uso normale.
+                await Task.Delay(1500);
+            }
+
+            messaggioTestoRicercabile =
+                $"Ottimizzazione della ricerca completata ({convertite} attività convertite).";
+            await InvokeAsync(StateHasChanged);
+
+            await Task.Delay(12000);
+            messaggioTestoRicercabile = string.Empty;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            // Un errore qui non deve disturbare: la ricerca continua a funzionare sulle colonne
+            // originali e il lavoro riprende al prossimo avvio.
+            messaggioTestoRicercabile = string.Empty;
+        }
+    }
+
     private async Task PulisciStoricoEditorInBackground()
     {
         try
@@ -3703,16 +3766,11 @@
     /// </summary>
     private async Task<List<WorkActivityDto>> OnRicercaAvanzata(RicercaAvanzataCriteri criteri)
     {
-        try
-        {
-            criteri.SoloTodo = filtroSoloTodo;
-            return await ActivityService.RicercaAvanzataAsync(criteri, isAdminMode);
-        }
-        catch (Exception ex)
-        {
-            MostraMessaggio($"Errore nella ricerca: {ex.Message}", true);
-            return new List<WorkActivityDto>();
-        }
+        // NIENTE try/catch qui: l'eccezione deve arrivare a SearchModal, che la mostra al suo
+        // interno. Catturandola e restituendo una lista vuota, la modale diceva "Nessun risultato
+        // trovato" mentre il vero errore (es. timeout) compariva dietro, visibile solo chiudendo.
+        criteri.SoloTodo = filtroSoloTodo;
+        return await ActivityService.RicercaAvanzataAsync(criteri, isAdminMode);
     }
 
     /// <summary>
@@ -4852,22 +4910,7 @@
     /// Rimuove i tag HTML da una stringa e decodifica le entità HTML di base.
     /// Usato per la generazione di testi plain da campi che possono contenere HTML.
     /// </summary>
-    private static string HtmlToPlainText(string? html)
-    {
-        if (string.IsNullOrEmpty(html)) return string.Empty;
-        // Sostituisce <br>, </p> e </div> con newline (i contenteditable usano <div> per gli a capo)
-        html = System.Text.RegularExpressions.Regex.Replace(html, @"<br\s*/?>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        html = System.Text.RegularExpressions.Regex.Replace(html, @"</p>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        html = System.Text.RegularExpressions.Regex.Replace(html, @"</div>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        // Rimuove tutti gli altri tag
-        html = System.Text.RegularExpressions.Regex.Replace(html, @"<[^>]+>", string.Empty);
-        // Decodifica entità HTML di base
-        html = html.Replace("&amp;", "&").Replace("&lt;", "<").Replace("&gt;", ">")
-                   .Replace("&nbsp;", " ").Replace("&quot;", "\"").Replace("&#39;", "'");
-        // Normalizza newline multipli consecutivi (max 2) per pulizia
-        html = System.Text.RegularExpressions.Regex.Replace(html, @"\n{3,}", "\n\n");
-        return html;
-    }
+    private static string HtmlToPlainText(string? html) => HtmlTextHelper.ToPlainText(html);
 
     #endregion
 

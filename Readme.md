@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-5.4-blue)
+![Version](https://img.shields.io/badge/version-5.5-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -78,7 +78,7 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
   },
   "AppSettings": {
     "AppName": "Work Activity Tracker",
-    "Version": "5.4",
+    "Version": "5.5",
     "NumeroMesiMantenimentoHistory": 3,
     "MostraModalitaAdmin": true,
     "PrivacyMode": false,
@@ -87,7 +87,8 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
     "TmpPatchDir": "C:\\TmpPatch\\",
     "GiorniPreavvisoScadenzaArancione": 5,
     "GiorniPreavvisoScadenzaRosso": 2,
-    "EsportaAttivitaCollegateInPdf": true
+    "EsportaAttivitaCollegateInPdf": true,
+    "TimeoutQuerySecondi": 120
   }
 }
 ```
@@ -99,6 +100,8 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
 > `GiorniPreavvisoScadenzaArancione` (default 5) / `GiorniPreavvisoScadenzaRosso` (default 2) (v5.3): giorni di preavviso entro i quali una riga della griglia con "Scadenza ticket" valorizzata viene evidenziata in arancione chiaro o in rosso. Le scadenze già passate usano un rosso più marcato. Un valore `0` o negativo disattiva il livello corrispondente.
 >
 > `EsportaAttivitaCollegateInPdf` (default `true`) (v5.3): se `true`, l'export PDF di una singola attività include anche le attività collegate dalla catena "Proseguo l'attività"; se `false` esporta la sola attività selezionata.
+>
+> `TimeoutQuerySecondi` (default 30) (v5.5): timeout in secondi dei comandi SQL. Il valore predefinito di SqlClient è 30 secondi e sugli archivi grandi la ricerca può superarlo. Viene letto all'avvio: per renderlo effettivo occorre riavviare l'applicazione.
 
 ### Eseguire l'applicazione
 
@@ -487,6 +490,7 @@ SQL Server Database
 | `PdfExportService` | Singleton | Export PDF delle attività via WebView2 composition controller (v5.2) |
 | `ReadmeTemplateService` | Singleton | Carica i template readme da `ReadmeTmplates.json` (v5.2) |
 | `BozzaAttivitaService` | Singleton | Salvataggio di emergenza dell'attività su file quando il DB non risponde (v5.3) |
+| `HtmlTextHelper` | statico | Conversione HTML → testo semplice, condivisa fra UI e servizi (v5.5) |
 
 ### Script JS in `wwwroot/index.html`
 
@@ -537,6 +541,8 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 | `MigrateToV5.2.sql` | Aggiunta colonna `Lingua` (IT/EN, default `IT`) in `Clienti` |
 | `MigrateToV5.3.sql` | Aggiunta `DataScadenzaTicket` in `Attivita` (+ indice filtrato `IX_Attivita_DataScadenzaTicket`) e `NotaCompletamento` in `TodoItems` |
 | `MigrateToV5.4.sql` | Aggiunta colonna `Note` (NVARCHAR(MAX)) in `Ambienti` |
+| `MigrateToV5.5.sql` | Aggiunta `NoteTesto` e `ChangesetTesto` in `Attivita` (+ indice filtrato `IX_Attivita_NoteTesto_DaConvertire`) |
+| _(script una tantum)_ | `PuliziaLogClientiAmbienti.sql` — **non è una migration**: accorcia le righe già presenti in `ClientiAmbienti_Log`, dove veniva salvato "Come collegarsi" per intero |
 
 ---
 
@@ -556,6 +562,17 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ---
 
 ## Changelog
+
+### v5.5
+- ⚡ **Gestione Clienti si apre subito**: la griglia non carica più "Come collegarsi" e "Dati ambiente" (i campi con gli screenshot in base64) per tutte le righe. Erano decine di MB trasferiti a ogni apertura — su database raggiunto via VPN, i 30-60 secondi di attesa prima di vedere l'elenco. I campi ricchi vengono letti **on-demand** solo per la riga selezionata, e per il solo cliente esportato in caso di PDF.
+- ⚡ **Ricerca molto più veloce**: nuove colonne `Attivita.NoteTesto` e `ChangesetTesto` con Note e Changeset ripuliti da tag e immagini. La ricerca e il calcolo del flag TODO girano su queste invece che sull'HTML: misurato, circa il **99% del volume da scandire erano screenshot**. Un indice tradizionale non era applicabile — `NVARCHAR(MAX)` non può essere colonna chiave di un indice.
+- 🔄 **Conversione dei dati esistenti automatica**: al primo avvio parte in background, a lotti e riprendibile fra un avvio e l'altro, con un banner di avanzamento. Durante la conversione la ricerca ricade sulle colonne originali, quindi **nessun risultato viene perso**.
+- ⏱️ **Timeout SQL configurabile** con la nuova chiave `TimeoutQuerySecondi` (default 30, impostata a 120): prima era fisso al valore predefinito di SqlClient e la ricerca sugli archivi grandi ci sbatteva contro.
+- 🐛 **Ricerca Avanzata, errori visibili**: un timeout della query veniva intercettato fuori dalla finestra, che mostrava "Nessun risultato trovato" mentre l'errore vero compariva dietro, leggibile solo chiudendo. Ora l'errore è mostrato dentro la finestra, con i suggerimenti per rimediare.
+- 🧹 **Log ambienti cliente più leggero**: "Come collegarsi" non viene più scritto per intero nel log a ogni salvataggio, duplicando tutti gli screenshot. Per le righe già presenti c'è lo script una tantum `PuliziaLogClientiAmbienti.sql`.
+- 🧼 **Build senza warning**: `DisplayAlert` obsoleto sostituito con `DisplayAlertAsync`, rotellina di caricamento collegata in Appunti, rimosso un campo inutilizzato nel Calendario.
+- 🆕 Nuovo helper condiviso `Services/HtmlTextHelper.cs`: `HtmlToPlainText` esisteva in due copie leggermente diverse, ora è una sola.
+- 🆕 Nuova migrazione DB: `MigrateToV5.5.sql`.
 
 ### v5.4
 - ⏰ **Scadenza dei ticket**: nuovo campo facoltativo "Scadenza ticket" nel form. Le righe della griglia si colorano all'avvicinarsi della scadenza (arancione entro 5 giorni, rosso entro 2, rosso marcato se già passata; soglie configurabili in `appsettings.json`). Nuova spunta **"⏳ Visualizza ticket in scadenza"** che mostra i soli TODO con scadenza valorizzata, ordinati dalla scadenza più vicina.
@@ -807,7 +824,8 @@ WorkActivityTracker/
 │   ├── CalendarioService.cs              # (v4.2) CRUD eventi calendario
 │   ├── PdfExportService.cs               # (v5.2) Export PDF via WebView2
 │   ├── ReadmeTemplateService.cs          # (v5.2) Carica ReadmeTmplates.json
-│   └── BozzaAttivitaService.cs           # (v5.3) Bozza di emergenza su file (VPN caduta)
+│   ├── BozzaAttivitaService.cs           # (v5.3) Bozza di emergenza su file (VPN caduta)
+│   └── HtmlTextHelper.cs                 # (v5.5) HTML → testo semplice (unica implementazione)
 ├── wwwroot/
 │   ├── css/app.css                       # Stili custom (font 13px, TODO, editor toolbar)
 │   └── index.html                        # Entry point HTML + script JS custom

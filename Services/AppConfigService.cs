@@ -63,6 +63,15 @@ public class AppConfigService
         _configuration.GetValue<int>("AppSettings:NumeroMesiMantenimentoHistory", 3);
 
     /// <summary>
+    /// Timeout in secondi dei comandi SQL. Default 30 (lo stesso di SqlClient). Va aumentato sugli
+    /// archivi grandi, dove la ricerca con LIKE su Note/ChangesetCoinvolti (NVARCHAR(MAX) con
+    /// screenshot in base64) può superare i 30 secondi. Letto all'avvio in MauiProgram: per renderlo
+    /// effettivo serve riavviare l'applicazione. Un valore <= 0 viene riportato a 30.
+    /// </summary>
+    public int TimeoutQuerySecondi =>
+        _configuration.GetValue<int>("AppSettings:TimeoutQuerySecondi", 30);
+
+    /// <summary>
     /// Se true, l'export PDF di una singola attività include anche le attività collegate dalla
     /// catena "**** Proseguo l'attività N ... ****" presente nelle Note. Se false esporta la sola
     /// attività selezionata. Default: true.

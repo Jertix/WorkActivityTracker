@@ -23,6 +23,12 @@ public class ClienteAmbienteService
 
     /// <summary>
     /// Recupera tutti gli ambienti per tutti i clienti, ordinati per nome cliente e ambiente.
+    ///
+    /// Proiezione **LEGGERA**: `ComeCollegarsi` e `DatiAmbiente` (NVARCHAR(MAX) con gli screenshot
+    /// incollati, in base64) NON vengono caricati. La griglia non li mostra, e trasferirli per tutte
+    /// le righe significava spostare decine di MB a ogni apertura della finestra — su un database
+    /// raggiunto via VPN erano i 30-60 secondi di attesa prima di vedere l'elenco.
+    /// Il contenuto completo di una riga si ottiene on-demand con <see cref="GetByIdAsync"/>.
     /// </summary>
     public async Task<List<ClienteAmbienteDto>> GetAllAsync()
     {
@@ -40,8 +46,6 @@ public class ClienteAmbienteService
                         ApplicationServer = ca.ApplicationServer,
                         DatabaseServer = ca.DatabaseServer,
                         PersoneRiferimento = ca.PersoneRiferimento,
-                        ComeCollegarsi = ca.ComeCollegarsi,
-                        DatiAmbiente = ca.DatiAmbiente,
                         DirectoryInstallazione = ca.DirectoryInstallazione,
                         InformazioniPool = ca.InformazioniPool,
                         TipoVersione = ca.TipoVersione,
@@ -79,6 +83,68 @@ public class ClienteAmbienteService
             .OrderBy(d => (d.NomeCliente ?? string.Empty).Trim(), StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(d => (d.Ambiente ?? string.Empty).Trim(), StringComparer.CurrentCultureIgnoreCase)
             .ToList();
+    }
+
+    /// <summary>
+    /// Recupera il record COMPLETO di un singolo ambiente cliente, campi ricchi inclusi.
+    /// Da usare quando si seleziona una riga della griglia: si paga il trasferimento degli
+    /// screenshot solo per la riga che serve davvero.
+    /// </summary>
+    public async Task<ClienteAmbienteDto?> GetByIdAsync(int id)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+
+        return await (from ca in context.ClientiAmbienti
+                      join c in context.Clienti on ca.ClienteId equals c.Id
+                      where ca.Id == id
+                      select new ClienteAmbienteDto
+                      {
+                          Id = ca.Id,
+                          ClienteId = ca.ClienteId,
+                          NomeCliente = c.Nome,
+                          Ambiente = ca.Ambiente,
+                          ApplicationServer = ca.ApplicationServer,
+                          DatabaseServer = ca.DatabaseServer,
+                          PersoneRiferimento = ca.PersoneRiferimento,
+                          ComeCollegarsi = ca.ComeCollegarsi,
+                          DatiAmbiente = ca.DatiAmbiente,
+                          DirectoryInstallazione = ca.DirectoryInstallazione,
+                          InformazioniPool = ca.InformazioniPool,
+                          TipoVersione = ca.TipoVersione,
+                          NumeroVersione = ca.NumeroVersione,
+                          DataModifica = ca.DataModifica
+                      }).FirstOrDefaultAsync();
+    }
+
+    /// <summary>
+    /// Recupera i record COMPLETI (campi ricchi inclusi) di tutti gli ambienti di UN cliente,
+    /// ordinati per nome ambiente. Usato dall'export PDF del cliente.
+    /// </summary>
+    public async Task<List<ClienteAmbienteDto>> GetByClienteAsync(int clienteId)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+
+        return await (from ca in context.ClientiAmbienti
+                      join c in context.Clienti on ca.ClienteId equals c.Id
+                      where ca.ClienteId == clienteId
+                      orderby ca.Ambiente
+                      select new ClienteAmbienteDto
+                      {
+                          Id = ca.Id,
+                          ClienteId = ca.ClienteId,
+                          NomeCliente = c.Nome,
+                          Ambiente = ca.Ambiente,
+                          ApplicationServer = ca.ApplicationServer,
+                          DatabaseServer = ca.DatabaseServer,
+                          PersoneRiferimento = ca.PersoneRiferimento,
+                          ComeCollegarsi = ca.ComeCollegarsi,
+                          DatiAmbiente = ca.DatiAmbiente,
+                          DirectoryInstallazione = ca.DirectoryInstallazione,
+                          InformazioniPool = ca.InformazioniPool,
+                          TipoVersione = ca.TipoVersione,
+                          NumeroVersione = ca.NumeroVersione,
+                          DataModifica = ca.DataModifica
+                      }).ToListAsync();
     }
 
     /// <summary>
@@ -305,7 +371,19 @@ public class ClienteAmbienteService
     private static string Serialize(ClienteAmbienteDto d) =>
         $"Cliente: {d.NomeCliente} | Ambiente: {d.Ambiente} | "
       + $"AppServer: {d.ApplicationServer} | DbServer: {d.DatabaseServer} | "
-      + $"Persone: {d.PersoneRiferimento} | ComeCollegarsi: {d.ComeCollegarsi} | "
+      + $"Persone: {d.PersoneRiferimento} | ComeCollegarsi: {TroncaPerLog(d.ComeCollegarsi)} | "
       + $"DirInstallazione: {d.DirectoryInstallazione} | InfoPool: {d.InformazioniPool} | "
       + $"TipoVersione: {d.TipoVersione} | NumeroVersione: {d.NumeroVersione}";
+
+    /// <summary>
+    /// Riduce un campo ricco a una riga breve per il log. `ComeCollegarsi` è HTML con gli
+    /// screenshot in base64: scriverlo per intero in VecchioValore E NuovoValore duplicava
+    /// tutte le immagini nella tabella di log a ogni singolo salvataggio.
+    /// </summary>
+    private static string TroncaPerLog(string? valore)
+    {
+        if (string.IsNullOrWhiteSpace(valore)) return "-";
+        var unaRiga = valore.Replace("\r\n", " ").Replace("\n", " ").Trim();
+        return unaRiga.Length <= 200 ? unaRiga : unaRiga.Substring(0, 200) + "… [troncato]";
+    }
 }

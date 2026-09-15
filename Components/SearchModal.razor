@@ -179,6 +179,24 @@
                         </div>
                     }
 
+                    @* ===== ERRORE DI RICERCA ===== *@
+                    @if (!string.IsNullOrEmpty(erroreRicerca))
+                    {
+                        <div class="alert alert-danger py-2" role="alert">
+                            <strong>⚠️ La ricerca non è stata completata.</strong>
+                            <div class="small mt-1">@erroreRicerca</div>
+                            @if (erroreRicerca.Contains("Timeout", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="small mt-2">
+                                    Suggerimenti: restringi i campi in cui cercare con <strong>⚙️ Ricerca avanzata</strong>
+                                    (soprattutto togliendo "Descrizione dettagliata" e "Elenco Changeset", che contengono
+                                    gli screenshot e sono i più lenti da scandire), oppure aumenta
+                                    <code>TimeoutQuerySecondi</code> in <code>appsettings.json</code> e riavvia il programma.
+                                </div>
+                            }
+                        </div>
+                    }
+
                     @* ===== GRIGLIA RISULTATI CON NAVIGAZIONE ===== *@
                     <div class="d-flex">
                         <div class="flex-grow-1">
@@ -237,6 +255,10 @@
                                                             <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                                                             Ricerca in corso, attendere…
                                                         </span>
+                                                    }
+                                                    else if (!string.IsNullOrEmpty(erroreRicerca))
+                                                    {
+                                                        <span class="text-danger">Ricerca non completata (vedi l'errore qui sopra)</span>
                                                     }
                                                     else if (ricercaEseguita)
                                                     {
@@ -373,6 +395,13 @@
     /// durante l'attesa: la ricerca è asincrona e può metterci qualche secondo sugli storici grandi.
     /// </summary>
     private bool isRicercaInCorso = false;
+
+    /// <summary>
+    /// Messaggio dell'ultimo errore di ricerca (tipicamente un timeout). Va mostrato QUI dentro:
+    /// prima l'eccezione veniva intercettata fuori dalla modale e la griglia diceva "Nessun
+    /// risultato trovato", con l'errore vero visibile solo chiudendo la finestra.
+    /// </summary>
+    private string erroreRicerca = string.Empty;
     private bool mostraFiltriAvanzati = false;
 
     // Filtri campi di ricerca (default tutti selezionati)
@@ -519,6 +548,7 @@
         // "Nessun risultato trovato" per tutto il tempo della query, salvo poi popolarsi.
         isRicercaInCorso = true;
         ricercaEseguita = false;
+        erroreRicerca = string.Empty;
         Risultati = new List<WorkActivityDto>();
         StateHasChanged();
 
@@ -526,11 +556,19 @@
         {
             Risultati = await OnRicerca(criteri);
         }
+        catch (Exception ex)
+        {
+            erroreRicerca = ex.Message;
+            Risultati = new List<WorkActivityDto>();
+        }
         finally
         {
             isRicercaInCorso = false;
             ricercaEseguita = true;
         }
+
+        // Con un errore non ha senso selezionare né scorrere alcun risultato.
+        if (!string.IsNullOrEmpty(erroreRicerca)) return;
 
         // Seleziona automaticamente il primo risultato (carica il dettaglio e scrolla).
         if (Risultati.Any())
@@ -860,19 +898,7 @@
     /// <summary>
     /// Rimuove i tag HTML e decodifica le entità. Usato per i campi che contengono HTML (Note, Changeset).
     /// </summary>
-    private static string HtmlToPlainText(string? html)
-    {
-        if (string.IsNullOrEmpty(html)) return string.Empty;
-        // <br>, </p>, </div> → newline
-        var testo = System.Text.RegularExpressions.Regex.Replace(html, @"<br\s*/?>|</p>|</div>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        // Rimuovi tutti i restanti tag HTML
-        testo = System.Text.RegularExpressions.Regex.Replace(testo, @"<[^>]+>", "");
-        // Decodifica entità HTML
-        testo = System.Net.WebUtility.HtmlDecode(testo);
-        // Normalizza righe vuote multiple
-        testo = System.Text.RegularExpressions.Regex.Replace(testo, @"\n{3,}", "\n\n");
-        return testo.Trim();
-    }
+    private static string HtmlToPlainText(string? html) => HtmlTextHelper.ToPlainText(html);
 
     /// <summary>
     /// Evidenzia il testo cercato in rosso (HTML) - usato solo nel dettaglio.

@@ -56,6 +56,20 @@ public class Attivita
     public DateTime? DataScadenzaTicket { get; set; }
 
     /// <summary>
+    /// Versione in solo testo di <see cref="Note"/> (HTML e screenshot base64 rimossi).
+    /// È la colonna su cui gira la ricerca: Note può pesare centinaia di KB per riga a causa
+    /// delle immagini incollate, questa resta di pochi KB. Mantenuta in Add/Update tramite
+    /// <c>HtmlTextHelper.ToPlainText</c>. NULL = riga non ancora convertita (vedi il backfill
+    /// <c>ActivityService.AggiornaTestoRicercabileAsync</c>); stringa vuota = niente da cercare.
+    /// </summary>
+    public string? NoteTesto { get; set; }
+
+    /// <summary>
+    /// Versione in solo testo di <see cref="ChangesetCoinvolti"/>. Vedi <see cref="NoteTesto"/>.
+    /// </summary>
+    public string? ChangesetTesto { get; set; }
+
+    /// <summary>
     /// ID del cliente associato (foreign key verso Clienti)
     /// </summary>
     public int? ClienteId { get; set; }

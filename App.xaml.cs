@@ -52,7 +52,7 @@ public partial class App : Application
             var page = Application.Current?.Windows.FirstOrDefault()?.Page;
             if (page != null)
             {
-                bool esci = await page.DisplayAlert(
+                bool esci = await page.DisplayAlertAsync(
                     "Modifiche non salvate",
                     "Ci sono modifiche non salvate nel form attività. Vuoi uscire senza salvare?",
                     "Sì, esci senza salvare",

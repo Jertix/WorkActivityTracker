@@ -864,8 +864,15 @@
         datiAmbienteEditorNeedsUpdate = true;
     }
 
-    private void Seleziona(ClienteAmbienteDto r)
+    /// <summary>
+    /// Porta nel form la riga selezionata. La griglia è caricata in forma leggera (senza
+    /// "Come collegarsi" e "Dati ambiente", che contengono gli screenshot), quindi i due campi
+    /// ricchi vengono letti ORA con una query mirata sul singolo record.
+    /// </summary>
+    private async Task Seleziona(ClienteAmbienteDto r)
     {
+        messaggio = string.Empty;
+
         corrente = new ClienteAmbienteDto
         {
             Id = r.Id,
@@ -877,19 +884,50 @@
             ApplicationServer = r.ApplicationServer,
             DatabaseServer = r.DatabaseServer,
             PersoneRiferimento = r.PersoneRiferimento,
-            ComeCollegarsi = r.ComeCollegarsi,
-            DatiAmbiente = r.DatiAmbiente,
             DirectoryInstallazione = r.DirectoryInstallazione,
             InformazioniPool = r.InformazioniPool,
             DataModifica = r.DataModifica,
             UltimoUtente = r.UltimoUtente
         };
-        messaggio = string.Empty;
+
+        await CaricaCampiRicchiAsync(r.Id);
+
         collegamentoEditorNeedsUpdate = true;
         datiAmbienteEditorNeedsUpdate = true;
     }
 
-    private void Clona(ClienteAmbienteDto r)
+    /// <summary>
+    /// Legge dal database "Come collegarsi" e "Dati ambiente" del record indicato e li riversa
+    /// in <c>corrente</c>. Mostra la rotellina della griglia perché su una riga con molti
+    /// screenshot, via VPN, il trasferimento può richiedere qualche secondo.
+    /// </summary>
+    private async Task CaricaCampiRicchiAsync(int id)
+    {
+        if (id <= 0) return;
+
+        isLoading = true;
+        StateHasChanged();
+        try
+        {
+            var completo = await ClienteAmbienteService.GetByIdAsync(id);
+            corrente.ComeCollegarsi = completo?.ComeCollegarsi;
+            corrente.DatiAmbiente = completo?.DatiAmbiente;
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Errore nel caricamento del dettaglio: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    /// <summary>
+    /// Clona la riga nel form come nuovo record. I campi ricchi vengono letti dal database
+    /// (vedi <see cref="Seleziona"/>) prima di azzerare l'Id.
+    /// </summary>
+    private async Task Clona(ClienteAmbienteDto r)
     {
         corrente = new ClienteAmbienteDto
         {
@@ -902,12 +940,14 @@
             ApplicationServer = r.ApplicationServer,
             DatabaseServer = r.DatabaseServer,
             PersoneRiferimento = r.PersoneRiferimento,
-            ComeCollegarsi = r.ComeCollegarsi,
-            DatiAmbiente = r.DatiAmbiente,
             DirectoryInstallazione = r.DirectoryInstallazione,
             InformazioniPool = r.InformazioniPool,
             DataModifica = null
         };
+
+        // Il record sorgente è r.Id; corrente.Id resta 0 perché è un nuovo inserimento.
+        await CaricaCampiRicchiAsync(r.Id);
+
         MostraMessaggio("Record clonato nel form. Modifica l'ambiente e premi Salva per creare il nuovo record.", false);
         collegamentoEditorNeedsUpdate = true;
         datiAmbienteEditorNeedsUpdate = true;
@@ -1274,11 +1314,9 @@
     {
         try
         {
-            // Tutti gli ambienti dello stesso cliente, in ordine di nome ambiente.
-            var ambientiCliente = righe
-                .Where(r => r.ClienteId == riga.ClienteId)
-                .OrderBy(r => r.Ambiente)
-                .ToList();
+            // Tutti gli ambienti dello stesso cliente, con i campi ricchi: la griglia è leggera,
+            // quindi "Come collegarsi" e "Dati ambiente" vanno riletti dal database.
+            var ambientiCliente = await ClienteAmbienteService.GetByClienteAsync(riga.ClienteId);
 
             if (ambientiCliente.Count == 0)
             {

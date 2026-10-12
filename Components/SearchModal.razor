@@ -333,11 +333,21 @@
                 
                 @* ===== FOOTER ===== *@
                 <div class="modal-footer">
+                    @if (!string.IsNullOrEmpty(messaggioNuovaFinestra))
+                    {
+                        <span class="me-auto small @(erroreNuovaFinestra ? "text-danger" : "text-muted")">@messaggioNuovaFinestra</span>
+                    }
                     <button type="button" class="btn btn-secondary" @onclick="Chiudi">
                         ❌ Chiudi
                     </button>
                     @if (indiceSelezionato >= 0 && indiceSelezionato < Risultati.Count)
                     {
+                        @* v5.6: apre l'attività in una seconda istanza (sola consultazione); la modale
+                           resta aperta, così se ne possono aprire più di una per confrontarle *@
+                        <button type="button" class="btn btn-outline-primary btn-lg" @onclick="ApriInNuovaFinestra"
+                                title="Apre l'attività selezionata in un'altra finestra del programma (sola consultazione), per confrontarla con quella su cui stai lavorando">
+                            <i class="bi bi-window-stack me-1"></i>Apri selezionato in nuova finestra
+                        </button>
                         <button type="button" class="btn btn-success btn-lg" @onclick="SelezionaEChiudi">
                             ✅ Seleziona
                         </button>
@@ -377,6 +387,13 @@
     [Parameter]
     public EventCallback<WorkActivityDto> OnSeleziona { get; set; }
 
+    /// <summary>
+    /// Apre l'elemento selezionato in una seconda istanza del programma (v5.6). Le eccezioni
+    /// risalgono qui e sono mostrate nel footer della modale.
+    /// </summary>
+    [Parameter]
+    public EventCallback<WorkActivityDto> OnApriInNuovaFinestra { get; set; }
+
     /// <summary>Indica se la modalità admin è attiva (mostra colonna Utente)</summary>
     [Parameter]
     public bool IsAdminMode { get; set; }
@@ -395,6 +412,10 @@
     /// durante l'attesa: la ricerca è asincrona e può metterci qualche secondo sugli storici grandi.
     /// </summary>
     private bool isRicercaInCorso = false;
+
+    /// <summary>Esito dell'ultimo "Apri selezionato in nuova finestra", mostrato nel footer.</summary>
+    private string messaggioNuovaFinestra = string.Empty;
+    private bool erroreNuovaFinestra = false;
 
     /// <summary>
     /// Messaggio dell'ultimo errore di ricerca (tipicamente un timeout). Va mostrato QUI dentro:
@@ -763,8 +784,31 @@
         lastRenderedId = -1;
         dettaglioCorrente = null;
         cacheDettagli.Clear();
+        messaggioNuovaFinestra = string.Empty;
 
         await OnChiudi.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Apre l'attività selezionata in una finestra di confronto. La modale resta aperta: si
+    /// possono aprire più risultati, ciascuno nella propria finestra.
+    /// </summary>
+    private async Task ApriInNuovaFinestra()
+    {
+        if (indiceSelezionato < 0 || indiceSelezionato >= Risultati.Count) return;
+
+        var selezionato = Risultati[indiceSelezionato];
+        try
+        {
+            await OnApriInNuovaFinestra.InvokeAsync(selezionato);
+            erroreNuovaFinestra = false;
+            messaggioNuovaFinestra = $"Apertura dell'attività ID {selezionato.Id} in una nuova finestra…";
+        }
+        catch (Exception ex)
+        {
+            erroreNuovaFinestra = true;
+            messaggioNuovaFinestra = $"Impossibile aprire la nuova finestra: {ex.Message}";
+        }
     }
 
     private async Task SelezionaEChiudi()

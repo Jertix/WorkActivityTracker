@@ -85,7 +85,13 @@ public class Attivita
     /// </summary>
     [MaxLength(200)]
     public string? Versione { get; set; }
-    
+
+    /// <summary>
+    /// Software su cui si è lavorato (foreign key verso Software). NULL per Permesso/Ferie
+    /// e per i tipi personalizzati, dove la combo non compare.
+    /// </summary>
+    public int? SoftwareId { get; set; }
+
     /// <summary>
     /// Riferimenti esterni (es: "vedere email", "vedere chat Teams")
     /// </summary>
@@ -135,7 +141,10 @@ public class Attivita
     
     [ForeignKey("ClienteId")]
     public virtual Cliente? Cliente { get; set; }
-    
+
+    [ForeignKey("SoftwareId")]
+    public virtual SoftwareItem? Software { get; set; }
+
     /// <summary>
     /// Collezione dei congelati associati a questa attività (relazione N:N)
     /// </summary>
@@ -798,6 +807,56 @@ public class TipoAttivitaLog
 }
 
 /// <summary>
+/// Software su cui si lavora (combo "Software" del form attività). Lista CONDIVISA fra tutti
+/// gli utenti; il valore di default è <c>AppSettings:NomeProgramma</c>, garantito all'avvio da
+/// <c>SoftwareService.EnsureSoftwareDefaultAsync</c>.
+/// </summary>
+[Table("Software")]
+public class SoftwareItem
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(100)]
+    public string Nome { get; set; } = string.Empty;
+
+    /// <summary>Ordine di visualizzazione nel dropdown</summary>
+    public int Ordine { get; set; } = 99;
+
+    /// <summary>False = eliminato (soft delete): le attività che lo usano continuano a mostrarne il nome.</summary>
+    public bool Attivo { get; set; } = true;
+}
+
+/// <summary>
+/// Log delle modifiche alla lista dei software per tracciabilità.
+/// </summary>
+[Table("Software_Log")]
+public class SoftwareLog
+{
+    [Key]
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(100)]
+    public string NomeUtente { get; set; } = string.Empty;
+
+    /// <summary>Tipo di azione: Nuovo, Modifica, Elimina, Ripristina</summary>
+    [Required]
+    [MaxLength(20)]
+    public string AzioneSvolta { get; set; } = string.Empty;
+
+    [MaxLength(100)]
+    public string? NomeValore { get; set; }
+
+    public string? VecchioValore { get; set; }
+
+    public string? NuovoValore { get; set; }
+
+    public DateTime Timestamp { get; set; } = DateTime.Now;
+}
+
+/// <summary>
 /// Evento del calendario con avviso configurabile
 /// </summary>
 [Table("EventiCalendario")]
@@ -932,6 +991,11 @@ public class WorkActivityDto
     public string? ClienteNome { get; set; }
     public decimal OreLavorate { get; set; }
     public string? Versione { get; set; }
+
+    /// <summary>Software su cui si è lavorato (v5.6). Il nome è risolto dal service per la griglia.</summary>
+    public int? SoftwareId { get; set; }
+    public string? SoftwareNome { get; set; }
+
     public List<int> AmbientiSelezionatiIds { get; set; } = new();
     public string? Vedere { get; set; }
     public string? Note { get; set; }

@@ -100,6 +100,9 @@ public static class MauiProgram
         // TipiAttivitaService: Scoped per la gestione dei tipi attività personalizzati
         builder.Services.AddScoped<TipiAttivitaService>();
 
+        // SoftwareService: Scoped per la lista software condivisa (combo "Software", v5.6)
+        builder.Services.AddScoped<SoftwareService>();
+
         // CalendarioService: Scoped per la gestione degli eventi del calendario
         builder.Services.AddScoped<CalendarioService>();
 

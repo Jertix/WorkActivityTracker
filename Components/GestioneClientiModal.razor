@@ -49,6 +49,14 @@
                                         <span class="visually-hidden">Caricamento...</span>
                                     </div>
                                 }
+                                else if (isAggiornamento)
+                                {
+                                    <span class="small text-muted d-flex align-items-center gap-1"
+                                          title="L'elenco mostrato è quello dell'apertura precedente: è in corso il ricaricamento dal database">
+                                        <span class="spinner-border spinner-border-sm text-secondary" role="status"></span>
+                                        aggiornamento…
+                                    </span>
+                                }
                                 <button class="btn btn-success btn-sm" @onclick="Nuovo" disabled="@isSaving">
                                     ➕ Nuovo
                                 </button>
@@ -102,24 +110,33 @@
                                                             }
                                                             else
                                                             {
-                                                                <text>🧾</text>
+                                                                <i class="bi bi-filetype-pdf"></i>
                                                             }
                                                         </button>
-                                                        <button class="btn btn-sm btn-primary me-1"
+                                                        <button class="btn btn-sm btn-outline-info me-1"
                                                                 @onclick="() => Clona(r)"
                                                                 @onclick:stopPropagation="true"
                                                                 title="Clona questo record nel form">
-                                                            🗐
+                                                            <i class="bi bi-copy"></i>
                                                         </button>
-                                                        <button class="btn btn-sm btn-danger"
+                                                        <button class="btn btn-sm btn-outline-danger"
                                                                 @onclick="() => ChiediElimina(r)"
                                                                 @onclick:stopPropagation="true"
                                                                 title="Elimina">
-                                                            🗑️
+                                                            <i class="bi bi-trash"></i>
                                                         </button>
                                                     </td>
                                                 </tr>
                                             }
+                                        }
+                                        else if (!listaCaricata && isLoading)
+                                        {
+                                            <tr>
+                                                <td colspan="6" class="text-center text-muted py-4">
+                                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                    Caricamento elenco in corso, attendere…
+                                                </td>
+                                            </tr>
                                         }
                                         else
                                         {
@@ -149,11 +166,11 @@
                         <button class="btn btn-outline-success btn-sm" @onclick="EsportaElencoXlsx"
                                 disabled="@IsExporting"
                                 title="Esporta l'elenco degli ambienti cliente in formato Excel (.xlsx)">
-                            📊 Esporta elenco XLSX
+                            <i class="bi bi-filetype-xlsx me-1"></i>Esporta elenco XLSX
                         </button>
                         <button class="btn btn-outline-secondary btn-sm" @onclick="ApriCartellaExport"
                                 title="Apri la cartella Export del programma">
-                            📁 Apri Export
+                            <i class="bi bi-folder2-open me-1"></i>Apri Export
                         </button>
                     </div>
 
@@ -770,6 +787,18 @@
 
     private bool isLoading = false;
     private bool isSaving = false;
+
+    // Lista in memoria fra un'apertura e l'altra: la modale resta nel render tree di Home
+    // (cambia solo IsVisible), quindi "righe" sopravvive alla chiusura. Dalla seconda apertura
+    // la griglia si mostra subito e viene aggiornata dietro le quinte.
+    private bool listaCaricata = false;
+    private bool isAggiornamento = false;
+
+    // Contatore dei caricamenti: se ne parte uno nuovo (es. Salva durante l'aggiornamento in
+    // background) il risultato di quello vecchio viene scartato, altrimenti potrebbe arrivare
+    // dopo e rimettere in griglia dati precedenti al salvataggio.
+    private int _generazioneCaricamento = 0;
+    private bool _disposed = false;
     private string messaggio = string.Empty;
     private bool isErrore = false;
 
@@ -789,12 +818,22 @@
         if (IsVisible && !_wasVisible)
         {
             _wasVisible = true;
-            await CaricaTutto();
             corrente = new ClienteAmbienteDto();
+            messaggio = string.Empty;
             collegamentoEditorNeedsUpdate = true;
             datiAmbienteEditorNeedsUpdate = true;
             _dotNetRef ??= DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("registraCtrlSModal", _dotNetRef);
+
+            if (listaCaricata)
+            {
+                // Riapertura: la griglia è già popolata, si aggiorna senza bloccare
+                _ = CaricaTutto(inBackground: true);
+            }
+            else
+            {
+                await CaricaTutto();
+            }
         }
         else if (!IsVisible && _wasVisible)
         {
@@ -832,24 +871,82 @@
 
     #region Data Loading
 
-    private async Task CaricaTutto()
+    /// <summary>
+    /// Carica la griglia e le liste di supporto del form.
+    /// Le quattro query partono INSIEME (ogni servizio apre il proprio DbContext dalla factory):
+    /// via VPN ogni query in sequenza costava un giro di rete in più. La griglia viene mostrata
+    /// appena arriva, senza aspettare clienti / ambienti distinti / congelati, che servono solo
+    /// alle combo del form.
+    /// Con <paramref name="inBackground"/> (riapertura della finestra) la griglia resta visibile
+    /// con i dati precedenti e compare solo l'indicatore "aggiornamento…".
+    /// </summary>
+    private async Task CaricaTutto(bool inBackground = false)
     {
-        isLoading = true;
+        var generazione = ++_generazioneCaricamento;
+        if (inBackground) isAggiornamento = true; else isLoading = true;
+
+        var taskRighe = ClienteAmbienteService.GetAllAsync();
+        var taskClienti = ClienteService.GetClientiAsync();
+        var taskAmbientiDistinti = ClienteAmbienteService.GetAmbientiDistintiAsync();
+        var taskCongelati = AmbienteService.GetAmbientiAsync();
+
         try
         {
-            righe = await ClienteAmbienteService.GetAllAsync();
-            clienti = await ClienteService.GetClientiAsync();
-            ambientiDistinti = await ClienteAmbienteService.GetAmbientiDistintiAsync();
-            congelatiAttivi = await AmbienteService.GetAmbientiAsync();
+            try
+            {
+                var nuoveRighe = await taskRighe;
+                if (generazione != _generazioneCaricamento) return;
+                righe = nuoveRighe;
+                listaCaricata = true;
+            }
+            finally
+            {
+                // La griglia è pronta (o è fallita): la rotellina principale si spegne subito
+                if (generazione == _generazioneCaricamento)
+                {
+                    isLoading = false;
+                    AggiornaVista();
+                }
+            }
+
+            await Task.WhenAll(taskClienti, taskAmbientiDistinti, taskCongelati);
+            if (generazione != _generazioneCaricamento) return;
+            clienti = taskClienti.Result;
+            ambientiDistinti = taskAmbientiDistinti.Result;
+            congelatiAttivi = taskCongelati.Result;
         }
         catch (Exception ex)
         {
-            MostraMessaggio($"Errore nel caricamento: {ex.Message}", true);
+            if (generazione != _generazioneCaricamento) return;
+            MostraMessaggio(inBackground
+                ? $"Aggiornamento dell'elenco non riuscito, sono mostrati i dati dell'apertura precedente: {ex.Message}"
+                : $"Errore nel caricamento: {ex.Message}", true);
         }
         finally
         {
-            isLoading = false;
+            // Se la griglia è fallita, WhenAll non è stato atteso: osserva comunque le altre
+            // query per non lasciare eccezioni non osservate.
+            _ = Task.WhenAll(taskClienti, taskAmbientiDistinti, taskCongelati)
+                .ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+
+            if (generazione == _generazioneCaricamento)
+            {
+                isLoading = false;
+                isAggiornamento = false;
+                AggiornaVista();
+            }
         }
+    }
+
+    /// <summary>
+    /// Ridisegna la modale. Serve perché il caricamento in background non nasce da un evento
+    /// UI, quindi Blazor non ridisegnerebbe da solo; protetto contro la chiusura dell'app.
+    /// </summary>
+    private void AggiornaVista()
+    {
+        if (_disposed) return;
+        try { StateHasChanged(); }
+        catch (ObjectDisposedException) { /* renderer già chiuso */ }
     }
 
     #endregion
@@ -1450,6 +1547,7 @@
 
     public void Dispose()
     {
+        _disposed = true;
         _dotNetRef?.Dispose();
     }
 

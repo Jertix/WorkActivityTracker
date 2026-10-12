@@ -317,6 +317,7 @@ public class ActivityService
             // ===== MODALITÀ COMPLETA: carica anche Note/Changeset (ricerca avanzata, export TXT) =====
             var results = await query
                 .Include(a => a.Cliente)
+                .Include(a => a.Software)
                 .Include(a => a.Utente)
                 .Include(a => a.AttivitaAmbienti)
                 .OrderByDescending(a => a.Data)
@@ -365,6 +366,8 @@ public class ActivityService
                 ClienteNome = a.Cliente?.Nome,
                 OreLavorate = a.OreLavorate,
                 Versione = a.Versione,
+                SoftwareId = a.SoftwareId,
+                SoftwareNome = a.Software?.Nome,
                 AmbientiSelezionatiIds = a.AttivitaAmbienti.Select(aa => aa.AmbienteId).ToList(),
                 Vedere = a.Vedere,
                 Note = a.Note,
@@ -398,6 +401,8 @@ public class ActivityService
                     ClienteNome = a.Cliente != null ? a.Cliente.Nome : null,
                     OreLavorate = a.OreLavorate,
                     Versione = a.Versione,
+                    SoftwareId = a.SoftwareId,
+                    SoftwareNome = a.Software != null ? a.Software.Nome : null,
                     AmbientiSelezionatiIds = a.AttivitaAmbienti.Select(aa => aa.AmbienteId).ToList(),
                     Vedere = a.Vedere,
                     UrlPatchRilasci = a.UrlPatchRilasci,
@@ -533,6 +538,8 @@ public class ActivityService
                 ClienteNome = a.Cliente != null ? a.Cliente.Nome : null,
                 OreLavorate = a.OreLavorate,
                 Versione = a.Versione,
+                SoftwareId = a.SoftwareId,
+                SoftwareNome = a.Software != null ? a.Software.Nome : null,
                 AmbientiSelezionatiIds = a.AttivitaAmbienti.Select(aa => aa.AmbienteId).ToList(),
                 Vedere = a.Vedere,
                 UrlPatchRilasci = a.UrlPatchRilasci,
@@ -605,6 +612,7 @@ public class ActivityService
 
         var query = context.Attivita
             .Include(a => a.Cliente)
+            .Include(a => a.Software)
             .Include(a => a.Utente)
             .Include(a => a.AttivitaAmbienti)
             .AsQueryable();
@@ -633,6 +641,8 @@ public class ActivityService
             ClienteNome = attivita.Cliente?.Nome,
             OreLavorate = attivita.OreLavorate,
             Versione = attivita.Versione,
+            SoftwareId = attivita.SoftwareId,
+            SoftwareNome = attivita.Software?.Nome,
             AmbientiSelezionatiIds = attivita.AttivitaAmbienti.Select(aa => aa.AmbienteId).ToList(),
             Vedere = attivita.Vedere,
             Note = attivita.Note,
@@ -672,6 +682,7 @@ public class ActivityService
             ClienteId = dto.ClienteId,
             OreLavorate = dto.OreLavorate,
             Versione = dto.Versione,
+            SoftwareId = dto.SoftwareId,
             Vedere = dto.Vedere,
             Note = dto.Note,
             ChangesetCoinvolti = dto.ChangesetCoinvolti,
@@ -738,6 +749,7 @@ public class ActivityService
         attivita.ClienteId = dto.ClienteId;
         attivita.OreLavorate = dto.OreLavorate;
         attivita.Versione = dto.Versione;
+        attivita.SoftwareId = dto.SoftwareId;
         attivita.Vedere = dto.Vedere;
         attivita.Note = dto.Note;
         attivita.ChangesetCoinvolti = dto.ChangesetCoinvolti;

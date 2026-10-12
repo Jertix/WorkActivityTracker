@@ -15,6 +15,7 @@
 @inject SegnalazioneService SegnalazioneService
 @inject AmbientiRilascioService AmbientiRilascioService
 @inject TipiAttivitaService TipiAttivitaService
+@inject SoftwareService SoftwareService
 @inject CalendarioService CalendarioService
 @inject EditorHistoryService EditorHistoryService
 @inject PdfExportService PdfExportService
@@ -154,6 +155,26 @@
             <button class="btn btn-sm btn-outline-secondary py-0" @onclick="ApriCalendario" title="Apri calendario per gestire gli eventi">
                 📅
             </button>
+        </div>
+    }
+
+    @* ===== AVVISO FINESTRA DI CONFRONTO (v5.6) ===== *@
+    @if (IstanzaConfronto.IsConfronto)
+    {
+        <div class="alert alert-info d-flex align-items-center gap-2 py-2 mb-2" role="status">
+            <i class="bi bi-window-stack fs-5"></i>
+            <span>
+                <strong>Finestra di confronto — sola consultazione.</strong>
+                Salva ed Elimina sono disattivati: le modifiche si fanno nella finestra principale.
+                @if (IstanzaConfronto.AttivitaDaAprire.HasValue)
+                {
+                    <text> Aperta dalla Ricerca Avanzata: attività ID @IstanzaConfronto.AttivitaDaAprire.</text>
+                }
+                else if (!string.IsNullOrWhiteSpace(IstanzaConfronto.TestoRicerca))
+                {
+                    <text> Ricerca di partenza: «@IstanzaConfronto.TestoRicerca»</text>
+                }
+            </span>
         </div>
     }
 
@@ -391,6 +412,7 @@
                                 <th>Cliente</th>
                                 <th>Ore</th>
                                 <th>Versione</th>
+                                <th>Software</th>
                                 <th>Ambienti</th>
                                 <th>Patch</th>
                                 <th title="Cartella documentazione">Cart. Doc.</th>
@@ -430,6 +452,7 @@
                                         <td>@(att.ClienteNome ?? "-")</td>
                                         <td>@att.OreLavorate</td>
                                         <td>@TruncateText(att.Versione, 20)</td>
+                                        <td title="@att.SoftwareNome">@TruncateText(att.SoftwareNome, 20)</td>
                                         <td style="white-space: nowrap; font-size: 0.8em;">@(att.AmbientiRilascioNomi ?? "")</td>
                                         <td class="text-center">
                                             @if (!string.IsNullOrWhiteSpace(att.UrlPatchRilasci))
@@ -443,53 +466,55 @@
                                                 <span style="color: green;" title="@att.CartellaDocumentazione">📁</span>
                                             }
                                         </td>
-                                        <td>
-                                            <button class="btn btn-sm btn-secondary me-1"
-                                                    @onclick="() => CopiaAttivitaComeTesto(att)"
-                                                    @onclick:stopPropagation="true"
-                                                    title="Copia attività come testo negli appunti">
-                                                📄
-                                            </button>
+                                        @* Azioni riga (v5.6): Bootstrap Icons; TXT e PDF raccolti nel menu "Esporta".
+                                           Il menu usa strategy "fixed" di Popper: la griglia è in un contenitore con
+                                           overflow (scroll), che altrimenti taglierebbe la tendina. *@
+                                        <td class="text-nowrap" @onclick:stopPropagation="true">
                                             <button class="btn btn-sm btn-outline-secondary me-1"
-                                                    @onclick="() => EsportaAttivitaComeTxt(att)"
-                                                    @onclick:stopPropagation="true"
-                                                    disabled="@IsExporting"
-                                                    title="Esporta attività come testo su file txt">
-                                                @if (exportRigaId == att.Id && exportInCorso == "TXT")
-                                                {
-                                                    <span class="spinner-border spinner-border-sm" role="status"></span>
-                                                }
-                                                else
-                                                {
-                                                    <text>💾</text>
-                                                }
+                                                    @onclick="() => CopiaAttivitaComeTesto(att)"
+                                                    title="Copia attività come testo negli appunti">
+                                                <i class="bi bi-clipboard"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-danger me-1"
-                                                    @onclick="() => EsportaAttivitaComePdf(att)"
-                                                    @onclick:stopPropagation="true"
-                                                    disabled="@IsExporting"
-                                                    title="Esporta attività su file PDF (con immagini)">
-                                                @if (exportRigaId == att.Id && exportInCorso == "PDF")
-                                                {
-                                                    <span class="spinner-border spinner-border-sm" role="status"></span>
-                                                }
-                                                else
-                                                {
-                                                    <text>🧾</text>
-                                                }
-                                            </button>
-                                            <button class="btn btn-sm btn-info me-1"
+                                            <div class="btn-group me-1">
+                                                <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button"
+                                                        data-bs-toggle="dropdown" aria-expanded="false"
+                                                        data-bs-popper-config='{"strategy":"fixed"}'
+                                                        disabled="@IsExporting"
+                                                        title="Esporta attività su file (TXT o PDF)">
+                                                    @if (exportRigaId == att.Id && IsExporting)
+                                                    {
+                                                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="bi bi-download"></i>
+                                                    }
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                                    <li>
+                                                        <button class="dropdown-item" type="button"
+                                                                @onclick="() => EsportaAttivitaComeTxt(att)">
+                                                            <i class="bi bi-filetype-txt text-secondary me-2"></i>Esporta TXT
+                                                        </button>
+                                                    </li>
+                                                    <li>
+                                                        <button class="dropdown-item" type="button"
+                                                                @onclick="() => EsportaAttivitaComePdf(att)">
+                                                            <i class="bi bi-filetype-pdf text-danger me-2"></i>Esporta PDF <span class="text-muted small">(con immagini)</span>
+                                                        </button>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                            <button class="btn btn-sm btn-outline-info me-1"
                                                     @onclick="async () => await DuplicaAttivita(att)"
-                                                    @onclick:stopPropagation="true"
                                                     title="Duplica attività (copia tutti i campi tranne la data)">
-                                                📋
+                                                <i class="bi bi-copy"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-danger"
+                                            <button class="btn btn-sm btn-outline-danger"
                                                     @onclick="() => ConfermaEliminaAttivita(att)"
-                                                    @onclick:stopPropagation="true"
-                                                    disabled="@(isAdminMode && att.UtenteUsername != UserService.WindowsUsername)"
+                                                    disabled="@(IstanzaConfronto.IsConfronto || (isAdminMode && att.UtenteUsername != UserService.WindowsUsername))"
                                                     title="Elimina attività del @att.Data.ToString("dd/MM/yyyy"): @att.Descrizione">
-                                                🗑️
+                                                <i class="bi bi-trash"></i>
                                             </button>
                                         </td>
                                     </tr>
@@ -498,7 +523,7 @@
                             else
                             {
                                 <tr>
-                                    <td colspan="@(isAdminMode ? 11 : 10)" class="text-center text-muted">
+                                    <td colspan="@(isAdminMode ? 13 : 12)" class="text-center text-muted">
                                         Nessuna attività trovata
                                     </td>
                                 </tr>
@@ -510,7 +535,7 @@
                                 <tr>
                                     <td colspan="@(isAdminMode ? 6 : 5)" class="text-end">Totale ore visualizzate:</td>
                                     <td>@Attivita.Sum(a => a.OreLavorate).ToString("N2")</td>
-                                    <td colspan="5"></td>
+                                    <td colspan="6"></td>
                                 </tr>
                             </tfoot>
                         }
@@ -531,21 +556,21 @@
                             <button class="btn btn-outline-success btn-sm" @onclick="EsportaGrigliaXlsx"
                                     disabled="@IsExporting"
                                     title="Esporta la griglia visualizzata in formato Excel (.xlsx)">
-                                📊 Esporta XLSX
+                                <i class="bi bi-filetype-xlsx me-1"></i>Esporta XLSX
                             </button>
-                            <button class="btn btn-outline-primary btn-sm" @onclick="EsportaDettagliTxt"
+                            <button class="btn btn-outline-secondary btn-sm" @onclick="EsportaDettagliTxt"
                                     disabled="@IsExporting"
                                     title="Esporta il dettaglio di tutte le attività visualizzate in un file TXT">
-                                📄 Esporta dettagli TXT
+                                <i class="bi bi-filetype-txt me-1"></i>Esporta dettagli TXT
                             </button>
                             <button class="btn btn-outline-danger btn-sm" @onclick="EsportaDettagliPdf"
                                     disabled="@IsExporting"
                                     title="Esporta il dettaglio di tutte le attività visualizzate in un file PDF (con immagini)">
-                                🧾 Esporta dettagli PDF
+                                <i class="bi bi-filetype-pdf me-1"></i>Esporta dettagli PDF
                             </button>
                             <button class="btn btn-outline-secondary btn-sm" @onclick="ApriCartellaExport"
                                     title="Apri la cartella Export del programma">
-                                📁 Apri Export
+                                <i class="bi bi-folder2-open me-1"></i>Apri Export
                             </button>
                             @* Rotellina di avanzamento: la generazione può durare minuti sui PDF con screenshot *@
                             @if (IsExporting)
@@ -582,7 +607,7 @@
                     ➕ Nuova
                 </button>
                 <button class="btn btn-light btn-sm py-0 px-2" @onclick="SalvaAttivita"
-                        disabled="@(isSaving || (isAdminMode && IsModifica && AttivitaCorrente.UtenteUsername != UserService.WindowsUsername))"
+                        disabled="@(isSaving || IstanzaConfronto.IsConfronto || (isAdminMode && IsModifica && AttivitaCorrente.UtenteUsername != UserService.WindowsUsername))"
                         title="Salva attività (Ctrl+S)">
                     💾 Salva
                 </button>
@@ -621,7 +646,7 @@
                 </div>
                 @if (AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro)
                 {
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label class="form-label fw-bold">Cliente</label>
                         <div class="input-group">
                             <select class="form-select fw-bold" @bind="AttivitaCorrente.ClienteId">
@@ -641,9 +666,31 @@
                         <label class="form-label fw-bold">Ore Lavorate <span class="text-danger">*</span></label>
                         <input type="number" class="form-control fw-bold" @bind="AttivitaCorrente.OreLavorate" min="0" max="24" step="0.5" />
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label class="form-label fw-bold">Versione di sviluppo</label>
                         <input type="text" class="form-control fw-bold" @bind="AttivitaCorrente.Versione" placeholder="@VersioneSviluppoPlaceholder" />
+                    </div>
+                    @* Software (v5.6): lista condivisa, default = NomeProgramma di appsettings *@
+                    <div class="col-md-2">
+                        <label class="form-label fw-bold">Software</label>
+                        <div class="input-group">
+                            <select class="form-select fw-bold" @bind="AttivitaCorrente.SoftwareId">
+                                <option value="">—</option>
+                                @foreach (var sw in softwareLista)
+                                {
+                                    <option value="@sw.Id">@sw.Nome</option>
+                                }
+                                @if (SoftwareCorrenteDisattivato)
+                                {
+                                    <option value="@AttivitaCorrente.SoftwareId">@AttivitaCorrente.SoftwareNome (disattivato)</option>
+                                }
+                            </select>
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="() => mostraEditorSoftware = true"
+                                    title="Gestisci lista software (condivisa fra tutti gli utenti)">
+                                ✏️
+                            </button>
+                        </div>
                     </div>
                 }
                 else
@@ -737,6 +784,12 @@
                         <button class="btn btn-outline-primary" type="button" @onclick="CercaPerQuestaDescrizione"
                                 title="Cerca per questa descrizione (azzera i filtri e cerca il testo della descrizione)">
                             🔍 Ricerca
+                        </button>
+                        @* v5.6: stessa ricerca, ma in una seconda istanza (sola consultazione) per il confronto *@
+                        <button class="btn btn-outline-secondary" type="button" @onclick="CercaInNuovaFinestra"
+                                disabled="@string.IsNullOrWhiteSpace(AttivitaCorrente.Descrizione)"
+                                title="Apre un'altra finestra del programma (sola consultazione) con la ricerca di questa descrizione, per confrontare i risultati con l'attività aperta qui">
+                            <i class="bi bi-window-stack me-1"></i>Ricerca in nuova finestra
                         </button>
                     </div>
                 </div>
@@ -1579,7 +1632,7 @@
                     ➕ Nuova
                 </button>
                 <button class="btn btn-primary" @onclick="SalvaAttivita"
-                        disabled="@(isSaving || (isAdminMode && IsModifica && AttivitaCorrente.UtenteUsername != UserService.WindowsUsername))"
+                        disabled="@(isSaving || IstanzaConfronto.IsConfronto || (isAdminMode && IsModifica && AttivitaCorrente.UtenteUsername != UserService.WindowsUsername))"
                         title="Salva attività (Ctrl+S)">
                     @if (isSaving)
                     {
@@ -1609,7 +1662,8 @@
     OnRicerca="@OnRicercaAvanzata"
     OnCaricaDettaglio="@OnCaricaDettaglioRicerca"
     OnChiudi="@ChiudiModaleRicerca"
-    OnSeleziona="@OnAttivitaSelezionataDaModale" />
+    OnSeleziona="@OnAttivitaSelezionataDaModale"
+    OnApriInNuovaFinestra="@ApriInNuovaFinestraDaRicerca" />
 
 @* ===== MODALE TODO LIST ===== *@
 <TodoListModal 
@@ -1658,6 +1712,13 @@
     IsVisible="@mostraEditorTipiAttivita"
     OnChiudi="@ChiudiEditorTipiAttivita"
     OnTipiChanged="@OnTipiAttivitaChanged" />
+
+@* ===== MODALE EDITOR SOFTWARE (v5.6) ===== *@
+<SoftwareEditorModal
+    IsVisible="@mostraEditorSoftware"
+    NomeDefault="@AppConfig.NomeProgramma"
+    OnChiudi="@(() => mostraEditorSoftware = false)"
+    OnSoftwareChanged="@OnSoftwareChanged" />
 
 @* ===== MODALE CALENDARIO ===== *@
 <CalendarioModal
@@ -2000,6 +2061,15 @@
     /// <summary>Controlla la visibilità della modale editor tipi attività</summary>
     private bool mostraEditorTipiAttivita = false;
 
+    /// <summary>Lista dei software attivi (combo "Software", condivisa fra gli utenti, v5.6)</summary>
+    private List<SoftwareItem> softwareLista = new();
+
+    /// <summary>Id del software di default (NomeProgramma di appsettings), usato da NuovaAttivita</summary>
+    private int? softwareDefaultId;
+
+    /// <summary>Controlla la visibilità della modale editor software</summary>
+    private bool mostraEditorSoftware = false;
+
     /// <summary>Controlla la visibilità della modale calendario</summary>
     private bool mostraCalendario = false;
 
@@ -2072,8 +2142,12 @@
     {
         // Copia di emergenza lasciata da un salvataggio fallito: va rilevata PRIMA di toccare il
         // database, così il banner compare anche quando il DB è ancora irraggiungibile.
-        bozzaPresente = BozzaService.Esiste();
-        dataBozza = BozzaService.DataBozza();
+        // La finestra di confronto non salva, quindi non gestisce la bozza: è della principale.
+        if (!IstanzaConfronto.IsConfronto)
+        {
+            bozzaPresente = BozzaService.Esiste();
+            dataBozza = BozzaService.DataBozza();
+        }
 
         try
         {
@@ -2095,6 +2169,10 @@
             await TipiAttivitaService.EnsureTipiBaseAsync();
             tipiAttivitaLista = await TipiAttivitaService.GetTipiAsync();
 
+            // Assicura che il software di default (NomeProgramma) esista e carica la lista
+            softwareDefaultId = await SoftwareService.EnsureSoftwareDefaultAsync(AppConfig.NomeProgramma);
+            softwareLista = await SoftwareService.GetSoftwareAsync();
+
             // Carica eventi imminenti per la barra di avviso
             eventiImminenti = await CalendarioService.GetEventiImminentiAsync();
 
@@ -2114,18 +2192,37 @@
             FiltroMese = oggi.Month;
             // FiltroGiorno = null (default) → mostra tutte le attività del mese
 
-            // Carica attività del mese corrente
-            await CaricaAttivita();
-
             // Inizializza il form con i valori di default corretti (Sviluppo auto-selezionato)
             // Va chiamato dopo il caricamento dei dati per avere clienteSviluppoId valorizzato
             NuovaAttivita();
 
-            // Avvia in background la pulizia dello storico modifiche (non blocca l'avvio)
-            _ = PulisciStoricoEditorInBackground();
+            if (IstanzaConfronto.IsConfronto && IstanzaConfronto.AttivitaDaAprire.HasValue)
+            {
+                // Finestra di confronto aperta dalla Ricerca Avanzata: apre l'attività indicata
+                await ApriAttivitaAllAvvio(IstanzaConfronto.AttivitaDaAprire.Value);
+            }
+            else if (IstanzaConfronto.IsConfronto && !string.IsNullOrWhiteSpace(IstanzaConfronto.TestoRicerca))
+            {
+                // Finestra di confronto: parte direttamente con la ricerca richiesta dalla
+                // principale (stessa logica del pulsante 🔍 Ricerca), senza caricare prima il mese.
+                await CercaTesto(IstanzaConfronto.TestoRicerca);
+            }
+            else
+            {
+                // Carica attività del mese corrente
+                await CaricaAttivita();
+            }
 
-            // Converte a lotti le attività il cui testo ricercabile non è ancora stato calcolato
-            _ = ConvertiTestoRicercabileInBackground();
+            // I lavori di manutenzione girano solo nella finestra principale: due istanze
+            // farebbero lo stesso lavoro in parallelo sullo stesso database.
+            if (!IstanzaConfronto.IsConfronto)
+            {
+                // Avvia in background la pulizia dello storico modifiche (non blocca l'avvio)
+                _ = PulisciStoricoEditorInBackground();
+
+                // Converte a lotti le attività il cui testo ricercabile non è ancora stato calcolato
+                _ = ConvertiTestoRicercabileInBackground();
+            }
         }
         catch (Exception ex)
         {
@@ -2282,6 +2379,8 @@
             ClienteNome = attivita.ClienteNome,
             OreLavorate = attivita.OreLavorate,
             Versione = attivita.Versione,
+            SoftwareId = attivita.SoftwareId,
+            SoftwareNome = attivita.SoftwareNome,
             AmbientiSelezionatiIds = new List<int>(attivita.AmbientiSelezionatiIds),
             Vedere = attivita.Vedere,
             Note = attivita.Note,
@@ -2338,7 +2437,8 @@
             Data = DateTime.Today,
             TipoAttivita = TipiAttivita.Lavoro,
             Versione = versioneSviluppo,
-            ClienteId = clienteSviluppoId  // Auto-seleziona "Sviluppo"
+            ClienteId = clienteSviluppoId,  // Auto-seleziona "Sviluppo"
+            SoftwareId = softwareDefaultId  // NomeProgramma di appsettings
         };
 
         // Reset della selezione "Sviluppo" nella tabella congelati
@@ -2452,6 +2552,8 @@
             ClienteNome = attivita.ClienteNome,
             OreLavorate = attivita.OreLavorate,
             Versione = attivita.Versione,
+            SoftwareId = attivita.SoftwareId,
+            SoftwareNome = attivita.SoftwareNome,
             AmbientiSelezionatiIds = attivita.AmbientiSelezionatiIds?.ToList() ?? new List<int>(),
             Vedere = attivita.Vedere,
             // La Note NON viene copiata (eviterebbe di gonfiare il record su lavorazioni multi-giorno):
@@ -2702,11 +2804,23 @@
     /// </summary>
     private async Task SalvaAttivita()
     {
+        // Finestra di confronto: sola consultazione (copre anche Ctrl+S)
+        if (IstanzaConfronto.IsConfronto)
+        {
+            MostraMessaggio("Questa è la finestra di confronto (sola consultazione): salva dalla finestra principale.", true);
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(AttivitaCorrente.Descrizione))
         {
             MostraMessaggio("La descrizione è obbligatoria", true);
             return;
         }
+
+        // La combo Software compare solo per Lavoro: se il tipo è stato cambiato dopo che il
+        // default era già impostato, non si salva un software su Permesso/Ferie/personalizzati.
+        if (AttivitaCorrente.TipoAttivita != TipiAttivita.Lavoro)
+            AttivitaCorrente.SoftwareId = null;
 
         // Legge HTML dal contenteditable Note prima di salvare
         try
@@ -2842,6 +2956,7 @@
     /// </summary>
     private void ConfermaEliminaAttivita(WorkActivityDto attivita)
     {
+        if (IstanzaConfronto.IsConfronto) return;   // sola consultazione (pulsante già disabilitato)
         attivitaDaEliminare = attivita;
         mostraConfermaElimina = true;
     }
@@ -3684,11 +3799,80 @@
     /// </summary>
     private async Task CercaPerQuestaDescrizione()
     {
-        var desc = AttivitaCorrente?.Descrizione ?? string.Empty;
+        await CercaTesto(AttivitaCorrente?.Descrizione ?? string.Empty);
+    }
+
+    /// <summary>
+    /// Azzera i filtri e cerca il testo indicato. Condiviso dal pulsante 🔍 Ricerca e
+    /// dall'avvio della finestra di confronto, così le due ricerche non possono divergere.
+    /// </summary>
+    private async Task CercaTesto(string testo)
+    {
         // Niente filtro sul mese: la stessa descrizione va cercata su tutto l'anno.
         await ResetFiltri(limitaAlMeseCorrente: false);
-        TestoRicerca = desc;
+        TestoRicerca = testo;
         await EseguiRicercaEAbilita();
+    }
+
+    /// <summary>
+    /// Avvio della finestra di confronto con un'attività già scelta (dalla Ricerca Avanzata):
+    /// la griglia mostra il mese dell'attività e il form la apre. Se la finestra di origine era
+    /// in Admin (necessario per le attività di altri utenti) lo diventa anche questa, purché la
+    /// modalità Admin sia abilitata in appsettings.
+    /// </summary>
+    private async Task ApriAttivitaAllAvvio(int id)
+    {
+        if (IstanzaConfronto.AvviaInAdmin && AppConfig.MostraModalitaAdmin)
+            isAdminMode = true;
+
+        var attivita = await ActivityService.GetActivityByIdAsync(id, isAdminMode);
+        if (attivita == null)
+        {
+            await CaricaAttivita();
+            MostraMessaggio($"Attività ID {id} non trovata (eliminata, oppure di un altro utente senza modalità Admin).", true);
+            return;
+        }
+
+        FiltroAnno = attivita.Data.Year;
+        FiltroMese = attivita.Data.Month;
+        FiltroGiorno = null;
+        await CaricaAttivita();
+        await SelezionaAttivita(attivita);
+    }
+
+    /// <summary>
+    /// Pulsante "Apri selezionato in nuova finestra" della Ricerca Avanzata. Le eccezioni
+    /// risalgono alla modale, che le mostra nel proprio footer (qui sarebbero coperte).
+    /// </summary>
+    private Task ApriInNuovaFinestraDaRicerca(WorkActivityDto attivita)
+    {
+        IstanzaConfronto.AvviaConAttivita(attivita.Id, isAdminMode);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Pulsante "Ricerca in nuova finestra": avvia una seconda istanza del programma, in sola
+    /// consultazione, che parte già con la ricerca della Descrizione. Questa finestra resta
+    /// com'è (attività aperta e modifiche non salvate comprese).
+    /// </summary>
+    private void CercaInNuovaFinestra()
+    {
+        var desc = AttivitaCorrente?.Descrizione?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(desc))
+        {
+            MostraMessaggio("Scrivi una descrizione da cercare prima di aprire la finestra di confronto.", true);
+            return;
+        }
+
+        try
+        {
+            IstanzaConfronto.Avvia(desc);
+            MostraMessaggio("Apertura della finestra di confronto in corso…", false);
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"Impossibile aprire la finestra di confronto: {ex.Message}", true);
+        }
     }
 
     /// <summary>
@@ -3958,6 +4142,32 @@
 
     #endregion
 
+    #region Gestione Software (v5.6)
+
+    /// <summary>
+    /// Dopo una modifica nella modale: ricarica la combo e la griglia (un software rinominato
+    /// deve cambiare nome anche nella colonna delle attività già salvate). Il software
+    /// selezionato nel form resta com'è anche se è stato disattivato: la combo lo mostra
+    /// comunque, marcato come disattivato.
+    /// </summary>
+    private async Task OnSoftwareChanged()
+    {
+        softwareLista = await SoftwareService.GetSoftwareAsync();
+        var corrente = softwareLista.FirstOrDefault(s => s.Id == AttivitaCorrente.SoftwareId);
+        if (corrente != null) AttivitaCorrente.SoftwareNome = corrente.Nome;
+        await CaricaAttivita();
+    }
+
+    /// <summary>
+    /// True se il software dell'attività aperta non è fra quelli attivi (è stato disattivato):
+    /// la combo aggiunge una voce apposta, altrimenti la select apparirebbe vuota.
+    /// </summary>
+    private bool SoftwareCorrenteDisattivato =>
+        AttivitaCorrente.SoftwareId.HasValue &&
+        !softwareLista.Any(s => s.Id == AttivitaCorrente.SoftwareId);
+
+    #endregion
+
     #region Gestione Calendario
 
     private void ApriCalendario()
@@ -4055,6 +4265,7 @@
                 ws.Cell(1, col++).Value = "Cliente";
                 ws.Cell(1, col++).Value = "Ore";
                 ws.Cell(1, col++).Value = "Versione";
+                ws.Cell(1, col++).Value = "Software";
 
                 // Stile intestazioni
                 var headerRow = ws.Row(1);
@@ -4076,6 +4287,7 @@
                     ws.Cell(row, col++).Value = att.ClienteNome;
                     ws.Cell(row, col++).Value = att.OreLavorate;
                     ws.Cell(row, col++).Value = att.Versione;
+                    ws.Cell(row, col++).Value = att.SoftwareNome;
                     row++;
                 }
 
@@ -4363,6 +4575,7 @@
         sb.Append(CampoPlain("👤 Cliente", att.ClienteNome ?? "-"));
         sb.Append(CampoPlain("⏱️ Ore Lavorate", att.OreLavorate.ToString()));
         sb.Append(CampoPlain("🏷️ Versione attualmente in Sviluppo", att.Versione));
+        sb.Append(CampoPlain("💻 Software", att.SoftwareNome));
         sb.Append(CampoPlain("🚀 Ambienti di rilascio", FormattaAmbientiRilascio(att)));
         sb.Append(CampoPlain("👀 Vedere", att.Vedere));
         sb.Append(CampoPlain("📁 Cartella Documentazione", att.CartellaDocumentazione));
@@ -4459,6 +4672,26 @@
     /// Percorsi calcolati per UNA cartella patch. Se gli ambienti di rilascio hanno versioni diverse
     /// viene prodotto un <see cref="PercorsoPatch"/> per ogni versione distinta.
     /// </summary>
+    /// <summary>
+    /// Nome del programma usato da struttura patch e Readme (v5.6): il Software scelto
+    /// nell'attività aperta; se non c'è, <c>NomeProgramma</c> di appsettings come prima.
+    /// Si cerca per Id nella lista attiva perché <c>SoftwareNome</c> non segue il cambio di
+    /// selezione nella combo; il fallback su <c>SoftwareNome</c> copre un software disattivato.
+    /// </summary>
+    private string NomeProgrammaCorrente
+    {
+        get
+        {
+            if (AttivitaCorrente.SoftwareId.HasValue)
+            {
+                var nome = softwareLista.FirstOrDefault(s => s.Id == AttivitaCorrente.SoftwareId)?.Nome
+                           ?? AttivitaCorrente.SoftwareNome;
+                if (!string.IsNullOrWhiteSpace(nome)) return nome;
+            }
+            return AppConfig.NomeProgramma;
+        }
+    }
+
     private sealed record PercorsoPatch(
         string ClientRoot,
         string Full,
@@ -4479,7 +4712,7 @@
 
         // Segmenti comuni a tutte le cartelle
         var dataSeg = DateTime.Now.ToString("yyyy-MM-dd");
-        var nomeProgrammaSeg = SanitizzaSegmentoCartella(AppConfig.NomeProgramma);
+        var nomeProgrammaSeg = SanitizzaSegmentoCartella(NomeProgrammaCorrente);
         // TICKET (virgole → underscore)
         var ticketSeg = SanitizzaSegmentoCartella(
             (AttivitaCorrente.NumeroTicket ?? string.Empty).Replace(",", "_"));
@@ -4602,7 +4835,7 @@
     private void CreaStrutturaInternaPatch(string radice, string lingua)
     {
         var isEn = string.Equals(lingua, "EN", StringComparison.OrdinalIgnoreCase);
-        var nomeProgramma = SanitizzaSegmentoCartella(AppConfig.NomeProgramma).ToUpperInvariant();
+        var nomeProgramma = SanitizzaSegmentoCartella(NomeProgrammaCorrente).ToUpperInvariant();
 
         // Nomi che cambiano in base alla lingua
         var prerequisiti = isEn ? "00_PREREQUISITES" : "00_PREREQUISITI";
@@ -4766,7 +4999,7 @@
     {
         if (string.IsNullOrEmpty(testo)) return string.Empty;
         return testo
-            .Replace("{NOMEPROGRAMMA}", AppConfig.NomeProgramma)
+            .Replace("{NOMEPROGRAMMA}", NomeProgrammaCorrente)
             .Replace("{NOMECOMPAGNIA}", AppConfig.NomeCompagnia)
             .Replace("{CLIENTE}", clienteNome)
             .Replace("{VERSIONE}", versioneRaw);
@@ -4776,7 +5009,7 @@
     private string SostituisciTokenPercorso(string percorso)
     {
         if (string.IsNullOrEmpty(percorso)) return string.Empty;
-        var progFolder = SanitizzaSegmentoCartella(AppConfig.NomeProgramma).ToUpperInvariant();
+        var progFolder = SanitizzaSegmentoCartella(NomeProgrammaCorrente).ToUpperInvariant();
         return percorso
             .Replace("{NOMEPROGRAMMA}", progFolder)
             .Replace("{NOMECOMPAGNIA}", AppConfig.NomeCompagnia);
@@ -4867,6 +5100,8 @@
         sb.AppendLine($"⏱️ Ore Lavorate: {att.OreLavorate}");
         if (!string.IsNullOrEmpty(att.Versione))
             sb.AppendLine($"🏷️ Versione attualmente in Sviluppo: {att.Versione}");
+        if (!string.IsNullOrEmpty(att.SoftwareNome))
+            sb.AppendLine($"💻 Software: {att.SoftwareNome}");
         if (!string.IsNullOrEmpty(att.Vedere))
         {
             sb.AppendLine();
@@ -5173,6 +5408,8 @@
         sb.AppendLine($"⏱️ Ore Lavorate: {att.OreLavorate}");
         if (!string.IsNullOrEmpty(att.Versione))
             sb.AppendLine($"🏷️ Versione attualmente in Sviluppo: {att.Versione}");
+        if (!string.IsNullOrEmpty(att.SoftwareNome))
+            sb.AppendLine($"💻 Software: {att.SoftwareNome}");
         if (!string.IsNullOrEmpty(att.Vedere))
         {
             sb.AppendLine();

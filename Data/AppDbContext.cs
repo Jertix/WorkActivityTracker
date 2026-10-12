@@ -70,6 +70,12 @@ public class AppDbContext : DbContext
     /// <summary>Tabella log modifiche tipi attività</summary>
     public DbSet<TipoAttivitaLog> TipiAttivitaLog { get; set; }
 
+    /// <summary>Tabella software (combo "Software" del form attività, condivisa fra gli utenti)</summary>
+    public DbSet<SoftwareItem> Software { get; set; }
+
+    /// <summary>Tabella log modifiche software</summary>
+    public DbSet<SoftwareLog> SoftwareLog { get; set; }
+
     /// <summary>Tabella eventi del calendario con avviso</summary>
     public DbSet<EventoCalendario> EventiCalendario { get; set; }
 
@@ -153,6 +159,17 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<TipoAttivitaItem>()
             .HasIndex(t => t.Nome)
             .IsUnique();
+
+        // Software: indice unico sul nome; relazione restrict (il software è soft-deleted via Attivo)
+        modelBuilder.Entity<SoftwareItem>()
+            .HasIndex(s => s.Nome)
+            .IsUnique();
+
+        modelBuilder.Entity<Attivita>()
+            .HasOne(a => a.Software)
+            .WithMany()
+            .HasForeignKey(a => a.SoftwareId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // EventiCalendario: relazione con Utente (restrict)
         modelBuilder.Entity<EventoCalendario>()

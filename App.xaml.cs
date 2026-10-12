@@ -13,7 +13,10 @@ public partial class App : Application
     {
         var window = new Window(new MainPage())
         {
-            Title = "Work Activity Tracker",
+            // La finestra di confronto (seconda istanza in sola consultazione) si distingue dal titolo
+            Title = IstanzaConfronto.IsConfronto
+                ? "Work Activity Tracker — Confronto (sola consultazione)"
+                : "Work Activity Tracker",
             Width = 1200,
             Height = 800
         };

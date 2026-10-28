@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-5.5-blue)
+![Version](https://img.shields.io/badge/version-5.7-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -64,12 +64,13 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
   - Sviluppo ASP.NET e Web
 - **.NET 10 SDK** con workload MAUI: `dotnet workload install maui`
 - **SQL Server** (Express, Developer o Standard)
+- **Riconoscimento del testo di Windows per l'italiano** (v5.7, facoltativo): serve per leggere il testo degli screenshot. Se manca, il programma lo segnala con le istruzioni (Impostazioni di Windows → Ora e lingua → Lingua e area geografica → Italiano → Opzioni lingua → Riconoscimento del testo).
 
 ### Setup Database
 
 1. Esegui `Database/CreateDatabase.sql` in SSMS per creare il database iniziale
-2. Applica in ordine tutti gli script `MigrateToVX.Y.sql` fino all'ultimo disponibile
-3. Crea il file `appsettings.json` nella root del progetto (non è incluso nel repository) e configura la connection string:
+2. Applica in ordine tutti gli script `MigrateToVX.Y.sql` fino all'ultimo disponibile (`MigrateToV5.6.sql` richiede di impostare a mano la variabile `@NomeProgramma`, vedi lo script)
+3. Configura in `appsettings.json` (root del progetto, copiato accanto all'eseguibile) la connection string. Dalla v5.7 gran parte delle altre impostazioni si modifica anche dalla finestra **⚙️ Impostazioni** (vedi §36):
 
 ```json
 {
@@ -78,7 +79,7 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
   },
   "AppSettings": {
     "AppName": "Work Activity Tracker",
-    "Version": "5.5",
+    "Version": "5.7",
     "NumeroMesiMantenimentoHistory": 3,
     "MostraModalitaAdmin": true,
     "PrivacyMode": false,
@@ -88,7 +89,9 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
     "GiorniPreavvisoScadenzaArancione": 5,
     "GiorniPreavvisoScadenzaRosso": 2,
     "EsportaAttivitaCollegateInPdf": true,
-    "TimeoutQuerySecondi": 120
+    "TimeoutQuerySecondi": 120,
+    "Tema": "ComeWindows",
+    "ColorePrincipale": "Classico"
   }
 }
 ```
@@ -102,6 +105,12 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
 > `EsportaAttivitaCollegateInPdf` (default `true`) (v5.3): se `true`, l'export PDF di una singola attività include anche le attività collegate dalla catena "Proseguo l'attività"; se `false` esporta la sola attività selezionata.
 >
 > `TimeoutQuerySecondi` (default 30) (v5.5): timeout in secondi dei comandi SQL. Il valore predefinito di SqlClient è 30 secondi e sugli archivi grandi la ricerca può superarlo. Viene letto all'avvio: per renderlo effettivo occorre riavviare l'applicazione.
+>
+> `NomeProgramma` (v5.6): è anche il **software di default** delle attività, creato o riattivato all'avvio nella lista Software (vedi §31).
+>
+> `Tema` (default `ComeWindows`) / `ColorePrincipale` (default `Classico`) (v5.7): aspetto dell'interfaccia. `Tema`: `ComeWindows`, `Chiaro`, `Scuro`. `ColorePrincipale`: `Classico` (il blu di sempre), `Acciaio`, `Fucina`, `Foresta`, `Prugna`, `Grafite`, `ComeWindows`. Un valore sconosciuto vale come il predefinito. Vedi §37.
+>
+> La finestra **⚙️ Impostazioni** (v5.7) riscrive questo file toccando solo le chiavi che gestisce; `MostraModalitaAdmin`, `PrivacyMode` e la connection string vi compaiono in sola lettura e si modificano solo qui. Aggiornando il programma da uno zip, conserva il tuo `appsettings.json`.
 
 ### Eseguire l'applicazione
 
@@ -133,6 +142,8 @@ Ogni attività registrata contiene:
 | `UrlPatchRilasci` | string | URL patch/pacchetto nei rilasci (NVARCHAR(MAX), può contenere più URL) |
 | `AmbientiSelezionatiIds` | List\<int\> | Congelati su cui è riportata la modifica |
 | `AmbientiRilascioNomi` | string? | Nomi ambienti rilascio separati da virgola (solo lettura, per griglia) |
+| `SoftwareId` | FK | Software a cui si riferisce il lavoro (v5.6, solo per Lavoro) |
+| `NoteOcr` / `ChangesetOcr` | string | Testo letto negli screenshot di Note e Changeset (v5.7, calcolato in background) |
 
 Per i tipi **Permesso** e **Ferie**, vengono mostrati solo i campi Data, Ore, Descrizione e Note; gli altri campi vengono nascosti nell'interfaccia.
 
@@ -144,29 +155,33 @@ Per i tipi **Permesso** e **Ferie**, vengono mostrati solo i campi Data, Ore, De
   - Bottone **"📅 Oggi"** accanto al filtro Giorno: imposta automaticamente Anno/Mese/Giorno alla data odierna.
   - **Combo Giorno con nomi ed emoji**: quando Anno e Mese sono selezionati, ogni opzione mostra il numero + il giorno della settimana abbreviato in italiano (es. "1 - lun"). Vengono nascosti i giorni non validi per il mese selezionato. Emoji prefisso: 🟢 per il giorno odierno (ha la precedenza), 🟠 per sabato e domenica.
 - **Rilevamento TODO preciso**: regex `(?<![a-zA-Z])TODO(?![a-zA-Z])` (word boundary, case-insensitive).
-- **Evidenziazione TODO**: riga rossa se TODO è in Descrizione, Note, ChangesetCoinvolti, UrlTicket.
-- **Riga selezionata**: colore giallo vivace (`#ffe066`). Se riga TODO+selezionata: arancione.
+- **Evidenziazione TODO**: riga rossa se TODO è in Descrizione, Note, ChangesetCoinvolti, UrlTicket. (Con Bootstrap 5.3 il colore non si vedeva più perché lo sfondo delle celle copriva quello della riga: corretto in v5.7.)
+- **Riga selezionata**: colore giallo vivace (`#ffe066`). Se riga TODO+selezionata: arancione. Nel tema scuro le stesse precedenze con tinte scure (§37).
+- **Colonna Software** (v5.6): dopo "Versione", il software dell'attività (§31).
 - **Riga totale ore**: footer con la somma delle ore delle attività visibili, allineata sotto la colonna **Ore**.
 - **Colonna Ambienti**: mostra i nomi degli ambienti di rilascio compilati, separati da virgola (es. "Test, Produzione"), senza numero di versione. Calcolato da una query batch in `ActivityService.GetActivitiesAsync()` e salvato in `WorkActivityDto.AmbientiRilascioNomi`. Vuota se nessun ambiente è stato associato.
 - **Colonna Patch**: mostra ✔ verde se il campo "URL Patch/Pacchetto nei rilasci" (`UrlPatchRilasci`) è compilato.
-- **Colonna Azioni**: pulsanti Copia (📄), Esporta TXT (💾), Duplica (📋), Elimina (🗑️).
-  - **📄 Copia**: genera testo plain dell'attività (HTML stripped) e lo copia negli appunti.
-  - **💾 Esporta TXT**: salva il dettaglio dell'attività come file `.txt` nella cartella `Export/`.
-  - **📋 Duplica**: copia tutti i campi tranne la data (incluso NumeroTicket e ChangesetCoinvolti). La **Descrizione dettagliata lavoro svolto (Note) NON viene copiata**: al suo posto viene inserito un header puntatore `**** Proseguo l'attività [Id]-[Descrizione]-[NumeroTicket] del [Data] ****` riferito all'attività di origine (evita di gonfiare il record su lavorazioni multi-giorno). Il lavoro dei giorni precedenti resta consultabile col pulsante "Mostra la descrizione del lavoro svolto nei giorni precedenti" (vedi §5).
-  - **🗑️ Elimina**: mostra una **modale Blazor custom centrata** per la conferma.
+- **Colonna Azioni**: pulsanti Copia, menu Esporta (TXT/PDF), Duplica, Elimina — con le icone Bootstrap Icons dalla v5.6 (§33).
+  - **Copia** (`bi-clipboard`): genera testo plain dell'attività (HTML stripped) e lo copia negli appunti.
+  - **Esporta** (`bi-download`, menu a tendina): TXT o PDF della singola attività nella cartella `Export/`.
+  - **Duplica** (`bi-copy`): copia tutti i campi tranne la data (incluso NumeroTicket e ChangesetCoinvolti). La **Descrizione dettagliata lavoro svolto (Note) NON viene copiata**: al suo posto viene inserito un header puntatore `**** Proseguo l'attività [Id]-[Descrizione]-[NumeroTicket] del [Data] ****` riferito all'attività di origine (evita di gonfiare il record su lavorazioni multi-giorno). Il lavoro dei giorni precedenti resta consultabile col pulsante "Mostra la descrizione del lavoro svolto nei giorni precedenti" (vedi §5).
+  - **Elimina** (`bi-trash`): mostra una **modale Blazor custom centrata** per la conferma.
 - **Pulsanti export sotto la griglia** (visibili se ci sono attività):
-  - **📊 Esporta XLSX**: esporta la griglia visualizzata in Excel (`ElencoAttivitàAl[timestamp].xlsx`).
-  - **📄 Esporta dettagli TXT**: esporta tutte le attività visibili in un TXT (`DettaglioTutteLeAttività_[dal]_[al]_[timestamp].txt`).
-  - **📁 Apri Export**: apre la cartella `Export/` in Esplora Risorse.
+  - **Esporta XLSX**: esporta la griglia visualizzata in Excel (`ElencoAttivitàAl[timestamp].xlsx`).
+  - **Esporta dettagli TXT**: esporta tutte le attività visibili in un TXT (`DettaglioTutteLeAttività_[dal]_[al]_[timestamp].txt`).
+  - **Esporta dettagli PDF**: vedi §21.
+  - **Apri Export**: apre la cartella `Export/` in Esplora Risorse.
 - Dopo il salvataggio, l'attività appena salvata rimane selezionata nella griglia.
 
 ### 3. Form di Inserimento/Modifica
 
 La testata (header blu) contiene bottoni rapidi Nuova / **Salva (Ctrl+S)** / Annulla replicati in piccolo. I bottoni principali sono anche nel footer del form.
 
-**Shortcut Ctrl+S**: salva l'attività corrente in qualsiasi momento (registrato via `registraCtrlS` JS + `[JSInvokable] SalvaViaShortcut()`).
+**Shortcut Ctrl+S**: salva l'attività corrente in qualsiasi momento (registrato via `registraCtrlS` JS + `[JSInvokable] SalvaViaShortcut()`). Dalla v5.7 funziona anche con il cursore ancora dentro un campo appena modificato: prima veniva salvato il valore precedente, perché `@bind` aggiorna il valore solo quando il campo perde il focus.
 
 Il campo **Cliente** ha un bottone **✏️** che apre la modale `ClientiEditorModal` per gestire la lista clienti (con log delle modifiche in `Clienti_Log`).
+
+Nella prima riga, dopo "Versione di sviluppo", la combo **Software** (v5.6, §31). Accanto a "🔍 Ricerca" della Descrizione, il pulsante **"Ricerca in nuova finestra"** (v5.6, §32).
 
 ### 4. Ambienti di Rilascio (Form, v4.1)
 
@@ -187,7 +202,7 @@ Campo `contenteditable` (non textarea) con toolbar di editing:
 - **S** barrato / **S** sottolineato: formattazione barrato e sottolineato.
 - **A** rosso: colora il testo in rosso.
 - **✕**: rimuove tutta la formattazione (bold, colore, highlight, sottolineato, ecc.).
-- **◀** / 📋 / **▶**: Undo / Storico versioni / Redo (overlay in basso a destra dell'editor, sopra le scrollbar).
+- **📷** / **◀** / 📋 / **▶**: Testo letto negli screenshot (v5.7, §34) / Undo / Storico versioni / Redo (overlay in basso a destra dell'editor, sopra le scrollbar).
 - **⊟**: rimuove le righe vuote dal contenuto dell'editor.
 - **TODO**: sostituisce ogni occorrenza di "TODO" (parola isolata) con `--`, preservando tutta la formattazione HTML.
 - Altezza: min 200px, max 500px con scroll verticale.
@@ -219,7 +234,7 @@ Changeset XXX: [Testo del check-in]
 - **S** barrato / **S** sottolineato: formattazione barrato e sottolineato.
 - **A** rosso: colora il testo in rosso.
 - **✕**: rimuove tutta la formattazione (bold, colore, highlight, sottolineato, ecc.).
-- **◀** / 📋 / **▶**: Undo / Storico versioni / Redo (overlay in basso a destra dell'editor, sopra le scrollbar).
+- **📷** / **◀** / 📋 / **▶**: Testo letto negli screenshot (v5.7, §34) / Undo / Storico versioni / Redo (overlay in basso a destra dell'editor, sopra le scrollbar).
 - **⊟**: rimuove le righe vuote dal contenuto dell'editor.
 - **TODO**: sostituisce ogni occorrenza di "TODO" (parola isolata) con `--`, preservando tutta la formattazione HTML.
 - Altezza: min 200px, max 350px, scroll verticale **e orizzontale**.
@@ -265,6 +280,10 @@ Ricerca full-text su tutte le attività (senza filtri data) con griglia risultat
 
 **Colonna "N° Ticket" e stato di attesa (v5.3/v5.4):** la griglia dei risultati mostra il numero del ticket dopo la data. Durante l'esecuzione della query compare **"Ricerca in corso, attendere…"** con rotellina, e il pulsante Cerca si disabilita: prima, per tutta la durata della ricerca, veniva mostrato "Nessun risultato trovato".
 
+**"Apri selezionato in nuova finestra" (v5.6):** pulsante nel footer, accanto a "✅ Seleziona": apre il risultato in un'altra finestra del programma (§32), lasciando aperta la Ricerca Avanzata.
+
+**📷 Testo negli screenshot (v5.7):** spunta che estende la ricerca al testo letto negli screenshot di Note e Changeset; nel dettaglio del risultato compaiono le sezioni "📷 Testo negli screenshot…" con le occorrenze evidenziate (§34).
+
 ### 13. Segnalazioni (Modale)
 
 Pulsante **"🐛 Segnala"** nella barra superiore (sempre visibile, indipendente dalla modalità admin), apre la modale `SegnalazioniModal`:
@@ -283,7 +302,11 @@ Attivabile tramite checkbox (configurabile in `appsettings.json` con `MostraModa
 
 ### 15. Avviso Modifiche Non Salvate
 
-Quando si tenta di chiudere la finestra con il form in modifica, viene mostrato un dialogo di conferma. Implementato via `UnsavedChangesService` (singleton) + `AppWindow.Closing` (WinUI nativo) in `App.xaml.cs`.
+Quando si tenta di chiudere la finestra con modifiche non salvate nell'attività, viene mostrato un dialogo di conferma. Implementato via `UnsavedChangesService` (singleton) + `AppWindow.Closing` (WinUI nativo) in `App.xaml.cs`. Fino alla v5.6 il servizio non veniva mai alimentato e l'avviso non scattava: dalla v5.7 segue l'indicatore qui sotto.
+
+**Indicatore nella barra di stato (v5.7):** pallino **verde** (attività salvata / nessuna modifica), **rosso** (modifiche da salvare) o **grigio** (sola consultazione: finestra di confronto o, in admin, attività di un altro utente). Il rilevamento avviene nel browser (`modificheFormHelper` in `index.html`): eventi `input`/`change` per i campi e un `MutationObserver` per gli editor Note/Changeset, perché indentazione, rimozione righe vuote e simili riscrivono l'HTML senza generare eventi. Se si continua a scrivere mentre un salvataggio lento è in corso, il pallino resta rosso.
+
+**Conferma prima di perdere le modifiche (v5.7):** con il pallino rosso, i comandi che sostituiscono l'attività nel form — riga della griglia, ➕ Nuova, ❌ Annulla, Duplica, "✅ Seleziona" della Ricerca Avanzata, ♻️ Ripristina bozza — mostrano la modale **"⚠️ Modifiche non salvate"** con **↩️ Resta sull'attività**, **🗑️ Scarta le modifiche** e **💾 Salva e continua** (che prosegue solo se il salvataggio riesce). Tutti passano da `EseguiConControlloModifiche`: un nuovo pulsante che cambia attività deve usarlo.
 
 ### 16. Export Attività
 
@@ -291,7 +314,7 @@ Quando si tenta di chiudere la finestra con il form in modifica, viene mostrato 
 - Naming convention: `ElencoAttivitàAl[yyyyMMdd_HHmmss].xlsx`, `DettaglioTutteLeAttività_[dal]_[al]_[timestamp].txt`, `DettaglioAttività_[data]_[descrizione]_[timestamp].txt`.
 - I campi HTML (Note, ChangesetCoinvolti) vengono convertiti in testo plain via `HtmlToPlainText()` prima dell'export.
 - L'ultimo file esportato viene mostrato nella barra di stato.
-- XLSX generato con **ClosedXML** (pacchetto NuGet 0.102.2).
+- XLSX generato con **ClosedXML** (pacchetto NuGet 0.105.1).
 
 ### 17. Barra di Stato
 
@@ -300,11 +323,12 @@ Barra fissa in fondo alla finestra:
 - **📤 Export**: nome dell'ultimo file esportato (con tooltip percorso completo).
 - **🔐 Modalità Admin attiva**: badge in admin mode.
 - **🔒 Privacy attiva**: badge se `PrivacyMode: true`.
+- **Pallino modifiche non salvate** (v5.7): verde / rosso / grigio, vedi §15.
 - **Versione app**: numero da `appsettings.json`.
 
 ### 18. Privacy Mode
 
-Proprietà booleana `PrivacyMode` in `appsettings.json`. Se `true`: le attività dell'utente non sono visibili ad altri utenti in modalità Admin. Nessuna UI per modificarla.
+Proprietà booleana `PrivacyMode` in `appsettings.json`. Se `true`: le attività dell'utente non sono visibili ad altri utenti in modalità Admin. Si modifica solo a mano nel file: la finestra ⚙️ Impostazioni (v5.7) la mostra in sola lettura.
 
 ### 19. Colonna "Cart. Doc." nella Griglia (v4.5)
 
@@ -415,6 +439,73 @@ Nelle toolbar di **"Descrizione dettagliata lavoro svolto"** e **"Elenco Changes
 
 Tutti gli export (XLSX, dettagli TXT/PDF, singola attività TXT/PDF) mostrano **"Generazione … in corso…"** con rotellina accanto a **📁 Apri Export**, e una rotellina al posto dell'icona sul pulsante della riga da cui è partito l'export. Gli altri pulsanti export si disabilitano: un export alla volta. Il lavoro pesante (generazione XLSX, composizione dell'HTML con gli screenshot in base64) gira su un thread di background, così l'interfaccia resta reattiva invece di apparire bloccata.
 
+### 31. Campo Software (v5.6)
+
+Combo **Software** nella prima riga del form, dopo "Versione di sviluppo", visibile solo per le attività di tipo **Lavoro** (salvando un altro tipo il valore viene azzerato).
+
+- La lista è **condivisa** fra tutti gli utenti (tabelle `Software` + `Software_Log`) e si gestisce dalla ✏️ accanto alla combo (`SoftwareEditorModal`): aggiunta, rinomina, ordine, disattivazione. Il log registra lo stato completo prima/dopo.
+- **Default**: `NomeProgramma` di `appsettings.json`, creato o riattivato all'avvio (`SoftwareService.EnsureSoftwareDefaultAsync`); nella modale è marcato "Default" e non si può rinominare né disattivare.
+- **Eliminazione soft**: un software disattivato sparisce dalla combo ma le attività che lo usano continuano a mostrarlo (con la voce "(disattivato)").
+- Riferimento per **Id**: rinominando un software cambia nome anche sulle attività già salvate.
+- Colonna **"Software"** in griglia, nell'export XLSX, nel PDF e nei due TXT.
+- **Struttura patch e Readme** usano il software dell'attività al posto del solo `NomeProgramma`.
+
+### 32. Finestre di Confronto (v5.6)
+
+Per confrontare ciò che si cerca con l'attività su cui si sta lavorando, senza perderla:
+
+- **"Ricerca in nuova finestra"** (accanto a "🔍 Ricerca" della Descrizione): avvia un'altra istanza del programma già filtrata sulla stessa ricerca.
+- **"Apri selezionato in nuova finestra"** (Ricerca Avanzata): apre il risultato selezionato in un'altra istanza, sul mese dell'attività e con l'attività già nel form; in modalità Admin (se `MostraModalitaAdmin` lo consente) anche le attività dei colleghi.
+
+Le finestre di confronto sono riconoscibili dal titolo ("— Confronto (sola consultazione)") e da un banner, e sono in **sola consultazione per l'attività**: Salva, Ctrl+S ed Elimina sono disattivati, perché due finestre sulla stessa attività si sovrascriverebbero. Le modali (TODO, Appunti, Gestione Clienti, ecc.) restano operative. Non eseguono i lavori di avvio (bozza, pulizia storico, conversioni e lettura degli screenshot in background), che restano della finestra principale. Implementazione in `Services/IstanzaConfronto.cs` (`Process.Start` con argomenti `--confronto --cerca …` / `--apri <id> [--admin]`), possibile perché l'app non è MSIX.
+
+### 33. Icone delle Azioni (v5.6)
+
+Le emoji ambigue su azioni ed export (📄 copiava e 📋 duplicava, 💾 era l'export TXT, 🧾 il PDF) sono state sostituite da **Bootstrap Icons** 1.11.3 (CDN in `index.html`), con una convenzione unica in tutta l'app: `bi-clipboard` copia negli appunti, `bi-copy` duplica/clona, `bi-trash` elimina, `bi-filetype-txt` / `bi-filetype-pdf` / `bi-filetype-xlsx` / `bi-filetype-md` per gli export, `bi-folder2-open` "Apri Export". Nella griglia attività TXT e PDF della singola riga sono raccolti nel menu a tendina **Esporta** (posizionamento `fixed`, altrimenti il contenitore con scroll taglierebbe la tendina). Le emoji restano nei titoli, nei pulsanti Salva e nei testi degli export.
+
+### 34. Testo negli Screenshot — OCR (v5.7)
+
+Il testo degli screenshot incollati nella Descrizione dettagliata e nei Changeset (`<img src="data:image/...;base64,...">`) viene letto con il **riconoscimento del testo di Windows** (`Windows.Media.Ocr`: gratuito, senza internet) e salvato in `Attivita.NoteOcr` / `ChangesetOcr`.
+
+- **In background**, all'avvio e dopo ogni salvataggio: il salvataggio non aspetta l'OCR. Al primo avvio vengono letti tutti gli screenshot già presenti, dalla attività più recente, con un banner di avanzamento. Ogni postazione legge solo le attività del proprio utente; la finestra di confronto non legge.
+- **Impronta al posto di un flag**: `Attivita.OcrImpronta` è lo SHA-256 degli screenshot di entrambi i campi (`ScreenshotHtmlHelper.CalcolaImpronta`). Salvando senza toccare le immagini l'impronta non cambia e nulla viene riletto; NULL = da leggere, stringa vuota = nessuno screenshot. La scrittura avviene solo se l'attività non è stata risalvata durante la lettura.
+- **Ingrandimento 3×** prima della lettura: misurato sugli screenshot reali, a 1× il testo piccolo delle interfacce usciva storpiato.
+- **Dove si usa**: la spunta "📷 Testo negli screenshot" della Ricerca Avanzata (§12). La ricerca rapida della griglia e il rilevamento dei TODO **non** lo usano.
+- **Pulsante 📷** in basso a destra dei due editor: mostra il testo letto negli screenshot di quel campo (`OcrScreenshotModal`, con "Copia tutto"); se gli screenshot sono appena stati incollati li legge al momento, senza scrivere nel database.
+- Se Windows non ha il riconoscimento del testo per l'italiano (o per una lingua dell'utente), un avviso spiega come attivarlo e le attività restano da leggere.
+- Per far rileggere tutto: `UPDATE Attivita SET OcrImpronta = NULL WHERE OcrImpronta <> ''`.
+
+### 35. Ricerca e Screenshot in Gestione Clienti (v5.7)
+
+- **Casella di ricerca** sopra l'elenco degli ambienti (Invio o 🔍, ✕ per togliere il filtro). Il filtro gira su SQL e cerca in cliente, ambiente, server, persone, directory, pool, versione, nel **testo scritto** in "Come collegarsi" e "Dati ambiente" e, con la spunta **"📷 anche negli screenshot"**, nel testo dei loro screenshot. Le righe trovate grazie a uno screenshot hanno un badge 📷. Il filtro resta attivo anche dopo Salva/Elimina e alla riapertura della finestra; l'export XLSX esporta l'elenco mostrato.
+- Per cercare nel testo scritto senza trovare parole dentro il base64 delle immagini servono le colonne `ComeCollegarsiTesto` / `DatiAmbienteTesto` (HTML ripulito, come `NoteTesto` v5.5); il testo degli screenshot è in `ComeCollegarsiOcr` / `DatiAmbienteOcr` con `OcrImpronta`.
+- I dati sono condivisi: la lettura in background la fa **qualsiasi postazione**, con scrittura condizionata (due PC sullo stesso ambiente non si sovrascrivono).
+- **Pulsante 📷** anche sui due editor della finestra.
+- Una postazione ancora con una versione precedente che modifica un ambiente non aggiorna questi testi: dopo che tutti hanno aggiornato, `UPDATE ClientiAmbienti SET OcrImpronta = NULL` li fa ricalcolare.
+
+### 36. Finestra Impostazioni ⚙️ (v5.7)
+
+Pulsante a ingranaggio all'estremo destro della barra superiore. Modifica le impostazioni di `appsettings.json` senza aprire il file:
+
+| Sezione | Impostazioni |
+|---|---|
+| 🎨 Aspetto | Tema e colore principale (§37), con anteprima immediata |
+| 📦 Struttura patch e Readme | `NomeProgramma`, `NomeCompagnia`, `TmpPatchDir` (con selezione della cartella) |
+| ⏰ Ticket in scadenza | Giorni di preavviso arancione / rosso |
+| 🛠️ Manutenzione e database | Mesi di storico, timeout delle query (dal prossimo avvio) |
+| 🧾 Export | Attività collegate nel PDF |
+| ℹ️ Informazioni | **Sola lettura**: versione, Privacy, Modalità Admin, server/database/autenticazione (mai la password), percorso del file |
+
+`ImpostazioniService` riscrive il file toccando **solo** queste chiavi (connection string e il resto restano com'erano), passando da un file temporaneo per non lasciarlo a metà, e ricarica la configurazione: i valori valgono subito, tranne quelli indicati "dal prossimo avvio". I commenti scritti a mano nel file si perdono al primo salvataggio dalla finestra.
+
+### 37. Temi (v5.7)
+
+- **Tema**: Come Windows / Chiaro / Scuro. Il tema scuro è quello di **Bootstrap 5.3** (`data-bs-theme`); anche la barra del titolo segue la scelta.
+- **Colore principale** (pulsanti principali, intestazioni, spunte, selezione, link): Classico, Acciaio, Fucina, Foresta, Prugna, Grafite o Come Windows (accento di Windows). Il default **Classico** è il blu di sempre.
+- La scelta si riapplica da sola quando `appsettings.json` cambia (anche nelle finestre di confronto aperte) e viene ripristinata prima che la pagina compaia, senza lampi chiari all'avvio.
+- Nel tema scuro gli **editor e le anteprime del testo salvato restano chiari**, come un foglio: l'HTML salvato porta i propri colori (evidenziato giallo, testo rosso, testo nero incollato da altri programmi) e su sfondo scuro diventerebbe illeggibile.
+- Implementazione: palette in `Services/TemaInterfaccia.cs`, `temaHelper` nell'`<head>` di `index.html` (calcola le sfumature `--wat-primario*`), colori dell'app come variabili `--wat-*` in `app.css` con la versione chiara e quella scura. Gli export PDF/TXT non cambiano.
+
 ---
 
 ## Modello Dati
@@ -441,6 +532,10 @@ TipiAttivita          — Tipi attività configurabili (Lavoro/Permesso/Ferie + 
 TipiAttivita_Log      — Log modifiche ai tipi attività (v4.2)
 EventiCalendario      — Eventi del calendario con scadenza e stato risolto (v4.2)
 EditorHistory         — Storico versioni HTML dei campi Note e ChangesetCoinvolti (v4.5)
+ClientiAmbienti       — Ambienti per cliente: server, persone, come collegarsi, dati ambiente (v4.7)
+ClientiAmbienti_Log   — Log modifiche agli ambienti per cliente (v4.7)
+Software              — Lista condivisa dei software (v5.6)
+Software_Log          — Log modifiche alla lista software (v5.6)
 ```
 
 ### Tipo Attività
@@ -464,7 +559,7 @@ EF Core DbContext
 SQL Server Database
 ```
 
-- **Single Page Application**: `Components/Pages/Home.razor` (~2700 righe).
+- **Single Page Application**: `Components/Pages/Home.razor` (~6000 righe).
 - **Modali** come componenti Blazor separati in `Components/`.
 - **JS Interop**: script in `wwwroot/index.html` per gli editor contenteditable e Ctrl+S.
 - **Nessuna EF Migration**: aggiornamenti schema tramite script SQL manuali in `Database/`.
@@ -475,7 +570,7 @@ SQL Server Database
 | Servizio | Lifetime | Scopo |
 |---|---|---|
 | `ActivityService` | Scoped | CRUD attività |
-| `UserService` | Scoped | Gestione utente Windows |
+| `UserService` | Singleton | Gestione utente Windows |
 | `AmbienteService` | Scoped | CRUD congelati + log |
 | `ClienteService` | Scoped | CRUD clienti + log |
 | `TodoService` | Scoped | CRUD TODO List |
@@ -491,6 +586,13 @@ SQL Server Database
 | `ReadmeTemplateService` | Singleton | Carica i template readme da `ReadmeTmplates.json` (v5.2) |
 | `BozzaAttivitaService` | Singleton | Salvataggio di emergenza dell'attività su file quando il DB non risponde (v5.3) |
 | `HtmlTextHelper` | statico | Conversione HTML → testo semplice, condivisa fra UI e servizi (v5.5) |
+| `ClienteAmbienteService` | Scoped | CRUD ambienti per cliente (Gestione Clienti) + log, ricerca lato SQL (v4.7, v5.7) |
+| `SoftwareService` | Scoped | Lista software condivisa + log (v5.6) |
+| `IstanzaConfronto` | statico | Avvio e argomenti delle finestre di confronto (v5.6) |
+| `OcrScreenshotService` | Singleton | Lettura del testo negli screenshot con l'OCR di Windows, lavoro in background (v5.7) |
+| `ScreenshotHtmlHelper` | statico | Estrazione degli screenshot base64 dall'HTML e impronta SHA-256 (v5.7) |
+| `ImpostazioniService` | Singleton | Lettura/scrittura delle impostazioni della finestra ⚙️ in `appsettings.json` (v5.7) |
+| `TemaInterfaccia` | statico | Palette e applicazione di tema e colore principale (v5.7) |
 
 ### Script JS in `wwwroot/index.html`
 
@@ -508,6 +610,8 @@ SQL Server Database
 | `noteEditorHelper.indent(el, right)` | Indenta le righe selezionate nelle Note |
 | `sostituisciTodoNeiNodi(el)` | Traversa i text node dell'editor e sostituisce TODO (parola isolata) con `--`, preservando HTML |
 | `copyToClipboard(text)` | Copia testo negli appunti con fallback `execCommand` per MAUI |
+| `modificheFormHelper` | Rilevamento delle modifiche nel form (eventi + `MutationObserver` sugli editor) per il pallino rosso/verde (v5.7) |
+| `temaHelper.applica(tema, colore)` | Applica tema chiaro/scuro e sfumature del colore principale; nell'`<head>`, ripristina l'ultima scelta prima di Blazor (v5.7) |
 
 ---
 
@@ -542,6 +646,8 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 | `MigrateToV5.3.sql` | Aggiunta `DataScadenzaTicket` in `Attivita` (+ indice filtrato `IX_Attivita_DataScadenzaTicket`) e `NotaCompletamento` in `TodoItems` |
 | `MigrateToV5.4.sql` | Aggiunta colonna `Note` (NVARCHAR(MAX)) in `Ambienti` |
 | `MigrateToV5.5.sql` | Aggiunta `NoteTesto` e `ChangesetTesto` in `Attivita` (+ indice filtrato `IX_Attivita_NoteTesto_DaConvertire`) |
+| `MigrateToV5.6.sql` | Tabelle `Software` e `Software_Log`; colonna `Attivita.SoftwareId` con chiave esterna e indice; software di default sulle attività Lavoro esistenti (**impostare a mano `@NomeProgramma`**) |
+| `MigrateToV5.7.sql` | `Attivita`: `NoteOcr`, `ChangesetOcr`, `OcrImpronta` (+ indice filtrato `IX_Attivita_OcrDaLeggere`). `ClientiAmbienti`: `ComeCollegarsiTesto`, `DatiAmbienteTesto`, `ComeCollegarsiOcr`, `DatiAmbienteOcr`, `OcrImpronta`. Va eseguito **dopo** la V5.6 |
 | _(script una tantum)_ | `PuliziaLogClientiAmbienti.sql` — **non è una migration**: accorcia le righe già presenti in `ClientiAmbienti_Log`, dove veniva salvato "Come collegarsi" per intero |
 
 ---
@@ -557,11 +663,33 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 - Il filtro "Solo TODO" è applicato sia alla lista principale che alla lista per la ricerca avanzata.
 - `UnsavedChangesService`: singleton condiviso tra il layer MAUI (`App.xaml.cs`) e il layer Blazor (`Home.razor`). `App.xaml.cs` intercetta `AppWindow.Closing` (cancellabile), controlla il servizio e mostra `DisplayAlert`.
 - `DotNetObjectReference<Home>` per il callback Ctrl+S: creato in `OnAfterRenderAsync` al first render, disposto in `Dispose()` (il componente implementa `IDisposable`).
-- Export XLSX usa **ClosedXML** (`ClosedXML` 0.102.2 nel `.csproj`). I file vengono salvati in `Export/` nella directory dell'eseguibile.
+- Export XLSX usa **ClosedXML** (`ClosedXML` 0.105.1 nel `.csproj`). I file vengono salvati in `Export/` nella directory dell'eseguibile.
+- **Colori (v5.7)**: niente colori scritti nel CSS o negli `style=""` — vanno aggiunti come variabili `--wat-*` in `app.css`, con il valore chiaro e quello scuro (§37). Editor e anteprime dell'HTML salvato usano la classe `foglio`, che resta chiara anche nel tema scuro.
 
 ---
 
 ## Changelog
+
+### v5.7
+- 📷 **Testo negli screenshot**: il testo degli screenshot incollati in Descrizione dettagliata e Changeset viene letto con il riconoscimento del testo di Windows (offline, gratuito) e si può cercare dalla Ricerca Avanzata con la spunta "📷 Testo negli screenshot". Lettura in background all'avvio e dopo ogni salvataggio, senza rileggere gli screenshot che non cambiano. Pulsante **📷** sui due editor per vedere e copiare il testo letto.
+- 🏢 **Ricerca in Gestione Clienti**: casella sopra l'elenco che cerca nei campi, nel testo scritto in "Come collegarsi"/"Dati ambiente" e nel testo dei loro screenshot, con badge 📷 sulle righe trovate in uno screenshot; pulsante 📷 sui due editor.
+- 🟢 **Modifiche non salvate**: pallino verde/rosso/grigio nella barra di stato; l'avviso alla chiusura del programma ora scatta davvero.
+- ⚠️ **Conferma prima di perdere le modifiche** quando si apre un'altra attività, si crea una nuova, si annulla, si duplica, si seleziona dalla Ricerca Avanzata o si ripristina la bozza: Resta / Scarta / Salva e continua.
+- ⚙️ **Finestra Impostazioni**: le impostazioni di `appsettings.json` modificabili da una finestra (Privacy, Modalità Admin e connection string in sola lettura).
+- 🌙 **Temi**: Come Windows / Chiaro / Scuro e colore principale a scelta; gli editor restano chiari anche al buio. Nuove chiavi `Tema` e `ColorePrincipale`.
+- 🐛 **Ctrl+S** con il cursore in un campo appena modificato salvava il valore precedente.
+- 🐛 **Righe TODO** di nuovo evidenziate in griglia e nella Ricerca Avanzata (con Bootstrap 5.3 lo sfondo delle celle copriva quello della riga).
+- 🆕 Nuovi servizi: `OcrScreenshotService`, `ImpostazioniService`, `ScreenshotHtmlHelper`, `TemaInterfaccia`. Nuove modali: `OcrScreenshotModal`, `ImpostazioniModal`.
+- 🆕 Nuova migrazione DB: `MigrateToV5.7.sql` (da eseguire dopo la V5.6).
+- 📦 Dipendenze aggiornate: MAUI 10.0.120, CommunityToolkit.Maui 15.0.1, EF Core 10.0.14, ClosedXML 0.105.1.
+
+### v5.6
+- 💻 **Campo Software** nel form attività (solo Lavoro), con lista condivisa gestita dalla ✏️, log delle modifiche, eliminazione soft e default `NomeProgramma`. Colonna in griglia e negli export; struttura patch e Readme usano il software dell'attività.
+- 🗗 **Finestre di confronto**: "Ricerca in nuova finestra" accanto a "🔍 Ricerca" e "Apri selezionato in nuova finestra" nella Ricerca Avanzata aprono un'altra istanza del programma, in sola consultazione per l'attività.
+- 🎨 **Icone più chiare** (Bootstrap Icons) su azioni ed export; nella griglia TXT e PDF raccolti nel menu "Esporta".
+- ⚡ **Gestione Clienti più reattiva**: dalla seconda apertura l'elenco compare subito e si aggiorna in background; le query di apertura partono in parallelo.
+- 🆕 Nuovi servizi: `SoftwareService`, `IstanzaConfronto`. Nuova modale: `SoftwareEditorModal`.
+- 🆕 Nuova migrazione DB: `MigrateToV5.6.sql` (impostare a mano `@NomeProgramma`).
 
 ### v5.5
 - ⚡ **Gestione Clienti si apre subito**: la griglia non carica più "Come collegarsi" e "Dati ambiente" (i campi con gli screenshot in base64) per tutte le righe. Erano decine di MB trasferiti a ogni apertura — su database raggiunto via VPN, i 30-60 secondi di attesa prima di vedere l'elenco. I campi ricchi vengono letti **on-demand** solo per la riga selezionata, e per il solo cliente esportato in caso di PDF.

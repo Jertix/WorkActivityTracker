@@ -81,7 +81,7 @@
                                                 <td class="text-center p-0"
                                                     style="cursor: @(isDelMese ? "pointer" : "default");
                                                            min-width: 36px; height: 38px;
-                                                           background-color: @(isSelezionato ? "#cce5ff" : isOggi ? "#fff3cd" : "");
+                                                           background-color: @(isSelezionato ? "rgba(var(--wat-primario-rgb), 0.2)" : isOggi ? "var(--bs-warning-bg-subtle)" : "");
                                                            opacity: @(isDelMese ? "1" : "0.35");"
                                                     @onclick="() => SelezionaGiorno(giorno)">
                                                     <span class="@(isOggi ? "fw-bold text-primary" : "") small">
@@ -89,7 +89,7 @@
                                                     </span>
                                                     @if (haEventi && isDelMese)
                                                     {
-                                                        <span class="d-block" style="width: 6px; height: 6px; border-radius: 50%; background: #0d6efd; margin: 0 auto; margin-top: -2px;"></span>
+                                                        <span class="d-block" style="width: 6px; height: 6px; border-radius: 50%; background: var(--wat-primario); margin: 0 auto; margin-top: -2px;"></span>
                                                     }
                                                 </td>
                                                 giornoCorrente = giornoCorrente.AddDays(1);

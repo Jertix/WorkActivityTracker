@@ -976,6 +976,39 @@ public class ReadmeTemplate
     public string DirectoryDiSalvataggio { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Le impostazioni di appsettings.json modificabili dalla finestra ⚙️ Impostazioni (v5.7).
+/// PrivacyMode, Modalità Admin e stringa di connessione NON ci sono: restano modificabili solo a
+/// mano nel file (scelta dell'utente), la finestra le mostra in sola lettura.
+/// </summary>
+public class ImpostazioniModificabili
+{
+    public string Tema { get; set; } = string.Empty;
+    public string ColorePrincipale { get; set; } = string.Empty;
+    public string NomeProgramma { get; set; } = string.Empty;
+    public string NomeCompagnia { get; set; } = string.Empty;
+    public string TmpPatchDir { get; set; } = string.Empty;
+    public int GiorniPreavvisoScadenzaArancione { get; set; }
+    public int GiorniPreavvisoScadenzaRosso { get; set; }
+    public bool EsportaAttivitaCollegateInPdf { get; set; }
+    public int NumeroMesiMantenimentoHistory { get; set; }
+    public int TimeoutQuerySecondi { get; set; }
+
+    public ImpostazioniModificabili Clona() => (ImpostazioniModificabili)MemberwiseClone();
+
+    /// <summary>Gli errori che impediscono il salvataggio (lista vuota = valori validi).</summary>
+    public List<string> Valida()
+    {
+        var errori = new List<string>();
+        if (string.IsNullOrWhiteSpace(NomeProgramma)) errori.Add("Il nome del programma è obbligatorio (compone il nome delle cartelle patch).");
+        if (string.IsNullOrWhiteSpace(TmpPatchDir)) errori.Add("La cartella della struttura patch è obbligatoria.");
+        if (GiorniPreavvisoScadenzaArancione < 0 || GiorniPreavvisoScadenzaRosso < 0) errori.Add("I giorni di preavviso non possono essere negativi (0 = evidenziazione disattivata).");
+        if (NumeroMesiMantenimentoHistory < 0) errori.Add("I mesi di storico non possono essere negativi (0 = pulizia disattivata).");
+        if (TimeoutQuerySecondi < 1) errori.Add("Il timeout delle query deve essere di almeno 1 secondo.");
+        return errori;
+    }
+}
+
 /// <summary>DTO per SegnalazioneRisposta</summary>
 public class SegnalazioneRispostaDto
 {

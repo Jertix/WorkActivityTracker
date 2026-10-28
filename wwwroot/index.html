@@ -11,6 +11,64 @@
     <!-- Bootstrap Icons (v5.6): icone dei pulsanti di export e delle azioni di riga -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
     <link href="css/app.css" rel="stylesheet" />
+
+    <!-- Tema e colore principale (v5.7). Sta nell'head e riapplica subito l'ultima scelta salvata
+         in localStorage: senza, a ogni avvio la pagina comparirebbe chiara e poi diventerebbe scura
+         quando Blazor chiama temaHelper.applica (TemaInterfaccia.ApplicaAsync). -->
+    <script>
+        window.temaHelper = (function () {
+            var scelta = null;   // { tema: 'ComeWindows'|'Chiaro'|'Scuro', colore: '#RRGGBB' }
+            var schemaScuro = window.matchMedia('(prefers-color-scheme: dark)');
+
+            function rgb(esa) {
+                var n = parseInt(esa.replace('#', ''), 16);
+                return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+            }
+            // Sfuma il colore verso il nero o il bianco della percentuale indicata
+            function mescola(c, verso, p) {
+                return c.map(function (v, i) { return Math.round(v + (verso[i] - v) * p); });
+            }
+            function esa(c) {
+                return '#' + c.map(function (v) { return v.toString(16).padStart(2, '0'); }).join('');
+            }
+
+            function applicaOra() {
+                if (!scelta) return;
+                var radice = document.documentElement;
+                var scuro = scelta.tema === 'Scuro' || (scelta.tema === 'ComeWindows' && schemaScuro.matches);
+                radice.setAttribute('data-bs-theme', scuro ? 'dark' : 'light');
+
+                // Le stesse proporzioni di Bootstrap: hover -15%, premuto -20% verso il nero;
+                // versione chiara (testo e link nel tema scuro) +40%, bordo del focus +50% verso il bianco
+                var c = rgb(scelta.colore || '#0d6efd'), nero = [0, 0, 0], bianco = [255, 255, 255];
+                var chiaro = mescola(c, bianco, 0.4);
+                var s = radice.style;
+                s.setProperty('--wat-primario', esa(c));
+                s.setProperty('--wat-primario-rgb', c.join(', '));
+                s.setProperty('--wat-primario-hover', esa(mescola(c, nero, 0.15)));
+                s.setProperty('--wat-primario-attivo', esa(mescola(c, nero, 0.2)));
+                s.setProperty('--wat-primario-chiaro', esa(chiaro));
+                s.setProperty('--wat-primario-chiaro-rgb', chiaro.join(', '));
+                s.setProperty('--wat-primario-bordo', esa(mescola(c, bianco, 0.5)));
+            }
+
+            // "Come Windows": segue il passaggio chiaro/scuro di Windows anche a programma aperto
+            schemaScuro.addEventListener('change', applicaOra);
+
+            return {
+                applica: function (tema, colore) {
+                    scelta = { tema: tema, colore: colore };
+                    applicaOra();
+                    try { localStorage.setItem('wat-tema', JSON.stringify(scelta)); } catch (e) { }
+                },
+                ripristina: function () {
+                    try { scelta = JSON.parse(localStorage.getItem('wat-tema') || 'null'); } catch (e) { scelta = null; }
+                    applicaOra();
+                }
+            };
+        })();
+        temaHelper.ripristina();
+    </script>
 </head>
 <body>
     <div id="app">Caricamento...</div>

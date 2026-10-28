@@ -1,6 +1,94 @@
+/* =============================================
+   TEMI (v5.7)
+   - Chiaro/scuro: attributo data-bs-theme di Bootstrap 5.3 su <html>.
+   - Colore principale: --wat-primario e sfumature, impostati da temaHelper (index.html) sullo
+     style di <html> a partire dalla palette di TemaInterfaccia.cs. I valori qui sotto sono quelli
+     di partenza ("Classico" = blu Bootstrap) finché il JS non ha girato.
+   - I colori scritti a mano dell'app stanno nelle variabili --wat-*: ognuna ha il valore chiaro
+     qui e quello scuro nel blocco [data-bs-theme="dark"]. Per un colore nuovo, aggiungerlo in
+     entrambi i blocchi invece di scriverlo nel CSS o in uno style="".
+   ============================================= */
+:root {
+    --wat-primario: #0d6efd;
+    --wat-primario-rgb: 13, 110, 253;
+    --wat-primario-hover: #0b5ed7;
+    --wat-primario-attivo: #0a58ca;
+    --wat-primario-chiaro: #6ea8fe;
+    --wat-primario-chiaro-rgb: 110, 168, 254;
+    --wat-primario-bordo: #86b7fe;
+}
+
+:root,
+[data-bs-theme="light"] {
+    --bs-primary: var(--wat-primario);
+    --bs-primary-rgb: var(--wat-primario-rgb);
+    --bs-link-color: var(--wat-primario);
+    --bs-link-color-rgb: var(--wat-primario-rgb);
+    --bs-link-hover-color: var(--wat-primario-attivo);
+    --bs-link-hover-color-rgb: var(--wat-primario-rgb);
+    /* Colore principale usato come testo (pulsanti "outline", link): nel tema scuro la versione chiara */
+    --wat-primario-testo: var(--wat-primario);
+    --wat-focus-bordo: var(--wat-primario-bordo);
+
+    --wat-sfondo-pagina: #f8f9fa;
+    --wat-separatore: #dee2e6;
+    --wat-riga-selezionata: #ffe066;
+    --wat-riga-selezionata-todo: #ffb347;
+    --wat-riga-selezionata-arancione: #ffcc66;
+    --wat-riga-selezionata-rossa: #ffa94d;
+    --wat-riga-todo: #ffcccc;
+    --wat-riga-todo-hover: #ffb3b3;
+    --wat-riga-todo-attiva: #ff9999;
+    --wat-scadenza-arancione: #ffe0b3;
+    --wat-scadenza-arancione-hover: #ffd08a;
+    --wat-scadenza-rossa: #ff9999;
+    --wat-scadenza-rossa-hover: #ff8080;
+    --wat-scadenza-scaduta: #ff6b6b;
+    --wat-scadenza-scaduta-hover: #fa5252;
+    --wat-zero-ore: #999;
+    --wat-pannello: #f8f9fa;
+    --wat-pannello-hover: #e9ecef;
+    --wat-pannello-hover-bordo: #ced4da;
+}
+
+[data-bs-theme="dark"] {
+    --bs-primary: var(--wat-primario);
+    --bs-primary-rgb: var(--wat-primario-rgb);
+    --bs-primary-text-emphasis: var(--wat-primario-chiaro);
+    --bs-link-color: var(--wat-primario-chiaro);
+    --bs-link-color-rgb: var(--wat-primario-chiaro-rgb);
+    --bs-link-hover-color: var(--wat-primario-bordo);
+    --bs-link-hover-color-rgb: var(--wat-primario-chiaro-rgb);
+    --wat-primario-testo: var(--wat-primario-chiaro);
+    --wat-focus-bordo: var(--wat-primario-chiaro);
+
+    /* La pagina un po' più scura delle card (--bs-body-bg), come il grigio chiaro nel tema chiaro */
+    --wat-sfondo-pagina: #1a1d20;
+    --wat-separatore: #495057;
+    /* Righe della griglia: tinte scure con testo chiaro, stesse precedenze del tema chiaro
+       (selezionata > scadenza > TODO). La selezionata resta la più evidente. */
+    --wat-riga-selezionata: #6b5a00;
+    --wat-riga-selezionata-todo: #7d4a0f;
+    --wat-riga-selezionata-arancione: #7a5c0c;
+    --wat-riga-selezionata-rossa: #8a4a14;
+    --wat-riga-todo: #4a2328;
+    --wat-riga-todo-hover: #5a2a31;
+    --wat-riga-todo-attiva: #6a3039;
+    --wat-scadenza-arancione: #573c13;
+    --wat-scadenza-arancione-hover: #684818;
+    --wat-scadenza-rossa: #6e2a2a;
+    --wat-scadenza-rossa-hover: #803131;
+    --wat-scadenza-scaduta: #8f2323;
+    --wat-scadenza-scaduta-hover: #a32a2a;
+    --wat-zero-ore: #868e96;
+    --wat-pannello: #2b3035;
+    --wat-pannello-hover: #343a40;
+    --wat-pannello-hover-bordo: #495057;
+}
+
 html, body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #f8f9fa;
+    background-color: var(--wat-sfondo-pagina);
     font-size: 0.8125rem; /* 13px */
 }
 
@@ -60,7 +148,7 @@ label {
 
 /* Stile tabella */
 .table-responsive {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--bs-border-color);
     border-radius: 0.375rem;
 }
 
@@ -79,38 +167,46 @@ label {
     box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
 }
 
+/* =============================================
+   EVIDENZIAZIONE RIGHE CON TODO
+   Il colore va anche sulle celle: in Bootstrap 5.3 ogni <td> ha il proprio sfondo
+   (--bs-table-bg) che copre quello della <tr>, quindi colorando solo la riga il rosa
+   non si vedeva (v5.7). Le regole stanno PRIMA di quelle della riga selezionata, così
+   a parità di specificità vince la selezione, anche al passaggio del mouse.
+   ============================================= */
+.todo-row,
+.todo-row td {
+    background-color: var(--wat-riga-todo) !important; /* Rosso chiaro */
+}
+
+.todo-row:hover,
+.todo-row:hover td {
+    background-color: var(--wat-riga-todo-hover) !important; /* Rosso più scuro al hover */
+}
+
+/* Se la riga TODO è anche selezionata, mantieni un colore distinguibile */
+.todo-row.table-primary,
+.todo-row.table-primary td,
+.todo-row.table-active,
+.todo-row.table-active td {
+    background-color: var(--wat-riga-todo-attiva) !important; /* Rosso medio */
+}
+
 /* Riga selezionata nella griglia - colore vivace per distinguerla chiaramente */
 .row-selected {
-    background-color: #ffe066 !important; /* Giallo vivace */
-    outline: 2px solid #0d6efd;
+    background-color: var(--wat-riga-selezionata) !important; /* Giallo vivace */
+    outline: 2px solid var(--wat-primario);
     outline-offset: -2px;
 }
 
 .row-selected td {
-    background-color: #ffe066 !important;
+    background-color: var(--wat-riga-selezionata) !important;
 }
 
 /* Riga selezionata + TODO: arancione (mix giallo+rosso) */
 .row-selected.todo-row,
 .row-selected.todo-row td {
-    background-color: #ffb347 !important;
-}
-
-/* =============================================
-   EVIDENZIAZIONE RIGHE CON TODO
-   ============================================= */
-.todo-row {
-    background-color: #ffcccc !important; /* Rosso chiaro */
-}
-
-.todo-row:hover {
-    background-color: #ffb3b3 !important; /* Rosso più scuro al hover */
-}
-
-/* Se la riga TODO è anche selezionata, mantieni un colore distinguibile */
-.todo-row.table-primary,
-.todo-row.table-active {
-    background-color: #ff9999 !important; /* Rosso medio */
+    background-color: var(--wat-riga-selezionata-todo) !important;
 }
 
 /* =============================================
@@ -125,14 +221,14 @@ label {
 .scadenza-arancione td,
 .todo-row.scadenza-arancione,
 .todo-row.scadenza-arancione td {
-    background-color: #ffe0b3 !important; /* Arancione chiaro */
+    background-color: var(--wat-scadenza-arancione) !important; /* Arancione chiaro */
 }
 
 .scadenza-arancione:hover,
 .scadenza-arancione:hover td,
 .todo-row.scadenza-arancione:hover,
 .todo-row.scadenza-arancione:hover td {
-    background-color: #ffd08a !important;
+    background-color: var(--wat-scadenza-arancione-hover) !important;
 }
 
 /* Entro la soglia "rosso" (default 2 giorni) */
@@ -140,14 +236,14 @@ label {
 .scadenza-rossa td,
 .todo-row.scadenza-rossa,
 .todo-row.scadenza-rossa td {
-    background-color: #ff9999 !important; /* Rosso */
+    background-color: var(--wat-scadenza-rossa) !important; /* Rosso */
 }
 
 .scadenza-rossa:hover,
 .scadenza-rossa:hover td,
 .todo-row.scadenza-rossa:hover,
 .todo-row.scadenza-rossa:hover td {
-    background-color: #ff8080 !important;
+    background-color: var(--wat-scadenza-rossa-hover) !important;
 }
 
 /* Scadenza già passata: rosso più marcato, testo in grassetto */
@@ -155,7 +251,7 @@ label {
 .scadenza-scaduta td,
 .todo-row.scadenza-scaduta,
 .todo-row.scadenza-scaduta td {
-    background-color: #ff6b6b !important; /* Rosso marcato */
+    background-color: var(--wat-scadenza-scaduta) !important; /* Rosso marcato */
     font-weight: 600;
 }
 
@@ -163,33 +259,33 @@ label {
 .scadenza-scaduta:hover td,
 .todo-row.scadenza-scaduta:hover,
 .todo-row.scadenza-scaduta:hover td {
-    background-color: #fa5252 !important;
+    background-color: var(--wat-scadenza-scaduta-hover) !important;
 }
 
 /* La riga selezionata resta riconoscibile anche quando ha una scadenza vicina:
    giallo selezione virato verso l'arancione/rosso a seconda della gravità. */
 .row-selected.scadenza-arancione,
 .row-selected.scadenza-arancione td {
-    background-color: #ffcc66 !important;
+    background-color: var(--wat-riga-selezionata-arancione) !important;
 }
 
 .row-selected.scadenza-rossa,
 .row-selected.scadenza-rossa td,
 .row-selected.scadenza-scaduta,
 .row-selected.scadenza-scaduta td {
-    background-color: #ffa94d !important;
+    background-color: var(--wat-riga-selezionata-rossa) !important;
 }
 
 /* =============================================
    RIGHE CON ZERO ORE LAVORATE
    ============================================= */
 .zero-ore-row {
-    color: #999 !important;
+    color: var(--wat-zero-ore) !important;
     font-style: italic;
 }
 
 .zero-ore-row td {
-    color: #999 !important;
+    color: var(--wat-zero-ore) !important;
 }
 
 /* Se selezionata o TODO, il colore specifico ha precedenza sul grigio */
@@ -240,11 +336,65 @@ label {
     padding-left: 1.75rem;
 }
 
-/* Focus states */
+/* Focus states (colore principale del tema, v5.7) */
 .form-control:focus,
-.form-select:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+.form-select:focus,
+.form-check-input:focus {
+    border-color: var(--wat-focus-bordo);
+    box-shadow: 0 0 0 0.2rem rgba(var(--wat-primario-rgb), 0.25);
+}
+
+/* =============================================
+   COLORE PRINCIPALE SUI COMPONENTI BOOTSTRAP (v5.7)
+   In Bootstrap 5.3.2 pulsanti primari, spunte e voci attive dei menu hanno il blu scritto
+   come valore, non preso da --bs-primary: vanno ridefiniti uno per uno.
+   ============================================= */
+.btn-primary {
+    --bs-btn-bg: var(--wat-primario);
+    --bs-btn-border-color: var(--wat-primario);
+    --bs-btn-hover-bg: var(--wat-primario-hover);
+    --bs-btn-hover-border-color: var(--wat-primario-hover);
+    --bs-btn-active-bg: var(--wat-primario-attivo);
+    --bs-btn-active-border-color: var(--wat-primario-attivo);
+    --bs-btn-disabled-bg: var(--wat-primario);
+    --bs-btn-disabled-border-color: var(--wat-primario);
+    --bs-btn-focus-shadow-rgb: var(--wat-primario-rgb);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--wat-primario-testo);
+    --bs-btn-border-color: var(--wat-primario-testo);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--wat-primario);
+    --bs-btn-hover-border-color: var(--wat-primario);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--wat-primario-attivo);
+    --bs-btn-active-border-color: var(--wat-primario-attivo);
+    --bs-btn-disabled-color: var(--wat-primario-testo);
+    --bs-btn-disabled-border-color: var(--wat-primario-testo);
+    --bs-btn-focus-shadow-rgb: var(--wat-primario-rgb);
+}
+
+.form-check-input:checked {
+    background-color: var(--wat-primario);
+    border-color: var(--wat-primario);
+}
+
+.dropdown-menu {
+    --bs-dropdown-link-active-bg: var(--wat-primario);
+}
+
+.nav-pills {
+    --bs-nav-pills-link-active-bg: var(--wat-primario);
+}
+
+.list-group {
+    --bs-list-group-active-bg: var(--wat-primario);
+    --bs-list-group-active-border-color: var(--wat-primario);
+}
+
+.progress {
+    --bs-progress-bar-bg: var(--wat-primario);
 }
 
 /* Buttons */
@@ -254,10 +404,6 @@ label {
 
 .btn-success {
     background-color: #198754;
-}
-
-.btn-primary {
-    background-color: #0d6efd;
 }
 
 /* Pulsante duplica nella griglia */
@@ -298,8 +444,8 @@ label {
 
 .changeset-editor:focus {
     outline: none;
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    border-color: var(--wat-focus-bordo);
+    box-shadow: 0 0 0 0.2rem rgba(var(--wat-primario-rgb), 0.25);
 }
 
 .changeset-editor strong {
@@ -402,8 +548,8 @@ tfoot.table-secondary td {
 
 .note-editor:focus {
     outline: none;
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    border-color: var(--wat-focus-bordo);
+    box-shadow: 0 0 0 0.2rem rgba(var(--wat-primario-rgb), 0.25);
 }
 
 .note-editor strong {
@@ -434,7 +580,7 @@ tfoot.table-secondary td {
 .editor-toolbar .separator {
     width: 1px;
     height: 20px;
-    background-color: #dee2e6;
+    background-color: var(--wat-separatore);
     margin: 0 2px;
 }
 
@@ -492,7 +638,7 @@ tfoot.table-secondary td {
    PANNELLO ICONE (EmojiPicker)
    ============================================= */
 .emoji-picker {
-    background-color: #f8f9fa;
+    background-color: var(--wat-pannello);
     max-height: 260px;
     overflow-y: auto;
 }
@@ -501,7 +647,7 @@ tfoot.table-secondary td {
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: #6c757d;
+    color: var(--bs-secondary-color);
     margin-top: 4px;
 }
 
@@ -523,6 +669,89 @@ tfoot.table-secondary td {
 }
 
 .emoji-btn:hover {
-    background-color: #e9ecef;
-    border-color: #ced4da;
+    background-color: var(--wat-pannello-hover);
+    border-color: var(--wat-pannello-hover-bordo);
+}
+
+/* =============================================
+   FOGLIO: editor e anteprime del contenuto salvato (v5.7)
+   Restano chiari anche nel tema scuro (scelta dell'utente): l'HTML salvato porta i propri colori
+   (evidenziato giallo/arancione, testo rosso, testo nero incollato da altri programmi) e su
+   sfondo scuro diventerebbe illeggibile; cambiarli vorrebbe dire alterare la formattazione.
+   color-scheme: light tiene chiari anche cursore e barre di scorrimento.
+   Il :focus va ripetuto perché .form-control:focus di Bootstrap ha specificità maggiore e,
+   nel tema scuro, rimetterebbe lo sfondo scuro proprio mentre si scrive.
+   ============================================= */
+.note-editor,
+.note-editor:focus,
+.changeset-editor,
+.changeset-editor:focus,
+.foglio {
+    background-color: #fff;
+    color: #212529;
+    color-scheme: light;
+}
+
+/* =============================================
+   TEMA SCURO: classi di Bootstrap 5.3 che non si adattano da sole (v5.7)
+   ============================================= */
+
+/* bg-light resta chiaro in Bootstrap anche al buio: qui è usato per intestazioni e riquadri */
+[data-bs-theme="dark"] .bg-light {
+    background-color: var(--bs-tertiary-bg) !important;
+    color: var(--bs-body-color);
+}
+
+/* Varianti colorate delle tabelle (table-secondary della riga dei totali, table-warning, ecc.):
+   Bootstrap le lascia con i colori chiari scritti come valori. Qui prendono le tinte "subtle" del
+   tema scuro; righe alterne e hover usano lo stesso colore (in Bootstrap sono velature opache). */
+[data-bs-theme="dark"] .table-light,
+[data-bs-theme="dark"] .table-secondary {
+    --wat-variante-bg: var(--bs-secondary-bg);
+    --wat-variante-colore: var(--bs-body-color);
+}
+[data-bs-theme="dark"] .table-primary {
+    --wat-variante-bg: rgba(var(--wat-primario-rgb), 0.3);
+    --wat-variante-colore: var(--bs-body-color);
+}
+[data-bs-theme="dark"] .table-success { --wat-variante-bg: var(--bs-success-bg-subtle); --wat-variante-colore: var(--bs-success-text-emphasis); }
+[data-bs-theme="dark"] .table-info { --wat-variante-bg: var(--bs-info-bg-subtle); --wat-variante-colore: var(--bs-info-text-emphasis); }
+[data-bs-theme="dark"] .table-warning { --wat-variante-bg: var(--bs-warning-bg-subtle); --wat-variante-colore: var(--bs-warning-text-emphasis); }
+[data-bs-theme="dark"] .table-danger { --wat-variante-bg: var(--bs-danger-bg-subtle); --wat-variante-colore: var(--bs-danger-text-emphasis); }
+
+[data-bs-theme="dark"] :is(.table-light, .table-secondary, .table-primary, .table-success, .table-info, .table-warning, .table-danger) {
+    --bs-table-color: var(--wat-variante-colore);
+    --bs-table-bg: var(--wat-variante-bg);
+    --bs-table-border-color: var(--bs-border-color);
+    --bs-table-striped-color: var(--wat-variante-colore);
+    --bs-table-striped-bg: var(--wat-variante-bg);
+    --bs-table-active-color: var(--wat-variante-colore);
+    --bs-table-active-bg: var(--wat-variante-bg);
+    --bs-table-hover-color: var(--wat-variante-colore);
+    --bs-table-hover-bg: var(--wat-variante-bg);
+    color: var(--bs-table-color);
+    border-color: var(--bs-table-border-color);
+}
+
+/* Pulsanti "G" e "█" delle toolbar: il contorno scuro sparirebbe sullo sfondo scuro */
+[data-bs-theme="dark"] .btn-outline-dark {
+    --bs-btn-color: #dee2e6;
+    --bs-btn-border-color: #adb5bd;
+    --bs-btn-hover-color: #212529;
+    --bs-btn-hover-bg: #dee2e6;
+    --bs-btn-hover-border-color: #dee2e6;
+    --bs-btn-active-color: #212529;
+    --bs-btn-active-bg: #f8f9fa;
+    --bs-btn-active-border-color: #f8f9fa;
+}
+
+/* Campioni colore delle toolbar (A su giallo/arancione/verde): la lettera resta scura, al buio
+   prenderebbe il colore chiaro del testo e sul giallo non si leggerebbe */
+[data-bs-theme="dark"] .editor-toolbar .btn[style*="background-color"] {
+    color: #212529;
+}
+
+/* Su sfondo giallo la X di chiusura resta scura (Bootstrap al buio la schiarisce) */
+[data-bs-theme="dark"] .bg-warning .btn-close {
+    filter: none;
 }

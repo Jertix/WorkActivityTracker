@@ -22,6 +22,7 @@
 @inject BozzaAttivitaService BozzaService
 @inject ReadmeTemplateService ReadmeTemplateService
 @inject OcrScreenshotService OcrService
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @implements IDisposable
 
 @* 
@@ -95,6 +96,11 @@
                 <button class="btn btn-outline-primary btn-sm py-0 px-2" @onclick="ApriCalendario"
                         title="Calendario eventi e promemoria">
                     📅
+                </button>
+                @* Impostazioni (v5.7): appsettings.json, tema e colore principale *@
+                <button class="btn btn-outline-secondary btn-sm py-0 px-2" @onclick="() => mostraImpostazioni = true"
+                        title="Impostazioni: aspetto (tema e colore), struttura patch, scadenze, export, manutenzione">
+                    <i class="bi bi-gear"></i>
                 </button>
             </div>
         </div>
@@ -900,8 +906,8 @@
                         @if (mostraLavoroPrecedente)
                         {
                             @* Anteprima di sola lettura: div (non textarea) per renderizzare l'HTML — screenshot e formattazione inclusi *@
-                            <div class="form-control note-preview-readonly mb-2"
-                                 style="min-height: 200px; max-height: 500px; overflow: auto; white-space: pre-wrap; background-color: #f8f9fa;">
+                            <div class="form-control note-preview-readonly foglio mb-2"
+                                 style="min-height: 200px; max-height: 500px; overflow: auto; white-space: pre-wrap;">
                                 @((MarkupString)htmlLavoroPrecedente)
                             </div>
                         }
@@ -1770,6 +1776,12 @@
     SuSeleziona="@RipristinaVersioneChangeset"
     Titolo="Changeset" />
 
+@* ===== MODALE IMPOSTAZIONI (v5.7) ===== *@
+<ImpostazioniModal
+    IsVisible="@mostraImpostazioni"
+    OnChiudi="() => mostraImpostazioni = false"
+    OnSalvate="OnImpostazioniSalvate" />
+
 @* ===== MODALE TESTO LETTO NEGLI SCREENSHOT (OCR, v5.7) ===== *@
 <OcrScreenshotModal
     IsVisible="@mostraTestoScreenshot"
@@ -1821,7 +1833,7 @@
     <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 2000;">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
-                <div class="modal-header bg-warning">
+                <div class="modal-header bg-warning text-dark">
                     <h5 class="modal-title">⚠️ Modifiche non salvate</h5>
                 </div>
                 <div class="modal-body">
@@ -2083,6 +2095,11 @@
     /// <summary>L'avviso "OCR non disponibile" si mostra una volta sola per sessione</summary>
     private bool ocrAvvisoNonDisponibileMostrato = false;
 
+    // ===== Impostazioni e tema (v5.7) =====
+    private bool mostraImpostazioni = false;
+    /// <summary>Registrazione al ricaricamento di appsettings.json (rilasciata in Dispose)</summary>
+    private IDisposable? _ascoltoConfigurazione;
+
     // Popup "📷 Testo letto negli screenshot" del form (Descrizione dettagliata o Changeset)
     private bool mostraTestoScreenshot = false;
     private string titoloTestoScreenshot = string.Empty;
@@ -2242,6 +2259,19 @@
     {
         if (firstRender)
         {
+            // Tema e colore da appsettings.json (lo script in <head> ha già rimesso l'ultimo usato,
+            // qui si allinea alla configurazione). Ogni ricaricamento del file — salvataggio dalla
+            // finestra ⚙️, modifica a mano, salvataggio da un'altra finestra del programma — lo
+            // riapplica e ridisegna la pagina (soglie di scadenza comprese).
+            await TemaInterfaccia.ApplicaAsync(JS, AppConfig.Tema, AppConfig.ColorePrincipale);
+            _ascoltoConfigurazione = Microsoft.Extensions.Primitives.ChangeToken.OnChange(
+                () => Configuration.GetReloadToken(),
+                () => _ = InvokeAsync(async () =>
+                {
+                    await TemaInterfaccia.ApplicaAsync(JS, AppConfig.Tema, AppConfig.ColorePrincipale);
+                    StateHasChanged();
+                }));
+
             // Registra il callback Ctrl+S
             dotNetRef = DotNetObjectReference.Create(this);
             try { await JS.InvokeVoidAsync("registraCtrlS", dotNetRef); }
@@ -2455,6 +2485,14 @@
     public void Dispose()
     {
         dotNetRef?.Dispose();
+        _ascoltoConfigurazione?.Dispose();
+    }
+
+    /// <summary>Finestra ⚙️ Impostazioni salvata: la chiude e riporta l'esito.</summary>
+    private void OnImpostazioniSalvate(string esito)
+    {
+        mostraImpostazioni = false;
+        MostraMessaggio(esito, false);
     }
 
     #endregion

@@ -4,7 +4,8 @@ namespace WorkActivityTracker.Services;
 
 /// <summary>
 /// Servizio per la gestione delle configurazioni dell'applicazione.
-/// Legge i valori da appsettings.json.
+/// Legge i valori da appsettings.json, sempre dal vivo: il file è caricato con reloadOnChange, quindi
+/// quanto salvato dalla finestra ⚙️ Impostazioni (<see cref="ImpostazioniService"/>) vale subito.
 /// </summary>
 public class AppConfigService
 {
@@ -13,6 +14,41 @@ public class AppConfigService
     public AppConfigService(IConfiguration configuration)
     {
         _configuration = configuration;
+    }
+
+    /// <summary>
+    /// Percorso completo dell'appsettings.json caricato all'avvio, impostato da MauiProgram.
+    /// Null se il file non è stato trovato e si è partiti con la configurazione in memoria: in quel
+    /// caso la finestra ⚙️ Impostazioni non può salvare (v5.7).
+    /// </summary>
+    public static string? PercorsoFile { get; internal set; }
+
+    /// <summary>
+    /// Tema dell'interfaccia (v5.7): "ComeWindows", "Chiaro" o "Scuro". Un valore sconosciuto o
+    /// scritto male nel file vale come il predefinito: l'aspetto non deve mai impedire l'avvio.
+    /// </summary>
+    public string Tema => ValoreAmmesso("AppSettings:Tema", TemiAmmessi);
+
+    /// <summary>
+    /// Colore principale dell'interfaccia (v5.7): pulsanti primari, spunte, intestazioni, selezione.
+    /// "Classico" è il blu Bootstrap usato fino alla v5.6, quindi chi aggiorna non vede cambiare nulla.
+    /// </summary>
+    public string ColorePrincipale => ValoreAmmesso("AppSettings:ColorePrincipale", ColoriAmmessi);
+
+    /// <summary>Valori accettati per <see cref="Tema"/>; il primo è il predefinito.</summary>
+    public static readonly string[] TemiAmmessi = { "ComeWindows", "Chiaro", "Scuro" };
+
+    /// <summary>Valori accettati per <see cref="ColorePrincipale"/>; il primo è il predefinito.</summary>
+    public static readonly string[] ColoriAmmessi = { "Classico", "Acciaio", "Fucina", "Foresta", "Prugna", "Grafite", "ComeWindows" };
+
+    /// <summary>
+    /// Il valore della chiave se è fra quelli ammessi (maiuscole/minuscole e spazi non contano),
+    /// riportato alla grafia canonica; altrimenti il primo della lista.
+    /// </summary>
+    private string ValoreAmmesso(string chiave, string[] ammessi)
+    {
+        var valore = _configuration.GetValue<string>(chiave)?.Trim();
+        return ammessi.FirstOrDefault(a => string.Equals(a, valore, StringComparison.OrdinalIgnoreCase)) ?? ammessi[0];
     }
 
     /// <summary>

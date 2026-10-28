@@ -194,7 +194,7 @@
                                 <span class="badge bg-primary">ID: @appSelezionato.Id</span>
                             </div>
                             <div class="card-body">
-                                <div class="border rounded p-3 bg-light" 
+                                <div class="border rounded p-3 foglio"
                                      style="max-height: @detailHeight; overflow-y: auto; font-family: 'Consolas', 'Courier New', monospace; white-space: pre-wrap;">
                                     @((MarkupString)GeneraDettaglioFormattato(appSelezionato))
                                 </div>
@@ -204,8 +204,8 @@
 
                     @* ===== FORM INSERIMENTO/MODIFICA ===== *@
                     <div class="card mt-3">
-                        <div class="card-header d-flex justify-content-between align-items-center"
-                             style="background-color: @(IsModificaAppunto ? "#fff3cd" : "#d1e7dd");">
+                        @* Tinte "subtle" di Bootstrap 5.3: si adattano al tema scuro (v5.7) *@
+                        <div class="card-header d-flex justify-content-between align-items-center @(IsModificaAppunto ? "bg-warning-subtle" : "bg-success-subtle")">
                             <strong>@(IsModificaAppunto ? "📝 Modifica Appunto" : "➕ Nuovo Appunto")</strong>
                             @if (appuntoCorrente.Id > 0)
                             {

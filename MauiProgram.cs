@@ -69,6 +69,9 @@ public static class MauiProgram
         
         // AppConfigService: Singleton per le configurazioni dell'app
         builder.Services.AddSingleton<AppConfigService>();
+
+        // ImpostazioniService: Singleton per la finestra ⚙️ Impostazioni, che riscrive appsettings.json (v5.7)
+        builder.Services.AddSingleton<ImpostazioniService>();
         
         // UserService: Singleton perché l'utente non cambia durante l'esecuzione
         builder.Services.AddSingleton<UserService>();
@@ -151,6 +154,8 @@ public static class MauiProgram
         if (File.Exists(configPath))
         {
             configBuilder.AddJsonFile(configPath, optional: false, reloadOnChange: true);
+            // Lo stesso file viene riscritto dalla finestra ⚙️ Impostazioni (v5.7)
+            AppConfigService.PercorsoFile = Path.GetFullPath(configPath);
         }
         else
         {

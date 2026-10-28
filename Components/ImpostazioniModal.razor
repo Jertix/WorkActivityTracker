@@ -1,0 +1,334 @@
+@using WorkActivityTracker.Models
+@using WorkActivityTracker.Services
+@using CommunityToolkit.Maui.Storage
+@inject ImpostazioniService ImpostazioniService
+@inject AppConfigService AppConfig
+@inject IJSRuntime JS
+@implements IDisposable
+
+@*
+    Finestra "⚙️ Impostazioni" (v5.7), aperta dall'ingranaggio in cima alla pagina.
+    Modifica le impostazioni di appsettings.json, che viene riscritto da ImpostazioniService (solo
+    le chiavi qui sotto). PrivacyMode, Modalità Admin e stringa di connessione sono in sola lettura:
+    si cambiano a mano nel file. Tema e colore si vedono subito (anteprima); Annulla li ripristina.
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 1100;">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content" style="max-height: 90vh;">
+
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title"><i class="bi bi-gear me-2"></i>Impostazioni</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="Annulla"></button>
+                </div>
+
+                <div class="modal-body d-flex flex-column gap-3">
+
+                    @if (!ImpostazioniService.PuoSalvare)
+                    {
+                        <div class="alert alert-warning py-2 mb-0">
+                            appsettings.json non è stato trovato all'avvio: le impostazioni si possono vedere ma non salvare.
+                        </div>
+                    }
+
+                    @* ===== ASPETTO ===== *@
+                    <div class="card">
+                        <div class="card-header"><strong>🎨 Aspetto</strong></div>
+                        <div class="card-body">
+                            <label class="form-label d-block">Tema</label>
+                            <div class="btn-group mb-3" role="group" aria-label="Tema">
+                                @foreach (var (tema, etichetta) in Temi)
+                                {
+                                    var id = $"tema-{tema}";
+                                    <input type="radio" class="btn-check" name="tema" id="@id" autocomplete="off"
+                                           checked="@(valori.Tema == tema)" @onchange="() => CambiaTema(tema)" />
+                                    <label class="btn btn-outline-primary" for="@id">@etichetta</label>
+                                }
+                            </div>
+
+                            <label class="form-label d-block">Colore principale</label>
+                            <div class="d-flex flex-wrap gap-3">
+                                @foreach (var colore in AppConfigService.ColoriAmmessi)
+                                {
+                                    var esa = colore == "ComeWindows" ? accentoWindows : TemaInterfaccia.Esadecimale(colore);
+                                    var scelto = valori.ColorePrincipale == colore;
+                                    <button type="button" class="btn btn-link p-0 text-decoration-none d-flex flex-column align-items-center"
+                                            style="width: 74px;" @onclick="() => CambiaColore(colore)"
+                                            title="@TemaInterfaccia.NomeColore(colore)" aria-pressed="@(scelto ? "true" : "false")">
+                                        <span class="rounded-circle d-inline-block"
+                                              style="width: 30px; height: 30px; background-color: @esa;
+                                                     box-shadow: @(scelto ? $"0 0 0 3px var(--bs-body-bg), 0 0 0 5px {esa}" : "none");"></span>
+                                        <span class="small mt-1 @(scelto ? "fw-bold text-body" : "text-body-secondary")">@TemaInterfaccia.NomeColore(colore)</span>
+                                    </button>
+                                }
+                            </div>
+                            <div class="form-text mt-2">
+                                L'anteprima è immediata; "Annulla" torna all'aspetto salvato. Gli editor (Descrizione,
+                                Changeset, Come collegarsi…) restano chiari anche nel tema scuro, per non alterare i colori del testo salvato.
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== STRUTTURA PATCH ===== *@
+                    <div class="card">
+                        <div class="card-header"><strong>📦 Struttura patch e Readme</strong></div>
+                        <div class="card-body row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Nome del programma <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" @bind="valori.NomeProgramma" />
+                                <div class="form-text">Nome delle cartelle patch e token {NOMEPROGRAMMA}. Il software predefinito si aggiorna al prossimo avvio.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Nome della compagnia</label>
+                                <input type="text" class="form-control" @bind="valori.NomeCompagnia" />
+                                <div class="form-text">Token {NOMECOMPAGNIA} dei readme.</div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Cartella in cui creare la struttura patch <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" @bind="valori.TmpPatchDir" />
+                                    <button class="btn btn-outline-secondary" type="button" @onclick="ScegliCartellaPatch"
+                                            title="Scegli la cartella">
+                                        <i class="bi bi-folder2-open"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        @* ===== TICKET IN SCADENZA ===== *@
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header"><strong>⏰ Ticket in scadenza</strong></div>
+                                <div class="card-body">
+                                    <label class="form-label">Arancione se mancano al massimo (giorni)</label>
+                                    <input type="number" min="0" class="form-control mb-2" @bind="valori.GiorniPreavvisoScadenzaArancione" />
+                                    <label class="form-label">Rosso se ne mancano al massimo (giorni)</label>
+                                    <input type="number" min="0" class="form-control" @bind="valori.GiorniPreavvisoScadenzaRosso" />
+                                    <div class="form-text">0 = evidenziazione disattivata.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        @* ===== MANUTENZIONE ===== *@
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header"><strong>🛠️ Manutenzione e database</strong></div>
+                                <div class="card-body">
+                                    <label class="form-label">Mesi di storico delle modifiche da conservare <span class="badge text-bg-secondary">dal prossimo avvio</span></label>
+                                    <input type="number" min="0" class="form-control mb-2" @bind="valori.NumeroMesiMantenimentoHistory" />
+                                    <label class="form-label">Timeout delle query (secondi) <span class="badge text-bg-secondary">dal prossimo avvio</span></label>
+                                    <input type="number" min="1" class="form-control" @bind="valori.TimeoutQuerySecondi" />
+                                    <div class="form-text">Storico: 0 = nessuna pulizia automatica.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== EXPORT ===== *@
+                    <div class="card">
+                        <div class="card-header"><strong>🧾 Export</strong></div>
+                        <div class="card-body">
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="checkbox" id="chkCollegatePdf"
+                                       @bind="valori.EsportaAttivitaCollegateInPdf" />
+                                <label class="form-check-label" for="chkCollegatePdf">
+                                    Nel PDF di un'attività includi anche le attività collegate ("Proseguo l'attività…")
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ===== INFORMAZIONI (SOLA LETTURA) ===== *@
+                    <div class="card">
+                        <div class="card-header"><strong>ℹ️ Informazioni</strong> <span class="small text-body-secondary">— si modificano a mano nel file</span></div>
+                        <div class="card-body small">
+                            <div class="row g-1">
+                                <div class="col-sm-4 text-body-secondary">Versione</div>
+                                <div class="col-sm-8">@AppConfig.Version</div>
+                                <div class="col-sm-4 text-body-secondary">Database</div>
+                                <div class="col-sm-8">@descrizioneConnessione</div>
+                                <div class="col-sm-4 text-body-secondary">Privacy (PrivacyMode)</div>
+                                <div class="col-sm-8">@(AppConfig.PrivacyMode ? "Attiva: le tue attività non sono visibili agli admin delle altre postazioni" : "Non attiva")</div>
+                                <div class="col-sm-4 text-body-secondary">Modalità Admin</div>
+                                <div class="col-sm-8">@(AppConfig.MostraModalitaAdmin ? "Disponibile (spunta in cima alla pagina)" : "Non disponibile")</div>
+                                <div class="col-sm-4 text-body-secondary">File</div>
+                                <div class="col-sm-8 d-flex align-items-center gap-2 flex-wrap">
+                                    <code class="text-break">@(AppConfigService.PercorsoFile ?? "(non trovato)")</code>
+                                    @if (AppConfigService.PercorsoFile is not null)
+                                    {
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @onclick="ApriCartellaFile"
+                                                title="Apri in Esplora risorse la cartella di appsettings.json">
+                                            <i class="bi bi-folder2-open me-1"></i>Apri cartella
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    @if (!string.IsNullOrEmpty(messaggio))
+                    {
+                        <div class="alert alert-danger py-2 mb-0 me-auto" role="alert" style="max-width: 70%; white-space: pre-line;">
+                            @messaggio
+                        </div>
+                    }
+                    <button type="button" class="btn btn-secondary" @onclick="Annulla">❌ Annulla</button>
+                    <button type="button" class="btn btn-primary" @onclick="Salva" disabled="@(!ImpostazioniService.PuoSalvare)">
+                        💾 Salva
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnChiudi { get; set; }
+
+    /// <summary>Salvataggio riuscito: Home mostra il messaggio (la modale si chiude)</summary>
+    [Parameter] public EventCallback<string> OnSalvate { get; set; }
+
+    private static readonly (string Tema, string Etichetta)[] Temi =
+    {
+        ("ComeWindows", "🖥️ Come Windows"),
+        ("Chiaro", "☀️ Chiaro"),
+        ("Scuro", "🌙 Scuro")
+    };
+
+    /// <summary>Valori in modifica nella finestra</summary>
+    private ImpostazioniModificabili valori = new();
+    /// <summary>Valori all'apertura: per Annulla (aspetto) e per capire cosa vale dal prossimo avvio</summary>
+    private ImpostazioniModificabili originali = new();
+
+    private string accentoWindows = "#0D6EFD";
+    private string descrizioneConnessione = string.Empty;
+    private string messaggio = string.Empty;
+    private bool _eraVisibile = false;
+    private DotNetObjectReference<ImpostazioniModal>? _dotNetRef;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && !_eraVisibile)
+        {
+            _eraVisibile = true;
+            originali = ImpostazioniService.Leggi();
+            valori = originali.Clona();
+            accentoWindows = TemaInterfaccia.Esadecimale("ComeWindows");
+            descrizioneConnessione = ImpostazioniService.DescriviConnessione();
+            messaggio = string.Empty;
+
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            try { await JS.InvokeVoidAsync("registraCtrlSModal", _dotNetRef); } catch { }
+        }
+        else if (!IsVisible && _eraVisibile)
+        {
+            _eraVisibile = false;
+            try { await JS.InvokeVoidAsync("deregistraCtrlSModal"); } catch { }
+        }
+    }
+
+    #region Aspetto (anteprima immediata)
+
+    private async Task CambiaTema(string tema)
+    {
+        valori.Tema = tema;
+        await TemaInterfaccia.ApplicaAsync(JS, valori.Tema, valori.ColorePrincipale);
+    }
+
+    private async Task CambiaColore(string colore)
+    {
+        valori.ColorePrincipale = colore;
+        await TemaInterfaccia.ApplicaAsync(JS, valori.Tema, valori.ColorePrincipale);
+    }
+
+    #endregion
+
+    #region Salva / Annulla
+
+    [JSInvokable]
+    public async Task SalvaViaShortcut() => await Salva();
+
+    private async Task Salva()
+    {
+        var errori = valori.Valida();
+        if (errori.Count > 0)
+        {
+            messaggio = string.Join("\n", errori);
+            return;
+        }
+
+        try
+        {
+            ImpostazioniService.Salva(valori);
+        }
+        catch (Exception ex)
+        {
+            messaggio = $"Impostazioni non salvate: {ex.Message}";
+            return;
+        }
+
+        // Valori letti solo all'avvio: lo si dice, altrimenti sembrerebbe che il salvataggio non abbia effetto
+        var dalProssimoAvvio = new List<string>();
+        if (valori.NumeroMesiMantenimentoHistory != originali.NumeroMesiMantenimentoHistory) dalProssimoAvvio.Add("mesi di storico");
+        if (valori.TimeoutQuerySecondi != originali.TimeoutQuerySecondi) dalProssimoAvvio.Add("timeout delle query");
+        if (!string.Equals(valori.NomeProgramma.Trim(), originali.NomeProgramma, StringComparison.Ordinal)) dalProssimoAvvio.Add("software predefinito");
+
+        var esito = "Impostazioni salvate in appsettings.json.";
+        if (dalProssimoAvvio.Count > 0)
+            esito += $" Al prossimo avvio del programma: {string.Join(", ", dalProssimoAvvio)}.";
+
+        await TemaInterfaccia.ApplicaAsync(JS, valori.Tema, valori.ColorePrincipale);
+        await OnSalvate.InvokeAsync(esito);
+    }
+
+    /// <summary>Chiude senza salvare: se l'aspetto era stato cambiato in anteprima, torna a quello salvato.</summary>
+    private async Task Annulla()
+    {
+        if (valori.Tema != originali.Tema || valori.ColorePrincipale != originali.ColorePrincipale)
+            await TemaInterfaccia.ApplicaAsync(JS, originali.Tema, originali.ColorePrincipale);
+        await OnChiudi.InvokeAsync();
+    }
+
+    #endregion
+
+    #region Cartelle
+
+    private async Task ScegliCartellaPatch()
+    {
+        try
+        {
+            var risultato = await FolderPicker.Default.PickAsync(default);
+            if (risultato.IsSuccessful && risultato.Folder != null)
+                valori.TmpPatchDir = risultato.Folder.Path.EndsWith('\\') ? risultato.Folder.Path : risultato.Folder.Path + "\\";
+        }
+        catch (Exception ex)
+        {
+            messaggio = $"Errore nella selezione della cartella: {ex.Message}";
+        }
+    }
+
+    private void ApriCartellaFile()
+    {
+        try
+        {
+            var cartella = Path.GetDirectoryName(AppConfigService.PercorsoFile);
+            if (!string.IsNullOrEmpty(cartella))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"\"{cartella}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            messaggio = $"Impossibile aprire la cartella: {ex.Message}";
+        }
+    }
+
+    #endregion
+
+    public void Dispose() => _dotNetRef?.Dispose();
+}

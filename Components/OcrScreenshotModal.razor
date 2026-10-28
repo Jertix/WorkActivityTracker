@@ -1,0 +1,80 @@
+@*
+    Modale "📷 Testo letto negli screenshot" (v5.7), aperta dal pulsante 📷 in basso a destra degli
+    editor (Descrizione dettagliata e Changeset). Mostra in sola lettura il testo che l'OCR ha letto
+    negli screenshot, selezionabile e copiabile. Il testo e il titolo (con il nome del campo) li
+    prepara chi la apre: salvato nel DB o letto al momento.
+*@
+
+@if (IsVisible)
+{
+    <div class="modal fade show d-block" tabindex="-1"
+         style="background-color: rgba(0,0,0,0.5); z-index: 1200;">
+        <div class="modal-dialog modal-dialog-scrollable modal-lg">
+            <div class="modal-content" style="max-height: 80vh;">
+
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title">@(string.IsNullOrEmpty(Titolo) ? "📷 Testo letto negli screenshot" : Titolo)</h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="OnChiudi"></button>
+                </div>
+
+                <div class="modal-body d-flex flex-column gap-2">
+                    @if (IsLoading)
+                    {
+                        <div class="text-center text-muted p-4">
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            Lettura degli screenshot in corso…
+                        </div>
+                    }
+                    else
+                    {
+                        @if (!string.IsNullOrEmpty(Info))
+                        {
+                            <div class="small text-muted">@Info</div>
+                        }
+                        @if (!string.IsNullOrEmpty(Testo))
+                        {
+                            <textarea class="form-control font-monospace small" readonly rows="16"
+                                      style="white-space: pre; overflow-x: auto;">@Testo</textarea>
+                        }
+                        else if (HaScreenshot)
+                        {
+                            <div class="text-muted text-center p-3">
+                                Negli screenshot non è stato riconosciuto alcun testo.
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-primary"
+                            @onclick="OnCopia" disabled="@(IsLoading || string.IsNullOrEmpty(Testo))">
+                        <i class="bi bi-clipboard me-1"></i>Copia tutto
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="OnChiudi">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+
+    /// <summary>Titolo con il nome del campo (es. "📷 Testo letto negli screenshot — Changeset ...")</summary>
+    [Parameter] public string Titolo { get; set; } = string.Empty;
+
+    /// <summary>True mentre l'OCR legge gli screenshot al momento (rotellina)</summary>
+    [Parameter] public bool IsLoading { get; set; }
+
+    /// <summary>Testo letto (vuoto se non ci sono screenshot o non è stato riconosciuto nulla)</summary>
+    [Parameter] public string Testo { get; set; } = string.Empty;
+
+    /// <summary>Riga informativa: provenienza del testo, nessuno screenshot, OCR non disponibile, errori</summary>
+    [Parameter] public string Info { get; set; } = string.Empty;
+
+    /// <summary>True se il campo contiene screenshot: distingue "nessun testo riconosciuto" da "nessuno screenshot"</summary>
+    [Parameter] public bool HaScreenshot { get; set; }
+
+    [Parameter] public EventCallback OnCopia { get; set; }
+    [Parameter] public EventCallback OnChiudi { get; set; }
+}

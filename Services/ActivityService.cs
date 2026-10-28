@@ -65,15 +65,16 @@ public class ActivityService
         campi.Any(c => !string.IsNullOrEmpty(c) && TodoWordRegex.IsMatch(c!));
 
     /// <summary>Esegue l'escape dei caratteri speciali LIKE ([ % _) per una ricerca letterale.</summary>
-    private static string EscapeLike(string input) =>
+    internal static string EscapeLike(string input) =>
         input.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]");
 
     /// <summary>
     /// Costruisce il pattern LIKE per la ricerca testuale: ogni sequenza di spazi/tab/a-capo del
     /// termine diventa un jolly "%", così il testo cercato viene trovato anche quando nel dato
     /// gli spazi sono doppi o c'è un a capo (il LIKE non sa esprimere "uno o più spazi").
+    /// Usato anche dalla casella di ricerca di Gestione Clienti (<c>ClienteAmbienteService</c>).
     /// </summary>
-    private static string BuildLikePattern(string testo)
+    internal static string BuildLikePattern(string testo)
     {
         var parti = Regex.Split(testo.Trim(), @"\s+")
             .Where(x => x.Length > 0)
@@ -139,6 +140,46 @@ public class ActivityService
     {
         using var context = await _contextFactory.CreateDbContextAsync();
         return await context.Attivita.CountAsync(a => a.NoteTesto == null);
+    }
+
+    /// <summary>
+    /// Solo testo OCR e impronta di un'attività (v5.7), senza l'HTML con gli screenshot. Usato dal
+    /// pulsante 📷 del form quando la lettura in background è finita dopo l'apertura dell'attività.
+    /// </summary>
+    public async Task<(string? NoteOcr, string? ChangesetOcr, string? OcrImpronta)?> GetTestoOcrAsync(int id)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+        var riga = await context.Attivita
+            .Where(a => a.Id == id)
+            .Select(a => new { a.NoteOcr, a.ChangesetOcr, a.OcrImpronta })
+            .FirstOrDefaultAsync();
+        return riga == null ? null : (riga.NoteOcr, riga.ChangesetOcr, riga.OcrImpronta);
+    }
+
+    /// <summary>
+    /// Allinea lo stato OCR degli screenshot (v5.7) al contenuto appena impostato di Note/Changeset.
+    /// Calcola solo l'impronta (pochi millisecondi): la lettura vera la fa OcrScreenshotService in
+    /// background, così il salvataggio non aspetta l'OCR.
+    /// - stessa impronta già salvata → testo OCR ancora valido, niente da rileggere;
+    /// - nessuno screenshot → impronta e testi vuoti (letta, niente da cercare);
+    /// - screenshot cambiati → impronta NULL, da leggere. I vecchi testi restano finché la rilettura
+    ///   non li sostituisce, così nel frattempo la ricerca non ha buchi.
+    /// </summary>
+    private static void AggiornaStatoOcr(Attivita attivita, string? noteHtml, string? changesetHtml)
+    {
+        var impronta = ScreenshotHtmlHelper.CalcolaImpronta(noteHtml, changesetHtml);
+        if (attivita.OcrImpronta == impronta) return;
+
+        if (impronta.Length == 0)
+        {
+            attivita.OcrImpronta = string.Empty;
+            attivita.NoteOcr = string.Empty;
+            attivita.ChangesetOcr = string.Empty;
+        }
+        else
+        {
+            attivita.OcrImpronta = null;
+        }
     }
 
     #endregion
@@ -515,6 +556,9 @@ public class ActivityService
             (criteri.Note && a.NoteTesto == null && a.Note != null && EF.Functions.Like(a.Note, like)) ||
             (criteri.Changeset && a.ChangesetTesto != null && EF.Functions.Like(a.ChangesetTesto, like)) ||
             (criteri.Changeset && a.ChangesetTesto == null && a.ChangesetCoinvolti != null && EF.Functions.Like(a.ChangesetCoinvolti, like)) ||
+            // Testo letto dagli screenshot (v5.7). Solo qui: la ricerca rapida della griglia non lo usa.
+            (criteri.Screenshot && a.NoteOcr != null && EF.Functions.Like(a.NoteOcr, like)) ||
+            (criteri.Screenshot && a.ChangesetOcr != null && EF.Functions.Like(a.ChangesetOcr, like)) ||
             (criteri.UrlPatchRilasci && a.UrlPatchRilasci != null && EF.Functions.Like(a.UrlPatchRilasci, like)) ||
             (criteri.TestoCheckIn && a.TestoCheckIn != null && EF.Functions.Like(a.TestoCheckIn, like)) ||
             (criteri.Versione && a.Versione != null && EF.Functions.Like(a.Versione, like)) ||
@@ -647,6 +691,10 @@ public class ActivityService
             Vedere = attivita.Vedere,
             Note = attivita.Note,
             ChangesetCoinvolti = attivita.ChangesetCoinvolti,
+            // Testo degli screenshot (v5.7): pulsante 📷 del form e dettaglio della Ricerca Avanzata
+            NoteOcr = attivita.NoteOcr,
+            ChangesetOcr = attivita.ChangesetOcr,
+            OcrImpronta = attivita.OcrImpronta,
             UrlPatchRilasci = attivita.UrlPatchRilasci,
             TestoCheckIn = attivita.TestoCheckIn,
             CartellaDocumentazione = attivita.CartellaDocumentazione,
@@ -692,6 +740,9 @@ public class ActivityService
             DataCreazione = DateTime.Now,
             DataModifica = DateTime.Now
         };
+
+        // Screenshot: si segnano "da leggere" (NULL), li legge l'OCR in background dopo il salvataggio
+        AggiornaStatoOcr(attivita, dto.Note, dto.ChangesetCoinvolti);
 
         context.Attivita.Add(attivita);
         await context.SaveChangesAsync();
@@ -757,6 +808,9 @@ public class ActivityService
         attivita.TestoCheckIn = dto.TestoCheckIn;
         attivita.CartellaDocumentazione = dto.CartellaDocumentazione;
         attivita.DataModifica = DateTime.Now;
+
+        // Screenshot: rilettura OCR solo se sono cambiati (stessa impronta = testo OCR ancora valido)
+        AggiornaStatoOcr(attivita, dto.Note, dto.ChangesetCoinvolti);
 
         // Aggiorna gli ambienti: rimuovi i vecchi e aggiungi i nuovi
         context.AttivitaAmbienti.RemoveRange(attivita.AttivitaAmbienti);

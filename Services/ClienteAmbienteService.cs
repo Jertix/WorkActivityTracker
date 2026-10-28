@@ -29,28 +29,62 @@ public class ClienteAmbienteService
     /// le righe significava spostare decine di MB a ogni apertura della finestra — su un database
     /// raggiunto via VPN erano i 30-60 secondi di attesa prima di vedere l'elenco.
     /// Il contenuto completo di una riga si ottiene on-demand con <see cref="GetByIdAsync"/>.
+    ///
+    /// Con <paramref name="testo"/> (casella di ricerca della griglia, v5.7) il filtro gira lato SQL
+    /// sui campi semplici, sul testo ripulito dei due editor e, con
+    /// <paramref name="cercaNegliScreenshot"/>, sul testo letto negli screenshot. Gli spazi del termine
+    /// fanno da jolly (<see cref="ActivityService.BuildLikePattern"/>, come nella ricerca delle attività).
     /// </summary>
-    public async Task<List<ClienteAmbienteDto>> GetAllAsync()
+    public async Task<List<ClienteAmbienteDto>> GetAllAsync(string? testo = null, bool cercaNegliScreenshot = true)
     {
         using var context = await _contextFactory.CreateDbContextAsync();
 
-        var query = from ca in context.ClientiAmbienti
+        var righe = from ca in context.ClientiAmbienti
                     join c in context.Clienti on ca.ClienteId equals c.Id
-                    orderby c.Nome, ca.Ambiente
+                    select new { ca, c.Nome };
+
+        var like = string.IsNullOrWhiteSpace(testo) ? null : ActivityService.BuildLikePattern(testo);
+        if (like != null)
+        {
+            righe = righe.Where(r =>
+                EF.Functions.Like(r.Nome, like) ||
+                EF.Functions.Like(r.ca.Ambiente, like) ||
+                (r.ca.ApplicationServer != null && EF.Functions.Like(r.ca.ApplicationServer, like)) ||
+                (r.ca.DatabaseServer != null && EF.Functions.Like(r.ca.DatabaseServer, like)) ||
+                (r.ca.PersoneRiferimento != null && EF.Functions.Like(r.ca.PersoneRiferimento, like)) ||
+                (r.ca.DirectoryInstallazione != null && EF.Functions.Like(r.ca.DirectoryInstallazione, like)) ||
+                (r.ca.InformazioniPool != null && EF.Functions.Like(r.ca.InformazioniPool, like)) ||
+                (r.ca.NumeroVersione != null && EF.Functions.Like(r.ca.NumeroVersione, like)) ||
+                // Testo dei due editor: colonne ripulite. Finché un ambiente non è stato elaborato
+                // (testo NULL) si ricade sull'HTML originale, così non si perdono risultati.
+                (r.ca.ComeCollegarsiTesto != null && EF.Functions.Like(r.ca.ComeCollegarsiTesto, like)) ||
+                (r.ca.ComeCollegarsiTesto == null && r.ca.ComeCollegarsi != null && EF.Functions.Like(r.ca.ComeCollegarsi, like)) ||
+                (r.ca.DatiAmbienteTesto != null && EF.Functions.Like(r.ca.DatiAmbienteTesto, like)) ||
+                (r.ca.DatiAmbienteTesto == null && r.ca.DatiAmbiente != null && EF.Functions.Like(r.ca.DatiAmbiente, like)) ||
+                (cercaNegliScreenshot && r.ca.ComeCollegarsiOcr != null && EF.Functions.Like(r.ca.ComeCollegarsiOcr, like)) ||
+                (cercaNegliScreenshot && r.ca.DatiAmbienteOcr != null && EF.Functions.Like(r.ca.DatiAmbienteOcr, like)));
+        }
+
+        var conScreenshot = like != null && cercaNegliScreenshot;
+        var query = from r in righe
+                    orderby r.Nome, r.ca.Ambiente
                     select new ClienteAmbienteDto
                     {
-                        Id = ca.Id,
-                        ClienteId = ca.ClienteId,
-                        NomeCliente = c.Nome,
-                        Ambiente = ca.Ambiente,
-                        ApplicationServer = ca.ApplicationServer,
-                        DatabaseServer = ca.DatabaseServer,
-                        PersoneRiferimento = ca.PersoneRiferimento,
-                        DirectoryInstallazione = ca.DirectoryInstallazione,
-                        InformazioniPool = ca.InformazioniPool,
-                        TipoVersione = ca.TipoVersione,
-                        NumeroVersione = ca.NumeroVersione,
-                        DataModifica = ca.DataModifica
+                        Id = r.ca.Id,
+                        ClienteId = r.ca.ClienteId,
+                        NomeCliente = r.Nome,
+                        Ambiente = r.ca.Ambiente,
+                        ApplicationServer = r.ca.ApplicationServer,
+                        DatabaseServer = r.ca.DatabaseServer,
+                        PersoneRiferimento = r.ca.PersoneRiferimento,
+                        DirectoryInstallazione = r.ca.DirectoryInstallazione,
+                        InformazioniPool = r.ca.InformazioniPool,
+                        TipoVersione = r.ca.TipoVersione,
+                        NumeroVersione = r.ca.NumeroVersione,
+                        DataModifica = r.ca.DataModifica,
+                        TrovatoNegliScreenshot = conScreenshot &&
+                            ((r.ca.ComeCollegarsiOcr != null && EF.Functions.Like(r.ca.ComeCollegarsiOcr, like!)) ||
+                             (r.ca.DatiAmbienteOcr != null && EF.Functions.Like(r.ca.DatiAmbienteOcr, like!)))
                     };
 
         var list = await query.ToListAsync();
@@ -112,8 +146,26 @@ public class ClienteAmbienteService
                           InformazioniPool = ca.InformazioniPool,
                           TipoVersione = ca.TipoVersione,
                           NumeroVersione = ca.NumeroVersione,
-                          DataModifica = ca.DataModifica
+                          DataModifica = ca.DataModifica,
+                          // Testo degli screenshot già letto (v5.7): lo usa il pulsante 📷 senza rileggerli
+                          ComeCollegarsiOcr = ca.ComeCollegarsiOcr,
+                          DatiAmbienteOcr = ca.DatiAmbienteOcr,
+                          OcrImpronta = ca.OcrImpronta
                       }).FirstOrDefaultAsync();
+    }
+
+    /// <summary>
+    /// Solo testo OCR e impronta di un ambiente (v5.7), senza l'HTML con gli screenshot. Usato dal
+    /// pulsante 📷 quando la lettura in background è finita dopo l'apertura del record.
+    /// </summary>
+    public async Task<(string? ComeCollegarsiOcr, string? DatiAmbienteOcr, string? OcrImpronta)?> GetTestoOcrAsync(int id)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+        var riga = await context.ClientiAmbienti
+            .Where(ca => ca.Id == id)
+            .Select(ca => new { ca.ComeCollegarsiOcr, ca.DatiAmbienteOcr, ca.OcrImpronta })
+            .FirstOrDefaultAsync();
+        return riga == null ? null : (riga.ComeCollegarsiOcr, riga.DatiAmbienteOcr, riga.OcrImpronta);
     }
 
     /// <summary>
@@ -194,6 +246,8 @@ public class ClienteAmbienteService
             NumeroVersione = string.IsNullOrWhiteSpace(dto.NumeroVersione) ? null : dto.NumeroVersione.Trim(),
             DataModifica = DateTime.Now
         };
+        // Testo ricercabile e stato degli screenshot (v5.7): l'OCR li legge in background
+        AggiornaTestoEStatoOcr(entity);
         context.ClientiAmbienti.Add(entity);
 
         // Risolve il nome cliente per il DTO di ritorno e per il log
@@ -217,6 +271,7 @@ public class ClienteAmbienteService
 
         dto.Id = entity.Id;
         dto.DataModifica = entity.DataModifica;
+        CopiaStatoOcr(entity, dto);
         return dto;
     }
 
@@ -286,9 +341,12 @@ public class ClienteAmbienteService
         entity.TipoVersione = string.IsNullOrWhiteSpace(dto.TipoVersione) ? null : dto.TipoVersione.Trim();
         entity.NumeroVersione = string.IsNullOrWhiteSpace(dto.NumeroVersione) ? null : dto.NumeroVersione.Trim();
         entity.DataModifica = DateTime.Now;
+        // Rilettura OCR solo se gli screenshot sono cambiati (stessa impronta = testo ancora valido)
+        AggiornaTestoEStatoOcr(entity);
 
         dto.NomeCliente = nuovoNomeCliente;
         dto.DataModifica = entity.DataModifica;
+        CopiaStatoOcr(entity, dto);
 
         context.ClientiAmbientiLog.Add(new ClienteAmbienteLog
         {
@@ -363,6 +421,44 @@ public class ClienteAmbienteService
             .OrderByDescending(l => l.Timestamp)
             .Take(maxRecords)
             .ToListAsync();
+    }
+
+    /// <summary>
+    /// Allinea testo ricercabile e stato OCR (v5.7) al contenuto appena impostato dei due campi ricchi.
+    /// Il testo ripulito si calcola subito (pochi millisecondi); per gli screenshot si calcola solo
+    /// l'impronta, come <c>ActivityService.AggiornaStatoOcr</c>: la lettura vera la fa
+    /// <see cref="OcrScreenshotService"/> in background, così il salvataggio non aspetta l'OCR.
+    /// - stessa impronta già salvata → testo OCR ancora valido, niente da rileggere;
+    /// - nessuno screenshot → impronta e testi OCR vuoti;
+    /// - screenshot cambiati → impronta NULL, da leggere. I vecchi testi OCR restano finché la
+    ///   rilettura non li sostituisce, così nel frattempo la ricerca non ha buchi.
+    /// </summary>
+    private static void AggiornaTestoEStatoOcr(ClienteAmbiente entity)
+    {
+        entity.ComeCollegarsiTesto = HtmlTextHelper.ToPlainText(entity.ComeCollegarsi);
+        entity.DatiAmbienteTesto = HtmlTextHelper.ToPlainText(entity.DatiAmbiente);
+
+        var impronta = ScreenshotHtmlHelper.CalcolaImpronta(entity.ComeCollegarsi, entity.DatiAmbiente);
+        if (entity.OcrImpronta == impronta) return;
+
+        if (impronta.Length == 0)
+        {
+            entity.OcrImpronta = string.Empty;
+            entity.ComeCollegarsiOcr = string.Empty;
+            entity.DatiAmbienteOcr = string.Empty;
+        }
+        else
+        {
+            entity.OcrImpronta = null;
+        }
+    }
+
+    /// <summary>Riporta nel DTO restituito al form lo stato OCR dopo il salvataggio (per il pulsante 📷).</summary>
+    private static void CopiaStatoOcr(ClienteAmbiente entity, ClienteAmbienteDto dto)
+    {
+        dto.ComeCollegarsiOcr = entity.ComeCollegarsiOcr;
+        dto.DatiAmbienteOcr = entity.DatiAmbienteOcr;
+        dto.OcrImpronta = entity.OcrImpronta;
     }
 
     /// <summary>

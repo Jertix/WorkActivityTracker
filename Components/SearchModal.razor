@@ -131,6 +131,17 @@
                                             <label class="form-check-label" for="chkChangeset">Elenco Changeset</label>
                                         </div>
                                     </div>
+                                    @* v5.7: testo letto con l'OCR negli screenshot di Descrizione dettagliata e Changeset *@
+                                    <div class="col-md-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="chkScreenshot"
+                                                   @bind="cercaInScreenshot" />
+                                            <label class="form-check-label" for="chkScreenshot"
+                                                   title="Testo letto automaticamente negli screenshot della Descrizione dettagliata e dei Changeset">
+                                                📷 Testo negli screenshot
+                                            </label>
+                                        </div>
+                                    </div>
                                     <div class="col-md-3">
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" id="chkUrlPatchRilasci" 
@@ -437,6 +448,7 @@
     private bool cercaInVersione = true;
     private bool cercaInCliente = true;
     private bool cercaInCartella = true;
+    private bool cercaInScreenshot = true;
 
     // Dimensione modale
     private enum ModalSize { Normal, Large, FullScreen }
@@ -562,7 +574,8 @@
             TestoCheckIn = cercaInTestoCheckIn,
             Versione = cercaInVersione,
             Cliente = cercaInCliente,
-            Cartella = cercaInCartella
+            Cartella = cercaInCartella,
+            Screenshot = cercaInScreenshot
         };
 
         // "ricercaEseguita" resta false durante l'attesa, altrimenti la griglia mostrerebbe
@@ -750,6 +763,7 @@
         cercaInVersione = true;
         cercaInCliente = true;
         cercaInCartella = true;
+        cercaInScreenshot = true;
     }
 
     private void DeselezionaTutti()
@@ -765,6 +779,7 @@
         cercaInVersione = false;
         cercaInCliente = false;
         cercaInCartella = false;
+        cercaInScreenshot = false;
     }
 
     #endregion
@@ -919,6 +934,23 @@
             sb.AppendLine();
             sb.AppendLine($"<strong>🔢 Elenco Changeset e lista files coinvolti:</strong>");
             sb.AppendLine(EvidenziaTestoHtml(HtmlToPlainText(att.ChangesetCoinvolti)));
+        }
+
+        // v5.7: testo letto con l'OCR negli screenshot. Il dettaglio mostra Note e Changeset come
+        // testo semplice, quindi senza immagini: senza questa sezione una parola trovata solo dentro
+        // uno screenshot non comparirebbe evidenziata da nessuna parte.
+        if (!string.IsNullOrWhiteSpace(att.NoteOcr))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"<strong>📷 Testo negli screenshot della descrizione dettagliata:</strong>");
+            sb.AppendLine(EvidenziaTestoHtml(att.NoteOcr));
+        }
+
+        if (!string.IsNullOrWhiteSpace(att.ChangesetOcr))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"<strong>📷 Testo negli screenshot dei Changeset:</strong>");
+            sb.AppendLine(EvidenziaTestoHtml(att.ChangesetOcr));
         }
 
         if (!string.IsNullOrEmpty(att.UrlPatchRilasci))

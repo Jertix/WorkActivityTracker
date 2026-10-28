@@ -4,6 +4,7 @@
 @inject ClienteAmbienteService ClienteAmbienteService
 @inject AmbienteService AmbienteService
 @inject PdfExportService PdfExportService
+@inject OcrScreenshotService OcrService
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -11,6 +12,7 @@
     Componente modale per la gestione degli ambienti per cliente (v4.7).
     Dati CONDIVISI tra tutti gli utenti. Include logging di tutte le modifiche.
     Campo "Come collegarsi" con editor rich HTML (toolbar completa come Note).
+    v5.7: casella di ricerca sopra l'elenco (anche nel testo degli screenshot) e pulsante 📷 sugli editor.
 *@
 
 @if (IsVisible)
@@ -41,7 +43,7 @@
                     @* ===== GRIGLIA AMBIENTI CLIENTE ===== *@
                     <div class="card mb-3">
                         <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                            <strong>Elenco Ambienti Cliente (@righe.Count elementi)</strong>
+                            <strong>Elenco Ambienti Cliente (@ConteggioElenco)</strong>
                             <div class="d-flex align-items-center gap-2">
                                 @if (isLoading)
                                 {
@@ -60,6 +62,34 @@
                                 <button class="btn btn-success btn-sm" @onclick="Nuovo" disabled="@isSaving">
                                     ➕ Nuovo
                                 </button>
+                            </div>
+                        </div>
+                        @* Casella di ricerca (v5.7): filtro lato SQL su campi, testo degli editor e screenshot *@
+                        <div class="d-flex align-items-center flex-wrap gap-3 px-3 py-2 border-bottom">
+                            <div class="input-group input-group-sm" style="max-width: 480px;">
+                                <input type="text" class="form-control"
+                                       placeholder="Cerca in cliente, ambiente, server, persone, Come collegarsi, Dati ambiente…"
+                                       @bind="testoRicerca" @bind:event="oninput"
+                                       @onkeydown="OnRicercaKeyDown" />
+                                <button class="btn btn-outline-primary" type="button" @onclick="Cerca"
+                                        disabled="@isLoading" title="Cerca (Invio)">
+                                    🔍
+                                </button>
+                                @if (!string.IsNullOrEmpty(filtroApplicato) || !string.IsNullOrEmpty(testoRicerca))
+                                {
+                                    <button class="btn btn-outline-secondary" type="button" @onclick="AzzeraRicerca"
+                                            disabled="@isLoading" title="Togli il filtro e mostra tutti gli ambienti">
+                                        ✕
+                                    </button>
+                                }
+                            </div>
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="checkbox" id="chkClientiScreenshot"
+                                       @bind="cercaNegliScreenshot" @bind:after="OnCambiaCercaNegliScreenshot" />
+                                <label class="form-check-label small" for="chkClientiScreenshot"
+                                       title="Cerca anche nel testo letto negli screenshot di Come collegarsi e Dati ambiente">
+                                    📷 anche negli screenshot
+                                </label>
                             </div>
                         </div>
                         <div class="card-body p-0">
@@ -84,7 +114,14 @@
                                                     class="@(corrente.Id == r.Id ? "table-active" : "")"
                                                     style="cursor: pointer;">
                                                     <td class="fw-bold">@r.NomeCliente</td>
-                                                    <td>@r.Ambiente</td>
+                                                    <td>
+                                                        @r.Ambiente
+                                                        @if (r.TrovatoNegliScreenshot)
+                                                        {
+                                                            <span class="badge bg-info text-dark ms-1"
+                                                                  title="Il testo cercato compare in uno screenshot di Come collegarsi o Dati ambiente">📷</span>
+                                                        }
+                                                    </td>
                                                     <td>
                                                         @if (!string.IsNullOrWhiteSpace(r.TipoVersione))
                                                         {
@@ -138,6 +175,14 @@
                                                 </td>
                                             </tr>
                                         }
+                                        else if (!string.IsNullOrEmpty(filtroApplicato))
+                                        {
+                                            <tr>
+                                                <td colspan="6" class="text-center text-muted py-4">
+                                                    Nessun ambiente trovato per «@filtroApplicato».
+                                                </td>
+                                            </tr>
+                                        }
                                         else
                                         {
                                             <tr>
@@ -165,7 +210,7 @@
                         }
                         <button class="btn btn-outline-success btn-sm" @onclick="EsportaElencoXlsx"
                                 disabled="@IsExporting"
-                                title="Esporta l'elenco degli ambienti cliente in formato Excel (.xlsx)">
+                                title="Esporta in formato Excel (.xlsx) l'elenco degli ambienti cliente mostrato (con un filtro attivo, solo quelli trovati)">
                             <i class="bi bi-filetype-xlsx me-1"></i>Esporta elenco XLSX
                         </button>
                         <button class="btn btn-outline-secondary btn-sm" @onclick="ApriCartellaExport"
@@ -367,13 +412,25 @@
                                             ⊟
                                         </button>
                                     </div>
-                                    <div @ref="collegamentoEditorRef"
-                                         id="collegamento-editor-div"
-                                         onkeydown="collegamentoEditorHelper.handleTab(event,this)"
-                                         contenteditable="true"
-                                         class="form-control note-editor"
-                                         style="min-height: 320px; max-height: 600px; overflow-y: auto; overflow-x: auto; white-space: pre;"
-                                         placeholder="Procedura, link, credenziali, VPN, RDP, ecc.">
+                                    <div style="position: relative;">
+                                        <div @ref="collegamentoEditorRef"
+                                             id="collegamento-editor-div"
+                                             onkeydown="collegamentoEditorHelper.handleTab(event,this)"
+                                             contenteditable="true"
+                                             class="form-control note-editor"
+                                             style="min-height: 320px; max-height: 600px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                                             placeholder="Procedura, link, credenziali, VPN, RDP, ecc.">
+                                        </div>
+                                        @* v5.7: testo letto negli screenshot (OCR) — overlay angolo in basso a destra *@
+                                        <div style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 2px; z-index: 10;">
+                                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                    @onclick="() => ApriTestoScreenshot(CampoScreenshot.ComeCollegarsi)"
+                                                    title="Testo letto negli screenshot"
+                                                    style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
+                                                    @onmousedown:preventDefault>
+                                                📷
+                                            </button>
+                                        </div>
                                     </div>
                                     @* Toolbar duplicata sotto l'editor *@
                                     <div class="editor-toolbar">
@@ -562,13 +619,25 @@
                                             ⊟
                                         </button>
                                     </div>
-                                    <div @ref="datiAmbienteEditorRef"
-                                         id="dati-ambiente-editor-div"
-                                         onkeydown="datiAmbienteEditorHelper.handleTab(event,this)"
-                                         contenteditable="true"
-                                         class="form-control note-editor"
-                                         style="min-height: 320px; max-height: 600px; overflow-y: auto; overflow-x: auto; white-space: pre;"
-                                         placeholder="Incolla qui i dati recuperati dall'ambiente (Installationlog.ini, proprietà di sistema, ecc.)">
+                                    <div style="position: relative;">
+                                        <div @ref="datiAmbienteEditorRef"
+                                             id="dati-ambiente-editor-div"
+                                             onkeydown="datiAmbienteEditorHelper.handleTab(event,this)"
+                                             contenteditable="true"
+                                             class="form-control note-editor"
+                                             style="min-height: 320px; max-height: 600px; overflow-y: auto; overflow-x: auto; white-space: pre;"
+                                             placeholder="Incolla qui i dati recuperati dall'ambiente (Installationlog.ini, proprietà di sistema, ecc.)">
+                                        </div>
+                                        @* v5.7: testo letto negli screenshot (OCR) — overlay angolo in basso a destra *@
+                                        <div style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 2px; z-index: 10;">
+                                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                                    @onclick="() => ApriTestoScreenshot(CampoScreenshot.DatiAmbiente)"
+                                                    title="Testo letto negli screenshot"
+                                                    style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
+                                                    @onmousedown:preventDefault>
+                                                📷
+                                            </button>
+                                        </div>
                                     </div>
                                     @* Toolbar duplicata sotto l'editor *@
                                     <div class="editor-toolbar">
@@ -740,6 +809,17 @@
             </div>
         </div>
     }
+
+    @* ===== MODALE TESTO LETTO NEGLI SCREENSHOT (OCR, v5.7) ===== *@
+    <OcrScreenshotModal
+        IsVisible="@mostraTestoScreenshot"
+        Titolo="@titoloTestoScreenshot"
+        IsLoading="@isLetturaScreenshot"
+        Testo="@testoScreenshot"
+        Info="@infoTestoScreenshot"
+        HaScreenshot="@screenshotPresenti"
+        OnCopia="CopiaTestoScreenshot"
+        OnChiudi="() => mostraTestoScreenshot = false" />
 }
 
 @code {
@@ -747,6 +827,9 @@
 
     [Parameter] public bool IsVisible { get; set; }
     [Parameter] public EventCallback OnChiudi { get; set; }
+
+    /// <summary>Ambiente salvato: Home fa partire la lettura degli screenshot in background (v5.7)</summary>
+    [Parameter] public EventCallback OnSalvato { get; set; }
 
     #endregion
 
@@ -808,6 +891,28 @@
     private bool _wasVisible = false;
 
     private bool IsModifica => corrente.Id > 0;
+
+    // ===== Casella di ricerca dell'elenco (v5.7) =====
+    /// <summary>Testo digitato nella casella (non ancora cercato finché non si preme Invio o 🔍)</summary>
+    private string testoRicerca = string.Empty;
+    /// <summary>
+    /// Termine dell'ultima ricerca eseguita; vuoto = elenco completo. Lo usa ogni ricaricamento
+    /// (riapertura, Salva, Elimina), così il filtro non si perde.
+    /// </summary>
+    private string filtroApplicato = string.Empty;
+    private bool cercaNegliScreenshot = true;
+
+    private string ConteggioElenco => string.IsNullOrEmpty(filtroApplicato)
+        ? $"{righe.Count} elementi"
+        : $"{righe.Count} elementi, filtro: «{filtroApplicato}»";
+
+    // ===== Popup "📷 Testo letto negli screenshot" (v5.7) =====
+    private bool mostraTestoScreenshot = false;
+    private string titoloTestoScreenshot = string.Empty;
+    private bool isLetturaScreenshot = false;
+    private string testoScreenshot = string.Empty;
+    private string infoTestoScreenshot = string.Empty;
+    private bool screenshotPresenti = false;
 
     #endregion
 
@@ -879,16 +984,18 @@
     /// alle combo del form.
     /// Con <paramref name="inBackground"/> (riapertura della finestra) la griglia resta visibile
     /// con i dati precedenti e compare solo l'indicatore "aggiornamento…".
+    /// La griglia rispetta sempre il filtro della casella di ricerca (<c>filtroApplicato</c>);
+    /// con <paramref name="soloGriglia"/> (una ricerca) le liste delle combo non vengono rilette.
     /// </summary>
-    private async Task CaricaTutto(bool inBackground = false)
+    private async Task CaricaTutto(bool inBackground = false, bool soloGriglia = false)
     {
         var generazione = ++_generazioneCaricamento;
         if (inBackground) isAggiornamento = true; else isLoading = true;
 
-        var taskRighe = ClienteAmbienteService.GetAllAsync();
-        var taskClienti = ClienteService.GetClientiAsync();
-        var taskAmbientiDistinti = ClienteAmbienteService.GetAmbientiDistintiAsync();
-        var taskCongelati = AmbienteService.GetAmbientiAsync();
+        var taskRighe = ClienteAmbienteService.GetAllAsync(filtroApplicato, cercaNegliScreenshot);
+        var taskClienti = soloGriglia ? Task.FromResult(clienti) : ClienteService.GetClientiAsync();
+        var taskAmbientiDistinti = soloGriglia ? Task.FromResult(ambientiDistinti) : ClienteAmbienteService.GetAmbientiDistintiAsync();
+        var taskCongelati = soloGriglia ? Task.FromResult(congelatiAttivi) : AmbienteService.GetAmbientiAsync();
 
         try
         {
@@ -1009,6 +1116,10 @@
             var completo = await ClienteAmbienteService.GetByIdAsync(id);
             corrente.ComeCollegarsi = completo?.ComeCollegarsi;
             corrente.DatiAmbiente = completo?.DatiAmbiente;
+            // Testo degli screenshot già letto (v5.7), per il pulsante 📷
+            corrente.ComeCollegarsiOcr = completo?.ComeCollegarsiOcr;
+            corrente.DatiAmbienteOcr = completo?.DatiAmbienteOcr;
+            corrente.OcrImpronta = completo?.OcrImpronta;
         }
         catch (Exception ex)
         {
@@ -1091,6 +1202,9 @@
                 await InvokeAsync(StateHasChanged);
             });
 
+            // Screenshot nuovi o cambiati: li legge l'OCR in background, il salvataggio non lo aspetta
+            await OnSalvato.InvokeAsync();
+
             await CaricaTutto();
         }
         catch (Exception ex)
@@ -1149,6 +1263,147 @@
 
     [JSInvokable]
     public async Task SalvaViaShortcut() => await Salva();
+
+    #endregion
+
+    #region Casella di ricerca (v5.7)
+
+    /// <summary>Esegue la ricerca nel database con il testo della casella (vuoto = elenco completo).</summary>
+    private async Task Cerca()
+    {
+        filtroApplicato = testoRicerca.Trim();
+        messaggio = string.Empty;
+        await CaricaTutto(soloGriglia: true);
+    }
+
+    private async Task AzzeraRicerca()
+    {
+        testoRicerca = string.Empty;
+        await Cerca();
+    }
+
+    private async Task OnRicercaKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isLoading) await Cerca();
+    }
+
+    /// <summary>Cambiando la spunta 📷 con un filtro attivo la ricerca viene rifatta subito.</summary>
+    private async Task OnCambiaCercaNegliScreenshot()
+    {
+        if (!string.IsNullOrEmpty(filtroApplicato)) await CaricaTutto(soloGriglia: true);
+    }
+
+    #endregion
+
+    #region Testo negli screenshot (OCR, v5.7)
+
+    /// <summary>Editor di cui il pulsante 📷 mostra il testo degli screenshot</summary>
+    private enum CampoScreenshot { ComeCollegarsi, DatiAmbiente }
+
+    /// <summary>
+    /// Pulsante 📷 di "Come collegarsi" o "Dati ambiente": mostra il testo letto negli screenshot di
+    /// quel campo. Stessa logica del form delle attività (Home): se gli screenshot sono quelli già
+    /// letti (stessa impronta, calcolata su entrambi i campi) usa il testo salvato, altrimenti legge
+    /// al momento le immagini del solo campo richiesto. Non scrive nel DB: lo fa il salvataggio,
+    /// tramite la lettura in background.
+    /// </summary>
+    private async Task ApriTestoScreenshot(CampoScreenshot campo)
+    {
+        var suCollegarsi = campo == CampoScreenshot.ComeCollegarsi;
+        mostraTestoScreenshot = true;
+        titoloTestoScreenshot = "📷 Testo letto negli screenshot — " + (suCollegarsi ? "Come collegarsi" : "Dati recuperati dall'ambiente");
+        testoScreenshot = string.Empty;
+        infoTestoScreenshot = string.Empty;
+
+        // HTML attuale degli editor: comprende gli screenshot incollati e non ancora salvati
+        var collegarsiHtml = corrente.ComeCollegarsi;
+        var datiHtml = corrente.DatiAmbiente;
+        try { collegarsiHtml = await JS.InvokeAsync<string>("collegamentoEditorHelper.getHtml", collegamentoEditorRef); }
+        catch { /* editor non disponibile: si usa il valore del DTO */ }
+        try { datiHtml = await JS.InvokeAsync<string>("datiAmbienteEditorHelper.getHtml", datiAmbienteEditorRef); }
+        catch { /* idem */ }
+
+        var htmlCampo = suCollegarsi ? collegarsiHtml : datiHtml;
+        var numeroScreenshot = ScreenshotHtmlHelper.EstraiImmaginiBase64(htmlCampo).Count;
+        screenshotPresenti = numeroScreenshot > 0;
+        if (!screenshotPresenti)
+        {
+            infoTestoScreenshot = suCollegarsi
+                ? "In \"Come collegarsi\" non ci sono screenshot."
+                : "In \"Dati recuperati dall'ambiente\" non ci sono screenshot.";
+            return;
+        }
+
+        var impronta = ScreenshotHtmlHelper.CalcolaImpronta(collegarsiHtml, datiHtml);
+
+        // La lettura in background può essere finita dopo l'apertura del record (o l'ha fatta
+        // un'altra postazione): in quel caso il testo è già nel DB e lo si recupera.
+        if (corrente.OcrImpronta != impronta && IsModifica)
+        {
+            try
+            {
+                var salvato = await ClienteAmbienteService.GetTestoOcrAsync(corrente.Id);
+                if (salvato.HasValue && salvato.Value.OcrImpronta == impronta)
+                {
+                    corrente.ComeCollegarsiOcr = salvato.Value.ComeCollegarsiOcr;
+                    corrente.DatiAmbienteOcr = salvato.Value.DatiAmbienteOcr;
+                    corrente.OcrImpronta = salvato.Value.OcrImpronta;
+                }
+            }
+            catch { /* DB non raggiungibile: si legge al momento */ }
+        }
+
+        var testoSalvato = suCollegarsi ? corrente.ComeCollegarsiOcr : corrente.DatiAmbienteOcr;
+        if (corrente.OcrImpronta == impronta && testoSalvato != null)
+        {
+            testoScreenshot = testoSalvato;
+            infoTestoScreenshot = $"Testo letto da {numeroScreenshot} screenshot, già salvato: si può cercare dalla casella sopra l'elenco.";
+            return;
+        }
+
+        if (!OcrService.Disponibile)
+        {
+            infoTestoScreenshot = OcrService.MotivoNonDisponibile!;
+            return;
+        }
+
+        // Gli screenshot dell'editor sono ancora quelli caricati dal DB? Allora manca solo la
+        // lettura in background; altrimenti sono stati incollati/tolti e serve un salvataggio.
+        var screenshotModificati = !IsModifica ||
+            impronta != ScreenshotHtmlHelper.CalcolaImpronta(corrente.ComeCollegarsi, corrente.DatiAmbiente);
+
+        isLetturaScreenshot = true;
+        StateHasChanged();
+        try
+        {
+            testoScreenshot = await Task.Run(() => OcrService.RiconosciHtmlAsync(htmlCampo));
+            infoTestoScreenshot = $"Testo letto ora da {numeroScreenshot} screenshot. " + (screenshotModificati
+                ? "Si potrà cercare dalla casella sopra l'elenco dopo il salvataggio."
+                : "Si potrà cercare dalla casella sopra l'elenco appena la lettura in background raggiunge questo ambiente.");
+        }
+        catch (Exception ex)
+        {
+            infoTestoScreenshot = $"Errore nella lettura degli screenshot: {ex.Message}";
+        }
+        finally
+        {
+            isLetturaScreenshot = false;
+        }
+    }
+
+    /// <summary>"Copia tutto" della modale: testo letto negli screenshot negli appunti.</summary>
+    private async Task CopiaTestoScreenshot()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("copyToClipboard", testoScreenshot);
+            infoTestoScreenshot = "Testo copiato negli appunti.";
+        }
+        catch (Exception ex)
+        {
+            infoTestoScreenshot = $"Impossibile copiare negli appunti: {ex.Message}";
+        }
+    }
 
     #endregion
 
@@ -1341,8 +1596,10 @@
             var nomeFile = $"ElencoAmbientiClienteAl{timestamp}.xlsx";
             var percorso = System.IO.Path.Combine(AppConfigService.GetExportFolder(), nomeFile);
 
-            // Snapshot: la generazione gira su un thread di background.
+            // Snapshot: la generazione gira su un thread di background. È l'elenco mostrato,
+            // quindi con la casella di ricerca attiva si esportano solo gli ambienti filtrati.
             var dati = righe.ToList();
+            var filtro = filtroApplicato;
 
             await Task.Run(() =>
             {
@@ -1394,7 +1651,9 @@
                 wb.SaveAs(percorso);
             });
 
-            MostraMessaggio($"Esportato: {nomeFile}", false);
+            MostraMessaggio(string.IsNullOrEmpty(filtro)
+                ? $"Esportato: {nomeFile}"
+                : $"Esportato: {nomeFile} ({dati.Count} ambienti, solo quelli del filtro «{filtro}»)", false);
         }
         catch (Exception ex)
         {
@@ -1536,6 +1795,7 @@
         messaggio = string.Empty;
         mostraConfermaElimina = false;
         daEliminare = null;
+        mostraTestoScreenshot = false;
         await OnChiudi.InvokeAsync();
     }
 

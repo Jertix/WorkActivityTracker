@@ -70,6 +70,25 @@ public class Attivita
     public string? ChangesetTesto { get; set; }
 
     /// <summary>
+    /// Testo letto con l'OCR dagli screenshot incollati in <see cref="Note"/> (v5.7). Cercabile dalla
+    /// Ricerca Avanzata. Popolato in background da <c>OcrScreenshotService.ElaboraLottoAsync</c>.
+    /// </summary>
+    public string? NoteOcr { get; set; }
+
+    /// <summary>Testo letto con l'OCR dagli screenshot di <see cref="ChangesetCoinvolti"/>. Vedi <see cref="NoteOcr"/>.</summary>
+    public string? ChangesetOcr { get; set; }
+
+    /// <summary>
+    /// Impronta (SHA-256) degli screenshot di Note + Changeset al momento della lettura OCR.
+    /// NULL = da leggere; stringa vuota = nessuno screenshot. Se si salva l'attività senza toccare
+    /// le immagini l'impronta non cambia e gli screenshot non vengono riletti
+    /// (vedi <c>ScreenshotHtmlHelper.CalcolaImpronta</c>).
+    /// </summary>
+    [MaxLength(64)]
+    [Column(TypeName = "varchar(64)")]
+    public string? OcrImpronta { get; set; }
+
+    /// <summary>
     /// ID del cliente associato (foreign key verso Clienti)
     /// </summary>
     public int? ClienteId { get; set; }
@@ -131,8 +150,12 @@ public class Attivita
     public DateTime DataCreazione { get; set; } = DateTime.Now;
     
     /// <summary>
-    /// Data e ora dell'ultima modifica
+    /// Data e ora dell'ultima modifica.
+    /// Tipo dichiarato perché la colonna è DATETIME (CreateDatabase.sql) mentre EF userebbe datetime2:
+    /// la lettura OCR in background la confronta per uguaglianza, e con tipi diversi il confronto
+    /// dipenderebbe dal livello di compatibilità di SQL Server (v5.7).
     /// </summary>
+    [Column(TypeName = "datetime")]
     public DateTime DataModifica { get; set; } = DateTime.Now;
     
     // Navigation properties
@@ -932,6 +955,8 @@ public class RicercaAvanzataCriteri
     public bool Versione { get; set; } = true;
     public bool Cliente { get; set; } = true;
     public bool Cartella { get; set; } = true;
+    /// <summary>Testo letto con l'OCR dagli screenshot di Note e Changeset (v5.7).</summary>
+    public bool Screenshot { get; set; } = true;
     /// <summary>Se true, restituisce solo le attività che contengono un TODO.</summary>
     public bool SoloTodo { get; set; } = false;
 }
@@ -1000,12 +1025,20 @@ public class WorkActivityDto
     public string? Vedere { get; set; }
     public string? Note { get; set; }
     public string? ChangesetCoinvolti { get; set; }
-    
+
+    /// <summary>
+    /// Testo OCR degli screenshot e relativa impronta (v5.7). Valorizzati solo da
+    /// GetActivityByIdAsync (dettaglio): li calcola il servizio, il form non li salva.
+    /// </summary>
+    public string? NoteOcr { get; set; }
+    public string? ChangesetOcr { get; set; }
+    public string? OcrImpronta { get; set; }
+
     /// <summary>
     /// URL della patch o del pacchetto nei rilasci
     /// </summary>
     public string? UrlPatchRilasci { get; set; }
-    
+
     /// <summary>
     /// Testo descrittivo del check-in
     /// </summary>
@@ -1128,6 +1161,32 @@ public class ClienteAmbiente
 
     public DateTime? DataModifica { get; set; }
 
+    /// <summary>
+    /// Versione in solo testo di <see cref="ComeCollegarsi"/> (HTML e screenshot base64 rimossi), su
+    /// cui gira la casella di ricerca di Gestione Clienti (v5.7): un LIKE sull'HTML troverebbe
+    /// parole dentro il base64 delle immagini. Calcolata in Add/Update con
+    /// <c>HtmlTextHelper.ToPlainText</c>; per gli ambienti già esistenti la calcola la lettura in
+    /// background (<c>OcrScreenshotService.ElaboraLottoClientiAmbientiAsync</c>).
+    /// </summary>
+    public string? ComeCollegarsiTesto { get; set; }
+
+    /// <summary>Versione in solo testo di <see cref="DatiAmbiente"/>. Vedi <see cref="ComeCollegarsiTesto"/>.</summary>
+    public string? DatiAmbienteTesto { get; set; }
+
+    /// <summary>Testo letto con l'OCR dagli screenshot di <see cref="ComeCollegarsi"/> (v5.7).</summary>
+    public string? ComeCollegarsiOcr { get; set; }
+
+    /// <summary>Testo letto con l'OCR dagli screenshot di <see cref="DatiAmbiente"/> (v5.7).</summary>
+    public string? DatiAmbienteOcr { get; set; }
+
+    /// <summary>
+    /// Impronta (SHA-256) degli screenshot dei due campi ricchi, come <c>Attivita.OcrImpronta</c>.
+    /// NULL = da elaborare (testo ripulito + OCR); stringa vuota = nessuno screenshot.
+    /// </summary>
+    [MaxLength(64)]
+    [Column(TypeName = "varchar(64)")]
+    public string? OcrImpronta { get; set; }
+
     [ForeignKey(nameof(ClienteId))]
     public virtual Cliente? Cliente { get; set; }
 }
@@ -1181,4 +1240,18 @@ public class ClienteAmbienteDto
     public DateTime? DataModifica { get; set; }
     /// <summary>Utente dell'ultima modifica (letto da ClientiAmbienti_Log, ordinato per Timestamp desc)</summary>
     public string? UltimoUtente { get; set; }
+
+    /// <summary>
+    /// Testo OCR degli screenshot e relativa impronta (v5.7). Valorizzati solo da GetByIdAsync e
+    /// dal salvataggio: li usa il pulsante 📷 degli editor, il form non li salva.
+    /// </summary>
+    public string? ComeCollegarsiOcr { get; set; }
+    public string? DatiAmbienteOcr { get; set; }
+    public string? OcrImpronta { get; set; }
+
+    /// <summary>
+    /// Solo nella griglia filtrata dalla casella di ricerca: il termine è stato trovato nel testo
+    /// di uno screenshot (badge 📷 accanto all'ambiente).
+    /// </summary>
+    public bool TrovatoNegliScreenshot { get; set; }
 }

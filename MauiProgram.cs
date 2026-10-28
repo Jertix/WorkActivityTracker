@@ -122,6 +122,10 @@ public static class MauiProgram
         // non è raggiungibile (caduta della VPN)
         builder.Services.AddSingleton<BozzaAttivitaService>();
 
+        // OcrScreenshotService: Singleton per leggere il testo degli screenshot (OCR di Windows, v5.7).
+        // Singleton perché il motore OCR si crea una volta sola e le letture sono serializzate.
+        builder.Services.AddSingleton<OcrScreenshotService>();
+
         return builder.Build();
     }
 

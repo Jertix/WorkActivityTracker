@@ -61,6 +61,16 @@
             document.addEventListener('keydown', function (e) {
                 if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
                     e.preventDefault();
+                    // @bind di Blazor aggiorna il valore sull'evento change, che parte solo quando il
+                    // campo perde il focus: con il cursore ancora nel campo appena modificato
+                    // (es. Descrizione) il salvataggio userebbe il testo precedente. blur() genera il
+                    // change prima della chiamata a SalvaViaShortcut, focus() rimette il cursore dov'era.
+                    // Non serve per gli editor contenteditable: il salvataggio ne legge l'HTML direttamente.
+                    var attivo = document.activeElement;
+                    if (attivo && (attivo.tagName === 'INPUT' || attivo.tagName === 'TEXTAREA')) {
+                        attivo.blur();
+                        attivo.focus();
+                    }
                     if (window._ctrlSModalRef) {
                         window._ctrlSModalRef.invokeMethodAsync('SalvaViaShortcut');
                     } else if (window._ctrlSRef) {
@@ -148,6 +158,67 @@
             var el = document.getElementById('changeset-editor-div');
             if (!el) return;
             window.changesetEditorHelper.indent(el, right);
+        };
+    </script>
+
+    <!-- Indicatore "modifiche non salvate" (v5.7): segnala a Blazor la PRIMA modifica fatta nel
+         form attività dopo che l'attività è stata caricata o salvata, poi si disarma (niente
+         chiamate a ogni tasto) finché Blazor non lo riarma.
+         - Campi normali (input, select, textarea, checkbox): eventi input/change.
+         - Editor Note e Changeset: MutationObserver, perché alcuni comandi della toolbar (indenta,
+           rimuovi righe vuote, rimuovi TODO, Tab) riscrivono l'HTML senza generare eventi input.
+           Le scritture di setContent (caricamento dell'attività) vengono scartate da scartaModificheEditor. -->
+    <script>
+        window.modificheFormHelper = {
+            _ref: null,
+            _armato: false,
+            _osservatore: null,
+
+            registra: function (dotNetRef, idContenitore) {
+                var contenitore = document.getElementById(idContenitore);
+                if (!contenitore) return;
+                var self = this;
+                self._ref = dotNetRef;
+                self._armato = true;
+
+                var suEvento = function () { self._segnala(); };
+                contenitore.addEventListener('input', suEvento, true);
+                contenitore.addEventListener('change', suEvento, true);
+
+                self._osservatore = new MutationObserver(function (records) {
+                    if (records.some(function (r) { return self._dentroEditor(r); })) self._segnala();
+                });
+                self._osservatore.observe(contenitore,
+                    { childList: true, characterData: true, attributes: true, subtree: true });
+            },
+
+            // Conta solo le mutazioni DENTRO un editor contenteditable: il resto del form viene
+            // ridisegnato da Blazor (classi, badge, sezioni nascoste) e non è una modifica dell'utente.
+            // Anche gli attributi della radice dell'editor (class, placeholder) li imposta Blazor.
+            _dentroEditor: function (r) {
+                var el = r.target.nodeType === Node.ELEMENT_NODE ? r.target : r.target.parentElement;
+                if (!el) return false;
+                var editor = el.closest('[contenteditable="true"]');
+                if (!editor) return false;
+                return r.type !== 'attributes' || el !== editor;
+            },
+
+            _segnala: function () {
+                if (!this._armato || !this._ref) return;
+                this._armato = false;
+                this._ref.invokeMethodAsync('SegnalaModificaForm');
+            },
+
+            // Chiamata da Blazor quando l'indicatore torna verde (attività caricata o salvata)
+            riarma: function () {
+                this._armato = true;
+            },
+
+            // Chiamata da setContent: il contenuto appena caricato non è una modifica dell'utente.
+            // takeRecords svuota la coda dell'observer prima che la callback venga eseguita.
+            scartaModificheEditor: function () {
+                if (this._osservatore) this._osservatore.takeRecords();
+            }
         };
     </script>
 
@@ -304,11 +375,12 @@
                 // Non sovrascrivere se l'utente sta editando
                 if (document.activeElement === el) return;
 
-                if (!text) { el.innerHTML = ''; return; }
+                if (!text) { el.innerHTML = ''; window.modificheFormHelper.scartaModificheEditor(); return; }
 
                 // Controlla se il contenuto è già HTML (ha tag)
                 if (/<[^>]+>/.test(text)) {
                     el.innerHTML = text;
+                    window.modificheFormHelper.scartaModificheEditor();
                     return;
                 }
 
@@ -323,6 +395,7 @@
                     return escaped || '';
                 });
                 el.innerHTML = htmlParts.join('<br>');
+                window.modificheFormHelper.scartaModificheEditor();
             },
 
             // Legge il testo grezzo (plain text) normalizzando le newline.
@@ -405,7 +478,7 @@
             setContent: function (el, html) {
                 if (!el) return;
                 if (document.activeElement === el) return;
-                if (!html) { el.innerHTML = ''; return; }
+                if (!html) { el.innerHTML = ''; window.modificheFormHelper.scartaModificheEditor(); return; }
 
                 if (/<[^>]+>/.test(html)) {
                     // Già HTML: imposta direttamente
@@ -419,6 +492,7 @@
                         .replace(/\n/g, '<br>');
                     el.innerHTML = escaped;
                 }
+                window.modificheFormHelper.scartaModificheEditor();
             },
 
             // Legge il contenuto HTML (per salvataggio nel DB con bold preservato)

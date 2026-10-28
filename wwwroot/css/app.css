@@ -337,6 +337,36 @@ tfoot.table-secondary td {
     font-size: 0.65rem;
 }
 
+/* Indicatore modifiche non salvate accanto alla versione (v5.7):
+   verde = salvato, rosso = da salvare, grigio = sola consultazione */
+.indicatore-modifiche {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.5);
+    transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+.indicatore-modifiche.salvato {
+    background-color: #28a745;
+    box-shadow: 0 0 6px 1px rgba(40, 167, 69, 0.7);
+}
+
+.indicatore-modifiche.da-salvare {
+    background-color: #dc3545;
+    box-shadow: 0 0 6px 2px rgba(220, 53, 69, 0.85);
+}
+
+.indicatore-modifiche.sola-lettura {
+    background-color: #6c757d;
+}
+
+.stato-modifiche-da-salvare {
+    color: #ff8787;
+    font-weight: 600;
+}
+
 /* Padding extra sul fondo del contenuto principale per non coprirlo con la status bar */
 .container-fluid.main-content {
     padding-bottom: 36px;

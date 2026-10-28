@@ -21,6 +21,7 @@
 @inject PdfExportService PdfExportService
 @inject BozzaAttivitaService BozzaService
 @inject ReadmeTemplateService ReadmeTemplateService
+@inject OcrScreenshotService OcrService
 @implements IDisposable
 
 @* 
@@ -195,7 +196,7 @@
                 💾 È presente una <strong>bozza non salvata</strong>@(dataBozza.HasValue ? $" del {dataBozza.Value:dd/MM/yyyy HH:mm}" : "")
                 (salvataggio nel database non riuscito). Ripristinala nel form e premi 💾 Salva.
             </span>
-            <button class="btn btn-sm btn-warning" type="button" @onclick="RipristinaBozza">
+            <button class="btn btn-sm btn-warning" type="button" @onclick="RipristinaBozzaDaPulsante">
                 ♻️ Ripristina
             </button>
             <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="ScartaBozza"
@@ -211,6 +212,15 @@
         <div class="alert alert-info alert-dismissible fade show py-2 mb-2" role="alert">
             ⚙️ @messaggioTestoRicercabile
             <button type="button" class="btn-close" @onclick="() => messaggioTestoRicercabile = string.Empty"></button>
+        </div>
+    }
+
+    @* ===== AVVISO LETTURA TESTO NEGLI SCREENSHOT (OCR, v5.7) ===== *@
+    @if (!string.IsNullOrEmpty(messaggioOcr))
+    {
+        <div class="alert alert-info alert-dismissible fade show py-2 mb-2" role="alert">
+            📷 @messaggioOcr
+            <button type="button" class="btn-close" @onclick="() => messaggioOcr = string.Empty"></button>
         </div>
     }
 
@@ -424,7 +434,7 @@
                             {
                                 @foreach (var att in Attivita)
                                 {
-                                    <tr @onclick="() => SelezionaAttivita(att)"
+                                    <tr @onclick="() => ApriAttivitaDaGriglia(att)"
                                         class="@GetRowClass(att)"
                                         style="cursor: pointer;">
                                         @if (isAdminMode)
@@ -506,7 +516,7 @@
                                                 </ul>
                                             </div>
                                             <button class="btn btn-sm btn-outline-info me-1"
-                                                    @onclick="async () => await DuplicaAttivita(att)"
+                                                    @onclick="() => DuplicaAttivitaDaGriglia(att)"
                                                     title="Duplica attività (copia tutti i campi tranne la data)">
                                                 <i class="bi bi-copy"></i>
                                             </button>
@@ -588,7 +598,8 @@
     </div>
 
     @* ===== FORM DETTAGLIO ATTIVITÀ ===== *@
-    <div class="card">
+    @* id usato da modificheFormHelper (index.html) per rilevare le modifiche non salvate *@
+    <div class="card" id="form-attivita">
         <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
             <strong>@(IsModifica ? "✏️ Modifica Attività" : "➕ Nuova Attività")</strong>
             <div class="d-flex align-items-center gap-2">
@@ -603,11 +614,11 @@
                     <span class="badge bg-light text-dark">ID: @AttivitaCorrente.Id</span>
                 }
                 @* Bottoni rapidi in cima *@
-                <button class="btn btn-success btn-sm py-0 px-2" @onclick="NuovaAttivita" disabled="@isSaving" title="Nuova attività">
+                <button class="btn btn-success btn-sm py-0 px-2" @onclick="NuovaAttivitaDaPulsante" disabled="@isSaving" title="Nuova attività">
                     ➕ Nuova
                 </button>
                 <button class="btn btn-light btn-sm py-0 px-2" @onclick="SalvaAttivita"
-                        disabled="@(isSaving || IstanzaConfronto.IsConfronto || (isAdminMode && IsModifica && AttivitaCorrente.UtenteUsername != UserService.WindowsUsername))"
+                        disabled="@(isSaving || !PuoSalvareAttivita)"
                         title="Salva attività (Ctrl+S)">
                     💾 Salva
                 </button>
@@ -859,7 +870,7 @@
                             }
                             @if (!string.IsNullOrEmpty(AttivitaCorrente.CartellaDocumentazione))
                             {
-                                <button class="btn btn-outline-danger" type="button" @onclick="() => AttivitaCorrente.CartellaDocumentazione = null">
+                                <button class="btn btn-outline-danger" type="button" @onclick="() => { AttivitaCorrente.CartellaDocumentazione = null; SegnaModifica(); }">
                                     ✕
                                 </button>
                             }
@@ -1038,6 +1049,14 @@
                         </div>
                         @* Pulsanti storico Note — overlay angolo in basso a destra *@
                         <div style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 2px; z-index: 10;">
+                            @* v5.7: testo letto negli screenshot della descrizione (OCR) *@
+                            <button class="btn btn-outline-secondary btn-sm" type="button"
+                                    @onclick="() => ApriTestoScreenshot(CampoScreenshot.Note)"
+                                    title="Testo letto negli screenshot"
+                                    style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
+                                    @onmousedown:preventDefault>
+                                📷
+                            </button>
                             <button class="btn btn-outline-secondary btn-sm" type="button"
                                     @onclick="NoteUndo"
                                     disabled="@(!IsModifica)"
@@ -1441,6 +1460,14 @@
                             </div>
                             @* Pulsanti storico Changeset — overlay angolo in basso a destra *@
                             <div style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 2px; z-index: 10;">
+                                @* testo letto negli screenshot dei changeset (OCR) *@
+                                <button class="btn btn-outline-secondary btn-sm" type="button"
+                                        @onclick="() => ApriTestoScreenshot(CampoScreenshot.Changeset)"
+                                        title="Testo letto negli screenshot"
+                                        style="padding: 1px 5px; font-size: 0.7rem; opacity: 0.75;"
+                                        @onmousedown:preventDefault>
+                                    📷
+                                </button>
                                 <button class="btn btn-outline-secondary btn-sm" type="button"
                                         @onclick="ChangesetUndo"
                                         disabled="@(!IsModifica)"
@@ -1628,11 +1655,11 @@
         @* ===== BOTTONI AZIONE ===== *@
         <div class="card-footer">
             <div class="d-flex gap-2">
-                <button class="btn btn-success" @onclick="NuovaAttivita" disabled="@isSaving">
+                <button class="btn btn-success" @onclick="NuovaAttivitaDaPulsante" disabled="@isSaving">
                     ➕ Nuova
                 </button>
                 <button class="btn btn-primary" @onclick="SalvaAttivita"
-                        disabled="@(isSaving || IstanzaConfronto.IsConfronto || (isAdminMode && IsModifica && AttivitaCorrente.UtenteUsername != UserService.WindowsUsername))"
+                        disabled="@(isSaving || !PuoSalvareAttivita)"
                         title="Salva attività (Ctrl+S)">
                     @if (isSaving)
                     {
@@ -1681,7 +1708,8 @@
 @* ===== MODALE GESTIONE CLIENTI (v4.7) ===== *@
 <GestioneClientiModal
     IsVisible="@mostraGestioneClienti"
-    OnChiudi="() => mostraGestioneClienti = false" />
+    OnChiudi="() => mostraGestioneClienti = false"
+    OnSalvato="OnGestioneClientiSalvato" />
 
 @* ===== MODALE EDITOR CONGELATI ===== *@
 <CongelatiEditorModal
@@ -1742,6 +1770,17 @@
     SuSeleziona="@RipristinaVersioneChangeset"
     Titolo="Changeset" />
 
+@* ===== MODALE TESTO LETTO NEGLI SCREENSHOT (OCR, v5.7) ===== *@
+<OcrScreenshotModal
+    IsVisible="@mostraTestoScreenshot"
+    Titolo="@titoloTestoScreenshot"
+    IsLoading="@isLetturaScreenshot"
+    Testo="@testoScreenshot"
+    Info="@infoTestoScreenshot"
+    HaScreenshot="@screenshotPresenti"
+    OnCopia="CopiaTestoScreenshot"
+    OnChiudi="() => mostraTestoScreenshot = false" />
+
 @* ===== MODALE CONFERMA ELIMINAZIONE ===== *@
 @if (mostraConfermaElimina && attivitaDaEliminare != null)
 {
@@ -1767,6 +1806,56 @@
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @onclick="AnnullaElimina">❌ Annulla</button>
                     <button class="btn btn-danger" @onclick="ConfermaElimina">🗑️ Sì, elimina</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ===== MODALE CONFERMA MODIFICHE NON SALVATE (v5.7) =====
+   Compare prima di sostituire l'attività nel form (riga della griglia, Nuova, Annulla, Duplica,
+   Ricerca Avanzata, Ripristina bozza) quando il pallino è rosso. z-index sotto il popup di
+   errore DB (3000), che può comparire se "Salva e continua" fallisce. *@
+@if (mostraConfermaModifiche)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5); z-index: 2000;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title">⚠️ Modifiche non salvate</h5>
+                </div>
+                <div class="modal-body">
+                    <p>L'attività aperta nel form ha modifiche non ancora salvate.
+                       Prima di <strong>@descrizioneAzioneConfermaModifiche</strong>, cosa vuoi fare?</p>
+                    <table class="table table-sm table-borderless mb-0">
+                        <tr>
+                            <td class="fw-bold text-muted" style="width: 80px;">Attività:</td>
+                            <td>@(IsModifica ? $"ID {AttivitaCorrente.Id}" : "Nuova, mai salvata")</td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold text-muted">Data:</td>
+                            <td>@AttivitaCorrente.Data.ToString("dd/MM/yyyy")</td>
+                        </tr>
+                        <tr>
+                            <td class="fw-bold text-muted">Titolo:</td>
+                            <td>@(string.IsNullOrWhiteSpace(AttivitaCorrente.Descrizione) ? "(descrizione vuota)" : TruncateText(AttivitaCorrente.Descrizione, 80))</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="ChiudiConfermaModifiche" disabled="@isSaving">
+                        ↩️ Resta sull'attività
+                    </button>
+                    <button class="btn btn-outline-danger" @onclick="ConfermaModificheScarta" disabled="@isSaving">
+                        🗑️ Scarta le modifiche
+                    </button>
+                    <button class="btn btn-primary" @onclick="ConfermaModificheSalva" disabled="@isSaving">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        💾 Salva e continua
+                    </button>
                 </div>
             </div>
         </div>
@@ -1816,7 +1905,13 @@
     {
         <span class="badge bg-info text-dark">🔒 Privacy attiva</span>
     }
-    <span class="ms-auto text-secondary">v@(AppConfig.Version)</span>
+    @* Pallino verde/rosso: l'attività nel form ha modifiche da salvare? (v5.7) *@
+    <span class="ms-auto d-inline-flex align-items-center gap-2 @(StatoModifiche == "da-salvare" ? "stato-modifiche-da-salvare" : "")"
+          title="@TooltipStatoModifiche">
+        <span>@EtichettaStatoModifiche</span>
+        <span class="indicatore-modifiche @StatoModifiche"></span>
+    </span>
+    <span class="text-secondary">v@(AppConfig.Version)</span>
 </div>
 
 @code {
@@ -1830,6 +1925,13 @@
     
     /// <summary>True se si sta modificando un'attività esistente (ID > 0)</summary>
     private bool IsModifica => AttivitaCorrente.Id > 0;
+
+    /// <summary>
+    /// False nella finestra di confronto e, in modalità admin, sulle attività di altri utenti.
+    /// Usata dai pulsanti Salva e dall'indicatore delle modifiche (che lì mostra "Sola consultazione").
+    /// </summary>
+    private bool PuoSalvareAttivita => !IstanzaConfronto.IsConfronto
+        && !(isAdminMode && IsModifica && AttivitaCorrente.UtenteUsername != UserService.WindowsUsername);
 
     // Dati di lookup caricati dal database
     private List<Cliente> clienti = new();
@@ -1971,6 +2073,24 @@
     /// <summary>Banner informativo sull'avanzamento della conversione del testo ricercabile.</summary>
     private string messaggioTestoRicercabile = string.Empty;
 
+    // ===== Testo negli screenshot (OCR, v5.7) =====
+    /// <summary>Banner del recupero iniziale (screenshot già presenti) o di OCR non disponibile</summary>
+    private string messaggioOcr = string.Empty;
+    /// <summary>True mentre gira LeggiScreenshotInBackground (un solo ciclo alla volta)</summary>
+    private bool ocrInCorso = false;
+    /// <summary>Richiesta arrivata mentre il ciclo girava: fa un altro giro a fine lavoro</summary>
+    private bool ocrDaRicontrollare = false;
+    /// <summary>L'avviso "OCR non disponibile" si mostra una volta sola per sessione</summary>
+    private bool ocrAvvisoNonDisponibileMostrato = false;
+
+    // Popup "📷 Testo letto negli screenshot" del form (Descrizione dettagliata o Changeset)
+    private bool mostraTestoScreenshot = false;
+    private string titoloTestoScreenshot = string.Empty;
+    private bool isLetturaScreenshot = false;
+    private string testoScreenshot = string.Empty;
+    private string infoTestoScreenshot = string.Empty;
+    private bool screenshotPresenti = false;
+
     /// <summary>True se su disco c'è una bozza lasciata da un salvataggio fallito.</summary>
     private bool bozzaPresente = false;
 
@@ -2046,6 +2166,25 @@
     // v4.7: flag per animazione pulse sulla status bar dopo il salvataggio
     private bool statusBarLampeggia = false;
 
+    // ===== Indicatore modifiche non salvate (v5.7) =====
+    /// <summary>True se il form contiene modifiche non ancora salvate (pallino rosso nella barra di stato)</summary>
+    private bool modificheNonSalvate = false;
+    /// <summary>
+    /// Incrementato a ogni modifica segnalata. SalvaAttivita lo confronta prima e dopo il salvataggio
+    /// per capire se l'utente ha continuato a scrivere mentre il salvataggio era in corso.
+    /// </summary>
+    private int contatoreModifiche = 0;
+    /// <summary>Flag: riarmare il rilevamento JS al prossimo render (stesso schema di noteEditorNeedsUpdate)</summary>
+    private bool rilevamentoModificheDaRiarmare = false;
+
+    // ===== Conferma prima di perdere le modifiche non salvate (v5.7) =====
+    /// <summary>Controlla la visibilità della modale "Modifiche non salvate"</summary>
+    private bool mostraConfermaModifiche = false;
+    /// <summary>Azione rimandata (apri altra attività, nuova, duplica...) da eseguire dopo Salva o Scarta</summary>
+    private Func<Task>? azioneDopoConfermaModifiche;
+    /// <summary>Descrizione dell'azione rimandata, mostrata nella modale (es. "creare una nuova attività")</summary>
+    private string descrizioneAzioneConfermaModifiche = string.Empty;
+
     /// <summary>Lista dei tipi ambienti di rilascio (per datalist)</summary>
     private List<TipoAmbienteRilascio> tipiAmbientiRilascio = new();
 
@@ -2107,6 +2246,10 @@
             dotNetRef = DotNetObjectReference.Create(this);
             try { await JS.InvokeVoidAsync("registraCtrlS", dotNetRef); }
             catch { /* Ignora se JS non ancora pronto */ }
+
+            // Rilevamento delle modifiche nel form (pallino rosso/verde nella barra di stato)
+            try { await JS.InvokeVoidAsync("modificheFormHelper.registra", dotNetRef, "form-attivita"); }
+            catch { /* Ignora se JS non ancora pronto */ }
         }
 
         if (changesetEditorNeedsUpdate && !changesetEditorFocused)
@@ -2130,6 +2273,14 @@
                     noteEditorRef,
                     AttivitaCorrente.Note ?? "");
             }
+            catch { /* Ignora errori JS */ }
+        }
+
+        // Dopo setContent: il contenuto appena caricato negli editor non deve contare come modifica
+        if (rilevamentoModificheDaRiarmare)
+        {
+            rilevamentoModificheDaRiarmare = false;
+            try { await JS.InvokeVoidAsync("modificheFormHelper.riarma"); }
             catch { /* Ignora errori JS */ }
         }
     }
@@ -2222,6 +2373,9 @@
 
                 // Converte a lotti le attività il cui testo ricercabile non è ancora stato calcolato
                 _ = ConvertiTestoRicercabileInBackground();
+
+                // Legge il testo degli screenshot non ancora letti (al primo avvio: tutti quelli già nel DB)
+                _ = LeggiScreenshotInBackground(mostraAvanzamento: true);
             }
         }
         catch (Exception ex)
@@ -2257,6 +2411,9 @@
         htmlLavoroPrecedente = string.Empty;
         lavoroPrecedenteCaricato = false;
 
+        // Il contenuto della bozza non è nel database finché non si salva
+        SegnaModifica();
+
         MostraMessaggio("Bozza ripristinata nel form. Premi 💾 Salva per scriverla nel database.", false);
     }
 
@@ -2278,6 +2435,17 @@
     public async Task SalvaViaShortcut()
     {
         await SalvaAttivita();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Chiamato da JavaScript (modificheFormHelper) alla prima modifica fatta nel form dopo un
+    /// caricamento o un salvataggio: le successive non arrivano finché il rilevamento non viene riarmato.
+    /// </summary>
+    [Microsoft.JSInterop.JSInvokable]
+    public async Task SegnalaModificaForm()
+    {
+        SegnaModifica();
         await InvokeAsync(StateHasChanged);
     }
 
@@ -2385,6 +2553,10 @@
             Vedere = attivita.Vedere,
             Note = attivita.Note,
             ChangesetCoinvolti = attivita.ChangesetCoinvolti,
+            // Testo degli screenshot già letto (v5.7): lo usa il pulsante 📷 senza rileggerli
+            NoteOcr = attivita.NoteOcr,
+            ChangesetOcr = attivita.ChangesetOcr,
+            OcrImpronta = attivita.OcrImpronta,
             UrlPatchRilasci = attivita.UrlPatchRilasci,
             TestoCheckIn = attivita.TestoCheckIn,
             CartellaDocumentazione = attivita.CartellaDocumentazione,
@@ -2422,6 +2594,9 @@
         // Segnala che i due editor contenteditable devono essere aggiornati
         changesetEditorNeedsUpdate = true;
         noteEditorNeedsUpdate = true;
+
+        // Attività appena letta dal DB: nessuna modifica in sospeso (pallino verde)
+        AzzeraModifiche();
     }
 
     /// <summary>
@@ -2462,6 +2637,9 @@
         lavoroPrecedenteCaricato = false;
 
         messaggio = string.Empty;
+
+        // Form vuoto con i soli valori di default: non c'è niente da perdere
+        AzzeraModifiche();
     }
 
     /// <summary>
@@ -2513,12 +2691,137 @@
     }
 
     /// <summary>
-    /// Annulla le modifiche correnti e resetta il form.
+    /// Annulla le modifiche correnti e resetta il form (chiede prima se ci sono modifiche non salvate).
     /// </summary>
-    private void AnnullaModifica()
+    private Task AnnullaModifica() =>
+        EseguiConControlloModifiche("annullare e svuotare il form",
+            () => { NuovaAttivita(); return Task.CompletedTask; });
+
+    /// <summary>Pulsanti ➕ Nuova: form vuoto, chiedendo prima se ci sono modifiche non salvate.</summary>
+    private Task NuovaAttivitaDaPulsante() =>
+        EseguiConControlloModifiche("creare una nuova attività",
+            () => { NuovaAttivita(); return Task.CompletedTask; });
+
+    /// <summary>Click su una riga della griglia: apre l'attività, chiedendo prima se ci sono modifiche non salvate.</summary>
+    private Task ApriAttivitaDaGriglia(WorkActivityDto att)
     {
-        NuovaAttivita();
+        // Riga dell'attività già aperta e modificata: ricaricarla dal DB cancellerebbe le modifiche,
+        // e cliccarci sopra è quasi sempre un gesto casuale (es. per tornare alla finestra). Non fa nulla.
+        if (modificheNonSalvate && att.Id > 0 && att.Id == AttivitaCorrente.Id)
+            return Task.CompletedTask;
+
+        return EseguiConControlloModifiche(
+            $"aprire l'attività del {att.Data:dd/MM/yyyy} «{TruncateText(att.Descrizione, 60)}»",
+            () => SelezionaAttivita(att));
     }
+
+    /// <summary>Pulsante Duplica della griglia (chiede prima se ci sono modifiche non salvate).</summary>
+    private Task DuplicaAttivitaDaGriglia(WorkActivityDto att) =>
+        EseguiConControlloModifiche($"duplicare l'attività del {att.Data:dd/MM/yyyy}",
+            () => DuplicaAttivita(att));
+
+    /// <summary>Pulsante ♻️ Ripristina del banner bozza (chiede prima se ci sono modifiche non salvate).</summary>
+    private Task RipristinaBozzaDaPulsante() =>
+        EseguiConControlloModifiche("ripristinare la bozza nel form",
+            () => { RipristinaBozza(); return Task.CompletedTask; });
+
+    /// <summary>
+    /// Punto d'ingresso dei comandi che sostituiscono l'attività nel form. Con il pallino rosso mostra
+    /// la modale "Modifiche non salvate" e rimanda l'azione a Salva/Scarta; altrimenti la esegue subito.
+    /// NON va usato dai flussi interni (es. il ricaricamento dopo il salvataggio in SalvaAttivita,
+    /// l'avvio), che chiamano SelezionaAttivita/NuovaAttivita direttamente.
+    /// </summary>
+    private async Task EseguiConControlloModifiche(string descrizioneAzione, Func<Task> azione)
+    {
+        // Dove non si può salvare (confronto, attività di altri) non c'è niente da proteggere
+        if (!modificheNonSalvate || !PuoSalvareAttivita)
+        {
+            await azione();
+            return;
+        }
+
+        descrizioneAzioneConfermaModifiche = descrizioneAzione;
+        azioneDopoConfermaModifiche = azione;
+        mostraConfermaModifiche = true;
+    }
+
+    /// <summary>
+    /// "Salva e continua": salva l'attività corrente e, solo se il salvataggio riesce, esegue l'azione rimandata.
+    /// </summary>
+    private async Task ConfermaModificheSalva()
+    {
+        await SalvaAttivita();
+
+        var azione = azioneDopoConfermaModifiche;
+        ChiudiConfermaModifiche();
+
+        // Salvataggio non riuscito (descrizione mancante, DB irraggiungibile): il pallino è ancora
+        // rosso e si resta sull'attività corrente, con il messaggio di SalvaAttivita a spiegare il perché.
+        if (modificheNonSalvate || azione == null) return;
+        await azione();
+    }
+
+    /// <summary>"Scarta le modifiche": esegue l'azione rimandata, che sostituisce il form.</summary>
+    private async Task ConfermaModificheScarta()
+    {
+        var azione = azioneDopoConfermaModifiche;
+        ChiudiConfermaModifiche();
+        if (azione != null) await azione();
+    }
+
+    /// <summary>Chiude la modale senza fare nulla ("Resta sull'attività").</summary>
+    private void ChiudiConfermaModifiche()
+    {
+        mostraConfermaModifiche = false;
+        azioneDopoConfermaModifiche = null;
+        descrizioneAzioneConfermaModifiche = string.Empty;
+    }
+
+    /// <summary>
+    /// Segna il form come modificato (pallino rosso). Chiamato da JS alla prima modifica digitata
+    /// e dai pulsanti che cambiano l'attività da C# senza passare da un campo (autocompila, undo, ecc.).
+    /// Tiene allineato anche UnsavedChangesService, che avvisa alla chiusura della finestra.
+    /// </summary>
+    private void SegnaModifica()
+    {
+        contatoreModifiche++;
+        modificheNonSalvate = true;
+        // Dove non si può salvare (confronto, attività di altri) l'avviso alla chiusura non avrebbe rimedio
+        UnsavedChanges.HasUnsavedChanges = PuoSalvareAttivita;
+    }
+
+    /// <summary>
+    /// Riporta il form a "nessuna modifica" (pallino verde): attività appena caricata, nuova o salvata.
+    /// Il rilevamento JS viene riarmato dopo il render, cioè dopo che setContent ha riempito gli editor.
+    /// </summary>
+    private void AzzeraModifiche()
+    {
+        modificheNonSalvate = false;
+        UnsavedChanges.HasUnsavedChanges = false;
+        rilevamentoModificheDaRiarmare = true;
+    }
+
+    /// <summary>Classe CSS del pallino nella barra di stato: salvato / da-salvare / sola-lettura</summary>
+    private string StatoModifiche =>
+        !PuoSalvareAttivita ? "sola-lettura"
+        : modificheNonSalvate ? "da-salvare"
+        : "salvato";
+
+    private string EtichettaStatoModifiche => StatoModifiche switch
+    {
+        "sola-lettura" => "Sola consultazione",
+        "da-salvare" => "Ci sono modifiche non salvate nell'attività",
+        _ => IsModifica ? "Attività salvata" : "Nessuna modifica da salvare"
+    };
+
+    private string TooltipStatoModifiche => StatoModifiche switch
+    {
+        "sola-lettura" => IstanzaConfronto.IsConfronto
+            ? "Finestra di confronto: le modifiche non possono essere salvate da qui"
+            : "Attività di un altro utente: non può essere salvata",
+        "da-salvare" => "Premi Ctrl+S o 💾 Salva per salvare le modifiche",
+        _ => "Nessuna modifica in sospeso nel form"
+    };
 
     /// <summary>
     /// Duplica un'attività esistente copiando tutti i campi tranne la data.
@@ -2594,6 +2897,9 @@
         // Segnala aggiornamento editor changeset e note
         changesetEditorNeedsUpdate = true;
         noteEditorNeedsUpdate = true;
+
+        // La copia esiste solo nel form finché non viene salvata
+        SegnaModifica();
 
         MostraMessaggio($"Attività duplicata! Modifica la data e salva.", false);
     }
@@ -2772,6 +3078,140 @@
         }
     }
 
+    /// <summary>Sotto questa soglia il recupero all'avvio non mostra il banner (pochi secondi di lavoro).</summary>
+    private const int SogliaBannerOcr = 10;
+
+    /// <summary>
+    /// Legge il testo degli screenshot delle attività ancora da leggere (OcrImpronta NULL), a lotti, in
+    /// background (v5.7). Parte all'avvio — la prima volta legge tutti gli screenshot già presenti nel
+    /// DB, dalla attività più recente — e dopo ogni salvataggio riuscito (attività o Gestione Clienti).
+    /// Dopo le attività dell'utente elabora gli ambienti di Gestione Clienti (dati condivisi: lo fa
+    /// qualsiasi postazione, vedi <c>OcrScreenshotService.ElaboraLottoClientiAmbientiAsync</c>).
+    /// Un solo ciclo alla volta: una richiesta che arriva mentre gira fa fare un altro giro a fine lavoro.
+    /// Riprendibile: chiudendo il programma a metà si riparte dalle attività non ancora lette.
+    /// Un errore (VPN caduta, DB lento) ferma il ciclo senza disturbare: riprende al prossimo
+    /// salvataggio o avvio.
+    /// </summary>
+    /// <param name="mostraAvanzamento">
+    /// True all'avvio: banner con l'avanzamento se c'è un vero recupero da fare. Dopo un salvataggio
+    /// no: sono pochi screenshot e finisce in qualche secondo.
+    /// </param>
+    private async Task LeggiScreenshotInBackground(bool mostraAvanzamento)
+    {
+        if (ocrInCorso)
+        {
+            ocrDaRicontrollare = true;
+            return;
+        }
+
+        if (!OcrService.Disponibile)
+        {
+            // Le attività restano "da leggere": verranno lette quando la lingua sarà installata
+            if (!ocrAvvisoNonDisponibileMostrato)
+            {
+                ocrAvvisoNonDisponibileMostrato = true;
+                messaggioOcr = $"Il testo negli screenshot non può essere letto su questo PC. {OcrService.MotivoNonDisponibile}";
+                await InvokeAsync(StateHasChanged);
+            }
+            return;
+        }
+
+        // "12 attività e 3 ambienti cliente", omettendo la parte a zero
+        static string Elenco(int attivita, int ambienti) => (attivita, ambienti) switch
+        {
+            ( > 0, > 0) => $"{attivita} attività e {ambienti} ambienti cliente",
+            (_, > 0) => $"{ambienti} ambienti cliente",
+            _ => $"{attivita} attività"
+        };
+
+        var mostraCompletamento = false;
+        var letteAttivita = 0;
+        var letteAmbienti = 0;
+        ocrInCorso = true;
+        try
+        {
+            var daLeggereAttivita = mostraAvanzamento ? await OcrService.ContaDaLeggereAsync() : 0;
+            var daLeggereAmbienti = mostraAvanzamento ? await OcrService.ContaClientiAmbientiDaLeggereAsync() : 0;
+            var daLeggere = daLeggereAttivita + daLeggereAmbienti;
+            var conBanner = daLeggere >= SogliaBannerOcr;
+            if (conBanner)
+            {
+                messaggioOcr = $"Lettura del testo negli screenshot: {Elenco(daLeggereAttivita, daLeggereAmbienti)} da leggere. " +
+                               "Puoi continuare a lavorare.";
+                await InvokeAsync(StateHasChanged);
+            }
+
+            // Esegue i lotti finché non restituiscono 0, aggiornando l'avanzamento del banner
+            async Task<int> EseguiLotti(Func<Task<int>> elaboraLotto)
+            {
+                var fatti = 0;
+                while (true)
+                {
+                    // Task.Run: decodifica delle immagini, OCR e hash non devono pesare sul thread della UI
+                    var n = await Task.Run(elaboraLotto);
+                    if (n == 0) return fatti;
+
+                    fatti += n;
+                    // Aggiorna l'avanzamento solo se l'utente non ha chiuso il banner
+                    if (conBanner && !string.IsNullOrEmpty(messaggioOcr))
+                    {
+                        var avanzamento = letteAttivita + letteAmbienti + fatti;
+                        messaggioOcr = $"Lettura del testo negli screenshot: {Math.Min(avanzamento, daLeggere)} di {daLeggere}…";
+                        await InvokeAsync(StateHasChanged);
+                    }
+                    // Respiro fra un lotto e l'altro: la lettura non deve rallentare l'uso normale
+                    await Task.Delay(500);
+                }
+            }
+
+            do
+            {
+                ocrDaRicontrollare = false;
+                // Prima le attività dell'utente, poi gli ambienti di Gestione Clienti
+                letteAttivita += await EseguiLotti(() => OcrService.ElaboraLottoAsync(5));
+                letteAmbienti += await EseguiLotti(() => OcrService.ElaboraLottoClientiAmbientiAsync(5));
+            } while (ocrDaRicontrollare);
+
+            mostraCompletamento = conBanner && !string.IsNullOrEmpty(messaggioOcr);
+        }
+        catch
+        {
+            messaggioOcr = string.Empty;
+        }
+        finally
+        {
+            // Rilasciato PRIMA dell'attesa del banner: un salvataggio in quei secondi deve poter ripartire
+            ocrInCorso = false;
+        }
+
+        if (mostraCompletamento)
+        {
+            var dove = (letteAttivita > 0, letteAmbienti > 0) switch
+            {
+                (true, true) => "dalla Ricerca Avanzata e dalla casella di ricerca di Gestione Clienti",
+                (false, true) => "dalla casella di ricerca di Gestione Clienti",
+                _ => "dalla Ricerca Avanzata"
+            };
+            messaggioOcr = $"Lettura del testo negli screenshot completata ({Elenco(letteAttivita, letteAmbienti)}): " +
+                           $"ora si può cercare {dove}.";
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(12000);
+            messaggioOcr = string.Empty;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    /// <summary>
+    /// Ambiente salvato in Gestione Clienti: screenshot nuovi o cambiati li legge l'OCR in background.
+    /// Non nella finestra di confronto (nessun lavoro in background lì): l'ambiente verrà letto al
+    /// prossimo avvio o salvataggio della finestra principale.
+    /// </summary>
+    private void OnGestioneClientiSalvato()
+    {
+        if (!IstanzaConfronto.IsConfronto)
+            _ = LeggiScreenshotInBackground(mostraAvanzamento: false);
+    }
+
     private async Task PulisciStoricoEditorInBackground()
     {
         try
@@ -2821,6 +3261,13 @@
         // default era già impostato, non si salva un software su Permesso/Ferie/personalizzati.
         if (AttivitaCorrente.TipoAttivita != TipiAttivita.Lavoro)
             AttivitaCorrente.SoftwareId = null;
+
+        // Quello che l'utente digita da qui in poi (es. continua a scrivere dopo Ctrl+S, col DB lento
+        // via VPN) non finisce in questo salvataggio: riarma il rilevamento JS e memorizza il contatore,
+        // così a fine salvataggio il pallino resta rosso se nel frattempo sono arrivate altre modifiche.
+        var contatoreAlSalvataggio = contatoreModifiche;
+        try { await JS.InvokeVoidAsync("modificheFormHelper.riarma"); }
+        catch { /* Ignora errori JS */ }
 
         // Legge HTML dal contenteditable Note prima di salvare
         try
@@ -2925,6 +3372,14 @@
                 // Se non è visibile con i filtri correnti, resetta il form
                 NuovaAttivita();
             }
+
+            // SelezionaAttivita/NuovaAttivita hanno riportato il pallino a verde: se durante il
+            // salvataggio sono arrivate altre modifiche, quelle non sono ancora nel DB.
+            if (contatoreModifiche != contatoreAlSalvataggio)
+                SegnaModifica();
+
+            // Screenshot nuovi o cambiati: l'OCR li legge in background, il salvataggio non lo aspetta
+            _ = LeggiScreenshotInBackground(mostraAvanzamento: false);
         }
         catch (Exception ex)
         {
@@ -3592,6 +4047,8 @@
         catch { /* Ignora errori JS */ }
         AttivitaCorrente.Note = string.IsNullOrWhiteSpace(html) ? null : html;
         noteEditorNeedsUpdate = true;
+        // Undo/Redo/ripristino da storico: setContent non conta come modifica, va segnata qui
+        SegnaModifica();
     }
 
     /// <summary>
@@ -3659,6 +4116,120 @@
         catch { /* Ignora errori JS */ }
         AttivitaCorrente.ChangesetCoinvolti = string.IsNullOrWhiteSpace(html) ? null : html;
         changesetEditorNeedsUpdate = true;
+        // Undo/Redo/ripristino da storico: setContent non conta come modifica, va segnata qui
+        SegnaModifica();
+    }
+
+    #endregion
+
+    #region Testo negli screenshot (OCR, v5.7)
+
+    /// <summary>Editor di cui il pulsante 📷 mostra il testo degli screenshot</summary>
+    private enum CampoScreenshot { Note, Changeset }
+
+    /// <summary>
+    /// Pulsante 📷 della Descrizione dettagliata o dei Changeset: mostra il testo letto negli
+    /// screenshot di quel campo (<c>NoteOcr</c> / <c>ChangesetOcr</c>).
+    /// Se gli screenshot sono quelli già letti (stessa impronta) usa il testo salvato; altrimenti
+    /// (screenshot appena incollato, attività non ancora raggiunta dalla lettura in background) legge
+    /// al momento le immagini del solo campo richiesto. Non scrive nel DB: lo fa il salvataggio,
+    /// tramite la lettura in background.
+    /// </summary>
+    private async Task ApriTestoScreenshot(CampoScreenshot campo)
+    {
+        var suNote = campo == CampoScreenshot.Note;
+        mostraTestoScreenshot = true;
+        titoloTestoScreenshot = "📷 Testo letto negli screenshot — " + (suNote ? "Descrizione dettagliata" : "Changeset e files coinvolti");
+        testoScreenshot = string.Empty;
+        infoTestoScreenshot = string.Empty;
+
+        // HTML attuale degli editor: comprende gli screenshot incollati e non ancora salvati.
+        // Servono entrambi i campi perché l'impronta salvata copre Note + Changeset.
+        var noteHtml = AttivitaCorrente.Note;
+        var changesetHtml = AttivitaCorrente.ChangesetCoinvolti;
+        try { noteHtml = await JS.InvokeAsync<string>("noteEditorHelper.getHtml", noteEditorRef); }
+        catch { /* editor non disponibile: si usa il valore del DTO */ }
+        if (AttivitaCorrente.TipoAttivita == TipiAttivita.Lavoro)
+        {
+            try { changesetHtml = await JS.InvokeAsync<string>("changesetEditorHelper.getHtml", changesetEditorRef); }
+            catch { /* idem */ }
+        }
+
+        var htmlCampo = suNote ? noteHtml : changesetHtml;
+        var numeroScreenshot = ScreenshotHtmlHelper.EstraiImmaginiBase64(htmlCampo).Count;
+        screenshotPresenti = numeroScreenshot > 0;
+        if (!screenshotPresenti)
+        {
+            infoTestoScreenshot = suNote
+                ? "Nella descrizione dettagliata non ci sono screenshot."
+                : "Nell'elenco dei changeset e files coinvolti non ci sono screenshot.";
+            return;
+        }
+
+        var impronta = ScreenshotHtmlHelper.CalcolaImpronta(noteHtml, changesetHtml);
+
+        // La lettura in background può essere finita dopo l'apertura dell'attività: in quel caso il
+        // testo è già nel DB e lo si recupera (pochi KB) invece di rileggere gli screenshot.
+        if (AttivitaCorrente.OcrImpronta != impronta && IsModifica)
+        {
+            try
+            {
+                var salvato = await ActivityService.GetTestoOcrAsync(AttivitaCorrente.Id);
+                if (salvato.HasValue && salvato.Value.OcrImpronta == impronta)
+                {
+                    AttivitaCorrente.NoteOcr = salvato.Value.NoteOcr;
+                    AttivitaCorrente.ChangesetOcr = salvato.Value.ChangesetOcr;
+                    AttivitaCorrente.OcrImpronta = salvato.Value.OcrImpronta;
+                }
+            }
+            catch { /* DB non raggiungibile: si legge al momento */ }
+        }
+
+        var testoSalvato = suNote ? AttivitaCorrente.NoteOcr : AttivitaCorrente.ChangesetOcr;
+        if (AttivitaCorrente.OcrImpronta == impronta && testoSalvato != null)
+        {
+            testoScreenshot = testoSalvato;
+            infoTestoScreenshot = $"Testo letto da {numeroScreenshot} screenshot, già salvato: si può cercare dalla Ricerca Avanzata.";
+            return;
+        }
+
+        if (!OcrService.Disponibile)
+        {
+            infoTestoScreenshot = OcrService.MotivoNonDisponibile!;
+            return;
+        }
+
+        isLetturaScreenshot = true;
+        StateHasChanged();
+        try
+        {
+            testoScreenshot = await Task.Run(() => OcrService.RiconosciHtmlAsync(htmlCampo));
+            infoTestoScreenshot = $"Testo letto ora da {numeroScreenshot} screenshot. " + (modificheNonSalvate
+                ? "Si potrà cercare dalla Ricerca Avanzata dopo il salvataggio."
+                : "Si potrà cercare dalla Ricerca Avanzata appena la lettura in background raggiunge questa attività.");
+        }
+        catch (Exception ex)
+        {
+            infoTestoScreenshot = $"Errore nella lettura degli screenshot: {ex.Message}";
+        }
+        finally
+        {
+            isLetturaScreenshot = false;
+        }
+    }
+
+    /// <summary>"Copia tutto" della modale: testo letto negli screenshot negli appunti.</summary>
+    private async Task CopiaTestoScreenshot()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("copyToClipboard", testoScreenshot);
+            infoTestoScreenshot = "Testo copiato negli appunti.";
+        }
+        catch (Exception ex)
+        {
+            infoTestoScreenshot = $"Impossibile copiare negli appunti: {ex.Message}";
+        }
     }
 
     #endregion
@@ -3678,6 +4249,7 @@
             if (result.IsSuccessful && result.Folder != null)
             {
                 AttivitaCorrente.CartellaDocumentazione = result.Folder.Path;
+                SegnaModifica();
             }
         }
         catch (Exception ex)
@@ -3986,16 +4558,23 @@
     /// Gestisce la selezione di un'attività dalla modale di ricerca.
     /// Popola il form principale con i dati dell'attività selezionata.
     /// </summary>
-    private async Task OnAttivitaSelezionataDaModale(WorkActivityDto attivita)
+    private Task OnAttivitaSelezionataDaModale(WorkActivityDto attivita)
     {
-        // Popola il form con l'attività selezionata
-        await SelezionaAttivita(attivita);
+        // La modale di ricerca si chiude da sola dopo "Seleziona" (SelezionaEChiudi → Chiudi): con
+        // modifiche non salvate la conferma resta quindi sulla pagina principale.
+        return EseguiConControlloModifiche(
+            $"aprire l'attività del {attivita.Data:dd/MM/yyyy} «{TruncateText(attivita.Descrizione, 60)}»",
+            async () =>
+            {
+                // Popola il form con l'attività selezionata
+                await SelezionaAttivita(attivita);
 
-        // Chiudi la modale
-        mostraModaleRicerca = false;
+                // Chiudi la modale
+                mostraModaleRicerca = false;
 
-        // Messaggio di conferma
-        MostraMessaggio($"Attività ID {attivita.Id} del {attivita.Data:dd/MM/yyyy} selezionata", false);
+                // Messaggio di conferma
+                MostraMessaggio($"Attività ID {attivita.Id} del {attivita.Data:dd/MM/yyyy} selezionata", false);
+            });
     }
 
     #endregion
@@ -5270,7 +5849,10 @@
         }
 
         if (aggiunti)
+        {
             AttivitaCorrente.NumeroTicket = string.Join(", ", risultato);
+            SegnaModifica();
+        }
     }
 
     /// <summary>
@@ -5317,7 +5899,10 @@
     private void CopiaCheckInInDescrizione()
     {
         if (!string.IsNullOrWhiteSpace(AttivitaCorrente.TestoCheckIn))
+        {
             AttivitaCorrente.Descrizione = AttivitaCorrente.TestoCheckIn;
+            SegnaModifica();
+        }
     }
 
     /// <summary>
@@ -5355,6 +5940,7 @@
                 AttivitaCorrente.AmbientiRilascio[i].TipoAmbiente = origine?.TipoAmbiente;
                 AttivitaCorrente.AmbientiRilascio[i].Versione = origine?.Versione;
             }
+            SegnaModifica();
 
             var compilate = ultimo.Coppie.Count(c =>
                 !string.IsNullOrWhiteSpace(c.TipoAmbiente) || !string.IsNullOrWhiteSpace(c.Versione));
@@ -5385,6 +5971,7 @@
         AttivitaCorrente.TestoCheckIn = (ticket.Length > 0 && desc.Length > 0)
             ? $"{ticket} - {desc}"
             : (ticket.Length > 0 ? ticket : desc);
+        SegnaModifica();
     }
 
     /// <summary>

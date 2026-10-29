@@ -20,7 +20,9 @@
       "Bash(cmd.exe /c \"where gh\")",
       "Bash(winget install:*)",
       "Bash(export PATH=\"$PATH:/c/Program Files/GitHub CLI\")",
-      "Bash(gh --version)"
+      "Bash(gh --version)",
+      "Bash(grep -n \"MostraMessaggio\\(\\\\$\\\\\"Elenco\\\\|esportat\\\\|Esporta l'elenco\" Components/GestioneClientiModal.razor)",
+      "Bash(dotnet build *)"
     ]
   }
 }

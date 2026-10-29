@@ -16,38 +16,77 @@ Designed for software teams: log work sessions, associate them with clients and 
 
 ## Screenshot
 
+Versione 5.7. Persone, aziende, ticket e server sono inventati: sono i dati dimostrativi di [`Database/DatiDemo.sql`](Database/DatiDemo.sql) (vedi *Setup Database*).
+
 ### Interfaccia principale
-Griglia delle attività con filtri per anno/mese/giorno e form di inserimento/modifica con editor Note, Changeset, congelati e barra di stato in fondo.
+Griglia delle attività con filtri per anno/mese/settimana/giorno: le righe con un TODO aperto sono rosate, quelle con un ticket in scadenza arancioni o rosse, la selezionata gialla/arancione. In cima l'avviso dell'evento più vicino del calendario, sotto il form dell'attività (qui con gli ambienti di rilascio) e in fondo la barra di stato con il pallino verde "Attività salvata".
 
 ![Interfaccia principale](Images/00_MainForm.png)
 
 ---
 
-### Segnalazioni Bug / Richieste di Modifica
-Modale per inviare segnalazioni agli altri utenti, con griglia riepilogativa, filtri per stato e utente, e funzionalità di risposta.
+### Descrizione dettagliata con uno screenshot incollato
+Editor con grassetto, evidenziazioni, testo colorato e immagini incollate; toolbar sopra e sotto, pulsanti 📷 ◀ 📋 ▶ in basso a destra e, sotto, i congelati su cui è riportata la modifica.
 
-![Segnalazioni](Images/01_Segnalazioni.png)
+![Editor della descrizione](Images/09_Editor.png)
 
 ---
 
-### Appunti / Knowledge Base
-Modale per gestire una base di conoscenza personale: lista appunti con tag, editor ricco con toolbar di formattazione e filtro per tag.
+### Testo letto negli screenshot
+Il pulsante 📷 mostra il testo che l'OCR di Windows ha letto nelle immagini del campo, pronto da copiare.
 
-![Appunti](Images/02_Appunti.png)
+![Testo negli screenshot](Images/06_TestoScreenshot.png)
+
+---
+
+### Ricerca Avanzata
+Ricerca su tutto lo storico, con dettaglio del risultato ed evidenziazione delle occorrenze. Qui "ORB-5021" compare solo dentro lo screenshot dell'errore: la trova la spunta "📷 Testo negli screenshot".
+
+![Ricerca Avanzata](Images/04_RicercaAvanzata.png)
+
+---
+
+### Gestione Clienti
+Ambienti dei clienti condivisi fra gli utenti (server, persone di riferimento, come collegarsi). La casella cerca anche nel testo degli screenshot: il badge 📷 indica che "gw-milano" è stato trovato nell'immagine del client VPN.
+
+![Gestione Clienti](Images/05_GestioneClienti.png)
 
 ---
 
 ### TODO List
-Modale per la gestione dei TODO: griglia con stato, priorità e scadenza, form per aggiungere nuovi elementi e integrazione con il rilevamento TODO nelle attività.
+TODO personali con livello di urgenza, ricerca e nota di completamento obbligatoria per chiuderli.
 
 ![TODO List](Images/03_TODOList.png)
 
 ---
 
-### Ricerca Avanzata
-Modale di ricerca full-text su tutti i campi delle attività, con anteprima del dettaglio e possibilità di selezionare direttamente l'attività trovata.
+### Appunti / Knowledge Base
+Base di conoscenza personale con tag, ricerca e dettaglio dell'appunto selezionato.
 
-![Ricerca Avanzata](Images/04_RicercaAvanzata.png)
+![Appunti](Images/02_Appunti.png)
+
+---
+
+### Segnalazioni Bug / Richieste di Modifica
+Segnalazioni fra gli utenti con filtri per stato e utente, dettaglio e risposte.
+
+![Segnalazioni](Images/01_Segnalazioni.png)
+
+---
+
+### Impostazioni
+La finestra ⚙️: tema, colore principale e le impostazioni di `appsettings.json`.
+
+![Impostazioni](Images/07_Impostazioni.png)
+
+---
+
+### Tema scuro
+Tema scuro con il colore principale Acciaio. Gli editor restano chiari, come un foglio, perché il testo salvato porta i propri colori.
+
+![Tema scuro](Images/08_TemaScuro.png)
+
+![Tema scuro, editor](Images/10_TemaScuroEditor.png)
 
 ---
 
@@ -111,6 +150,14 @@ Modale di ricerca full-text su tutti i campi delle attività, con anteprima del 
 > `Tema` (default `ComeWindows`) / `ColorePrincipale` (default `Classico`) (v5.7): aspetto dell'interfaccia. `Tema`: `ComeWindows`, `Chiaro`, `Scuro`. `ColorePrincipale`: `Classico` (il blu di sempre), `Acciaio`, `Fucina`, `Foresta`, `Prugna`, `Grafite`, `ComeWindows`. Un valore sconosciuto vale come il predefinito. Vedi §37.
 >
 > La finestra **⚙️ Impostazioni** (v5.7) riscrive questo file toccando solo le chiavi che gestisce; `MostraModalitaAdmin`, `PrivacyMode` e la connection string vi compaiono in sola lettura e si modificano solo qui. Aggiornando il programma da uno zip, conserva il tuo `appsettings.json`.
+
+### Dati dimostrativi (facoltativo)
+
+Per provare il programma senza dati propri, `Database/DatiDemo.sql` riempie un database **appena creato** con dati inventati: quattro utenti, clienti e congelati, circa due mesi e mezzo di attività (catene "Proseguo l'attività", TODO aperti, ticket in scadenza, changeset, ambienti di rilascio, screenshot leggibili dall'OCR), TODO List, appunti, segnalazioni, calendario e Gestione Clienti. Le date sono calcolate rispetto al giorno di esecuzione.
+
+1. Crea un database separato (es. `WorkActivityTracker_Demo`) con `CreateDatabase.sql` e tutte le migration, cambiando in testa agli script il nome del database (`USE` / `CREATE DATABASE`).
+2. Esegui `DatiDemo.sql` su quel database (SSMS, oppure `sqlcmd -f 65001`): l'utente principale "Mario Rossi" è il tuo utente Windows. Lo script si ferma se nel database ci sono già attività.
+3. Punta l'applicazione al database demo (`ConnectionStrings`) e imposta `"NomeProgramma": "Orbita"`. Al primo avvio il programma converte il testo e legge gli screenshot in background.
 
 ### Eseguire l'applicazione
 
@@ -649,6 +696,7 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 | `MigrateToV5.6.sql` | Tabelle `Software` e `Software_Log`; colonna `Attivita.SoftwareId` con chiave esterna e indice; software di default sulle attività Lavoro esistenti (**impostare a mano `@NomeProgramma`**) |
 | `MigrateToV5.7.sql` | `Attivita`: `NoteOcr`, `ChangesetOcr`, `OcrImpronta` (+ indice filtrato `IX_Attivita_OcrDaLeggere`). `ClientiAmbienti`: `ComeCollegarsiTesto`, `DatiAmbienteTesto`, `ComeCollegarsiOcr`, `DatiAmbienteOcr`, `OcrImpronta`. Va eseguito **dopo** la V5.6 |
 | _(script una tantum)_ | `PuliziaLogClientiAmbienti.sql` — **non è una migration**: accorcia le righe già presenti in `ClientiAmbienti_Log`, dove veniva salvato "Come collegarsi" per intero |
+| _(dati dimostrativi)_ | `DatiDemo.sql` — **non è una migration**: riempie un database demo appena creato con dati inventati (vedi *Dati dimostrativi*) |
 
 ---
 

@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-5.7-blue)
+![Version](https://img.shields.io/badge/version-5.7.1-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -118,7 +118,7 @@ Tema scuro con il colore principale Acciaio. Gli editor restano chiari, come un 
   },
   "AppSettings": {
     "AppName": "Work Activity Tracker",
-    "Version": "5.7",
+    "Version": "5.7.1",
     "NumeroMesiMantenimentoHistory": 3,
     "MostraModalitaAdmin": true,
     "PrivacyMode": false,
@@ -717,6 +717,12 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 ---
 
 ## Changelog
+
+### v5.7.1
+- 🐛 **Tema scuro, titolo della finestra**: il titolo "Work Activity Tracker" restava nero sulla barra scura e si leggeva appena; ora è bianco nel tema scuro e nero in quello chiaro, anche cambiando tema a programma aperto.
+- 🐛 **Tema scuro, badge dell'ID**: il badge "ID: …" nell'intestazione del form era nero su grigio scuro; ora è leggibile.
+- 📚 Nel repository: screenshot della v5.7 nel README e `Database/DatiDemo.sql` per provare il programma con dati inventati.
+- 📝 Nessuna modifica al database.
 
 ### v5.7
 - 📷 **Testo negli screenshot**: il testo degli screenshot incollati in Descrizione dettagliata e Changeset viene letto con il riconoscimento del testo di Windows (offline, gratuito) e si può cercare dalla Ricerca Avanzata con la spunta "📷 Testo negli screenshot". Lettura in background all'avvio e dopo ogni salvataggio, senza rileggere gli screenshot che non cambiano. Pulsante **📷** sui due editor per vedere e copiare il testo letto.

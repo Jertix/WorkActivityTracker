@@ -298,6 +298,102 @@
         };
     </script>
 
+    <!-- Importazione Markdown nell'editor Note (v5.8). La conversione è in C# (MarkdownHelper):
+         qui si conserva la posizione del cursore e si gestisce il trascinamento del file.
+         - Il cursore va memorizzato perché fra il click sul menu e l'inserimento il focus lascia
+           l'editor (pulsante del menu Bootstrap, finestra di scelta del file).
+         - Il trascinamento è intercettato solo per i file: un testo trascinato dentro l'editor
+           resta gestito dal browser. -->
+    <script>
+        window.markdownImportHelper = {
+            _ref: null,
+            _range: null,
+
+            registra: function (dotNetRef, idEditor, estensioni) {
+                var self = this;
+                var giaRegistrato = self._ref !== null;
+                self._ref = dotNetRef;
+                if (giaRegistrato) return;
+
+                var editorDi = function (e) {
+                    var t = e.target;
+                    var el = t && t.nodeType === Node.ELEMENT_NODE ? t : (t ? t.parentElement : null);
+                    return el ? el.closest('#' + idEditor) : null;
+                };
+                var conFile = function (e) {
+                    return !!e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') >= 0;
+                };
+
+                // Ultima posizione del cursore dentro l'editor (il Range si aggiorna da solo se il
+                // contenuto cambia, quindi resta valido anche dopo altre modifiche)
+                document.addEventListener('selectionchange', function () {
+                    var editor = document.getElementById(idEditor);
+                    var sel = window.getSelection();
+                    if (!editor || !sel || sel.rangeCount === 0) return;
+                    var r = sel.getRangeAt(0);
+                    if (editor.contains(r.startContainer)) self._range = r.cloneRange();
+                });
+
+                document.addEventListener('dragover', function (e) {
+                    var editor = editorDi(e);
+                    if (!editor || !conFile(e)) return;
+                    e.preventDefault();   // senza, il browser non accetta il rilascio
+                    e.dataTransfer.dropEffect = 'copy';
+                    editor.classList.add('editor-drop-attivo');
+                });
+
+                document.addEventListener('dragleave', function (e) {
+                    var editor = editorDi(e);
+                    if (editor && !editor.contains(e.relatedTarget)) editor.classList.remove('editor-drop-attivo');
+                });
+
+                document.addEventListener('drop', function (e) {
+                    var editor = editorDi(e);
+                    if (!editor || !conFile(e)) return;
+                    e.preventDefault();   // senza, il browser proverebbe ad aprire il file
+                    editor.classList.remove('editor-drop-attivo');
+
+                    var file = e.dataTransfer.files[0];
+                    if (!file) return;
+
+                    // Il testo va dove si è lasciato il file
+                    var punto = document.caretRangeFromPoint(e.clientX, e.clientY);
+                    if (punto && editor.contains(punto.startContainer)) self._range = punto;
+
+                    var nome = file.name.toLowerCase();
+                    var ammesso = estensioni.some(function (est) { return nome.endsWith(est); });
+                    if (!ammesso) {
+                        self._ref.invokeMethodAsync('ImportaMarkdownTrascinato', file.name, null);
+                        return;
+                    }
+                    file.arrayBuffer().then(function (buffer) {
+                        self._ref.invokeMethodAsync('ImportaMarkdownTrascinato', file.name, new Uint8Array(buffer));
+                    });
+                });
+            },
+
+            // Inserisce l'HTML dove era il cursore; se non era nell'editor, in fondo.
+            // execCommand, non innerHTML: così Ctrl+Z annulla l'importazione.
+            // La riga vuota in coda: con il cursore a metà riga Chrome fonde l'ultimo blocco inserito
+            // con il resto della riga, e l'ultimo paragrafo perdeva il suo <p> (e quindi l'a capo
+            // automatico). Così si fonde la riga vuota, e il cursore resta su una riga nuova.
+            inserisci: function (el, html) {
+                if (!el) return;
+                el.focus();
+                var r = this._range;
+                if (!r || !el.contains(r.startContainer)) {
+                    r = document.createRange();
+                    r.selectNodeContents(el);
+                    r.collapse(false);
+                }
+                var sel = window.getSelection();
+                try { sel.removeAllRanges(); sel.addRange(r); }
+                catch (ex) { /* posizione non più valida: resta quella data da focus() */ }
+                document.execCommand('insertHTML', false, html + '<div><br></div>');
+            }
+        };
+    </script>
+
     <!-- Navigazione dei TODO dentro un contenteditable.
          Non altera il contenuto (niente marcatori inseriti nell'HTML, che finirebbero nel DB):
          cerca le occorrenze nei text node e ci porta sopra la selezione, poi scrolla l'editor. -->
@@ -582,7 +678,10 @@
                 const container = range.commonAncestorContainer;
                 let node = container.nodeType === 3 ? container.parentNode : container;
                 while (node && node !== editor) {
-                    if (node.tagName === 'DIV' || node.tagName === 'P') break;
+                    // Oltre alle righe DIV/P, i blocchi del Markdown importato (v5.8): senza, con il
+                    // cursore in una voce di elenco o in una cella si risaliva fino all'editor e si
+                    // indentavano tutti i suoi figli (elenchi e tabelle compresi).
+                    if (/^(DIV|P|LI|H[1-6]|TD|TH|PRE)$/.test(node.tagName)) break;
                     node = node.parentNode;
                 }
                 if (!node) node = editor;

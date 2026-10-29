@@ -556,6 +556,14 @@ tfoot.table-secondary td {
     font-weight: 700;
 }
 
+/* File Markdown trascinato sopra l'editor Note (v5.8). Ripetuto con :focus, che altrimenti
+   toglierebbe il contorno (.note-editor:focus ha outline: none) */
+.note-editor.editor-drop-attivo,
+.note-editor.editor-drop-attivo:focus {
+    outline: 2px dashed var(--wat-primario);
+    outline-offset: -5px;
+}
+
 /* Anteprima readonly "lavoro dei giorni precedenti": rende l'HTML (screenshot inclusi).
    Vincola le immagini alla larghezza del contenitore per evitare overflow eccessivi. */
 .note-preview-readonly img {

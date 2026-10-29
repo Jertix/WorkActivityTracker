@@ -1038,6 +1038,30 @@
                                 @onmousedown:preventDefault>
                             😊
                         </button>
+                        <div class="separator"></div>
+                        @* v5.8: importa un testo Markdown nel punto del cursore *@
+                        <div class="btn-group">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
+                                    data-bs-toggle="dropdown" aria-expanded="false"
+                                    data-bs-popper-config='{"strategy":"fixed"}'
+                                    title="Importa un testo Markdown nel punto del cursore, con titoli, elenchi, codice e tabelle già formattati">
+                                <i class="bi bi-markdown"></i>
+                            </button>
+                            <ul class="dropdown-menu shadow-sm">
+                                <li>
+                                    <button class="dropdown-item" type="button" @onclick="NoteImportaMarkdownDaFile">
+                                        <i class="bi bi-file-earmark-text me-2"></i>Da file .md…
+                                    </button>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item" type="button" @onclick="NoteImportaMarkdownDaAppunti">
+                                        <i class="bi bi-clipboard-plus me-2"></i>Dagli appunti
+                                    </button>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><span class="dropdown-item-text small text-muted">Oppure trascina un file .md sull'editor</span></li>
+                            </ul>
+                        </div>
                     </div>
                     <EmojiPicker IsVisible="@(emojiPickerAperto == 1)"
                                  Recenti="@emojiRecenti"
@@ -1214,6 +1238,30 @@
                                 @onmousedown:preventDefault>
                             😊
                         </button>
+                        <div class="separator"></div>
+                        @* v5.8: importa un testo Markdown nel punto del cursore *@
+                        <div class="btn-group">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
+                                    data-bs-toggle="dropdown" aria-expanded="false"
+                                    data-bs-popper-config='{"strategy":"fixed"}'
+                                    title="Importa un testo Markdown nel punto del cursore, con titoli, elenchi, codice e tabelle già formattati">
+                                <i class="bi bi-markdown"></i>
+                            </button>
+                            <ul class="dropdown-menu shadow-sm">
+                                <li>
+                                    <button class="dropdown-item" type="button" @onclick="NoteImportaMarkdownDaFile">
+                                        <i class="bi bi-file-earmark-text me-2"></i>Da file .md…
+                                    </button>
+                                </li>
+                                <li>
+                                    <button class="dropdown-item" type="button" @onclick="NoteImportaMarkdownDaAppunti">
+                                        <i class="bi bi-clipboard-plus me-2"></i>Dagli appunti
+                                    </button>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><span class="dropdown-item-text small text-muted">Oppure trascina un file .md sull'editor</span></li>
+                            </ul>
+                        </div>
                     </div>
                     <EmojiPicker IsVisible="@(emojiPickerAperto == 2)"
                                  Recenti="@emojiRecenti"
@@ -2279,6 +2327,14 @@
 
             // Rilevamento delle modifiche nel form (pallino rosso/verde nella barra di stato)
             try { await JS.InvokeVoidAsync("modificheFormHelper.registra", dotNetRef, "form-attivita"); }
+            catch { /* Ignora se JS non ancora pronto */ }
+
+            // Posizione del cursore e trascinamento di un file Markdown sull'editor Note (v5.8)
+            try
+            {
+                await JS.InvokeVoidAsync("markdownImportHelper.registra",
+                    dotNetRef, "note-editor-div", MarkdownHelper.EstensioniAmmesse);
+            }
             catch { /* Ignora se JS non ancora pronto */ }
         }
 
@@ -4011,6 +4067,109 @@
     {
         try { await JS.InvokeVoidAsync("sostituisciTodoNeiNodi", noteEditorRef); }
         catch { /* Ignora errori JS */ }
+    }
+
+    #endregion
+
+    #region Importazione Markdown nelle Note (v5.8)
+
+    /// <summary>
+    /// Menu Markdown della toolbar Note, voce "Da file .md…": sceglie il file e lo importa nel punto
+    /// del cursore. La posizione del cursore la conserva markdownImportHelper (index.html), perché
+    /// la finestra di scelta toglie il focus all'editor.
+    /// </summary>
+    private async Task NoteImportaMarkdownDaFile()
+    {
+        try
+        {
+            var file = await Microsoft.Maui.Storage.FilePicker.Default.PickAsync(new PickOptions
+            {
+                PickerTitle = "Scegli il file Markdown da importare",
+                FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+                {
+                    { DevicePlatform.WinUI, MarkdownHelper.EstensioniAmmesse }
+                })
+            });
+            if (file == null) return;   // scelta annullata
+
+            await ImportaFileMarkdown(file.FileName, await File.ReadAllBytesAsync(file.FullPath));
+        }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"❌ Impossibile importare il file Markdown: {ex.Message}", true);
+        }
+    }
+
+    /// <summary>
+    /// Menu Markdown della toolbar Note, voce "Dagli appunti": converte il testo Markdown copiato
+    /// (dalla chat di Claude, dal terminale, da Notepad++ senza visualizzatore).
+    /// </summary>
+    private async Task NoteImportaMarkdownDaAppunti()
+    {
+        string? testo;
+        try { testo = await Microsoft.Maui.ApplicationModel.DataTransfer.Clipboard.Default.GetTextAsync(); }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"❌ Impossibile leggere gli appunti: {ex.Message}", true);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(testo))
+        {
+            MostraMessaggio("⚠️ Gli appunti non contengono testo da importare.", true);
+            return;
+        }
+        await InserisciMarkdownNelleNote(testo, "dagli appunti");
+    }
+
+    /// <summary>
+    /// Chiamato da JavaScript (markdownImportHelper) quando si lascia cadere un file sull'editor Note.
+    /// <paramref name="contenuto"/> è null se il file non è Markdown: il JS non lo legge nemmeno.
+    /// </summary>
+    [Microsoft.JSInterop.JSInvokable]
+    public async Task ImportaMarkdownTrascinato(string nomeFile, byte[]? contenuto)
+    {
+        if (contenuto == null)
+            MostraMessaggio($"⚠️ \"{nomeFile}\" non è un file Markdown: si possono trascinare solo file "
+                + string.Join(" o ", MarkdownHelper.EstensioniAmmesse) + ".", true);
+        else
+            await ImportaFileMarkdown(nomeFile, contenuto);
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ImportaFileMarkdown(string nomeFile, byte[] contenuto)
+    {
+        if (contenuto.Length > MarkdownHelper.DimensioneMassimaByte)
+        {
+            MostraMessaggio($"⚠️ \"{nomeFile}\" è troppo grande per essere importato "
+                + $"({contenuto.Length / 1024 / 1024} MB, massimo {MarkdownHelper.DimensioneMassimaByte / 1024 / 1024} MB).", true);
+            return;
+        }
+        await InserisciMarkdownNelleNote(MarkdownHelper.Decodifica(contenuto), $"da \"{nomeFile}\"");
+    }
+
+    /// <summary>
+    /// Converte il Markdown e lo inserisce nel punto del cursore dell'editor Note (in fondo se il
+    /// cursore non era nell'editor). L'inserimento passa da execCommand, quindi Ctrl+Z lo annulla, e
+    /// il MutationObserver di modificheFormHelper accende da solo il pallino delle modifiche.
+    /// </summary>
+    private async Task InserisciMarkdownNelleNote(string markdown, string origine)
+    {
+        var html = MarkdownHelper.ToHtmlPerEditor(markdown);
+        if (string.IsNullOrEmpty(html))
+        {
+            MostraMessaggio($"⚠️ Niente da importare {origine}: il testo è vuoto.", true);
+            return;
+        }
+
+        try { await JS.InvokeVoidAsync("markdownImportHelper.inserisci", noteEditorRef, html); }
+        catch (Exception ex)
+        {
+            MostraMessaggio($"❌ Impossibile inserire il Markdown nella descrizione: {ex.Message}", true);
+            return;
+        }
+        MostraMessaggio($"✅ Markdown importato {origine}. Ctrl+Z nell'editor per annullare.", false);
     }
 
     #endregion

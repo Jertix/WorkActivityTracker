@@ -38,6 +38,9 @@
     <!-- ClosedXML per esportazione XLSX -->
     <PackageReference Include="ClosedXML" Version="0.105.1" />
 
+    <!-- Markdig per importare file Markdown nella descrizione dettagliata -->
+    <PackageReference Include="Markdig" Version="1.4.0" />
+
     <!-- Entity Framework Core SQL Server -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.14" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.14" />

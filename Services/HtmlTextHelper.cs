@@ -16,8 +16,16 @@ namespace WorkActivityTracker.Services;
 /// </summary>
 public static class HtmlTextHelper
 {
+    // Oltre a <br>, </p>, </div> degli editor: voci di elenco, titoli, righe di tabella e blocchi di
+    // codice (Markdown importato v5.8, o HTML incollato da una pagina web). L'apertura di un elenco
+    // va a capo per separare la voce madre dal primo punto di un elenco annidato.
     private static readonly Regex RegexACapo =
-        new(@"<br\s*/?>|</p>|</div>", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        new(@"<br\s*/?>|</p>|</div>|</li>|</h[1-6]>|</tr>|</pre>|<(?:ul|ol)\b[^>]*>",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Fra due celle della stessa riga: senza separatore il testo delle colonne finirebbe attaccato
+    private static readonly Regex RegexFraCelle =
+        new(@"</t[dh]>(?=\s*<t[dh]\b)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex RegexTag =
         new(@"<[^>]+>", RegexOptions.Compiled);
@@ -33,8 +41,9 @@ public static class HtmlTextHelper
     {
         if (string.IsNullOrEmpty(html)) return string.Empty;
 
-        // <br>, </p>, </div> → newline (i contenteditable usano <div> per gli a capo)
+        // <br>, </p>, </div> → newline (i contenteditable usano <div> per gli a capo), ecc.
         var testo = RegexACapo.Replace(html, "\n");
+        testo = RegexFraCelle.Replace(testo, " | ");
 
         // Rimuove tutti i restanti tag, immagini base64 comprese
         testo = RegexTag.Replace(testo, string.Empty);

@@ -32,6 +32,13 @@ Editor con grassetto, evidenziazioni, testo colorato e immagini incollate; toolb
 
 ---
 
+### Piano Markdown importato nella descrizione
+Novità della v5.8 (in sviluppo). Dal menu Markdown della toolbar ("Da file .md…" o "Dagli appunti"), oppure trascinando il file sull'editor, un piano scritto in Markdown entra nella descrizione già formattato: titoli, elenchi, liste di controllo ☐/☑, tabelle, codice e citazioni. Ctrl+Z annulla l'importazione.
+
+![Piano Markdown importato](Images/11_ImportaMarkdown.png)
+
+---
+
 ### Testo letto negli screenshot
 Il pulsante 📷 mostra il testo che l'OCR di Windows ha letto nelle immagini del campo, pronto da copiare.
 
@@ -252,6 +259,7 @@ Campo `contenteditable` (non textarea) con toolbar di editing:
 - **📷** / **◀** / 📋 / **▶**: Testo letto negli screenshot (v5.7, §34) / Undo / Storico versioni / Redo (overlay in basso a destra dell'editor, sopra le scrollbar).
 - **⊟**: rimuove le righe vuote dal contenuto dell'editor.
 - **TODO**: sostituisce ogni occorrenza di "TODO" (parola isolata) con `--`, preservando tutta la formattazione HTML.
+- **Menu Markdown** (v5.8, §38): importa nel punto del cursore un file `.md` o il Markdown copiato negli appunti, già formattato; il file si può anche trascinare sull'editor.
 - Altezza: min 200px, max 500px con scroll verticale.
 - Font: Segoe UI, `white-space: pre-wrap`.
 - **Bordo rosso** se il campo contiene TODO.
@@ -553,6 +561,19 @@ Pulsante a ingranaggio all'estremo destro della barra superiore. Modifica le imp
 - Nel tema scuro gli **editor e le anteprime del testo salvato restano chiari**, come un foglio: l'HTML salvato porta i propri colori (evidenziato giallo, testo rosso, testo nero incollato da altri programmi) e su sfondo scuro diventerebbe illeggibile.
 - Implementazione: palette in `Services/TemaInterfaccia.cs`, `temaHelper` nell'`<head>` di `index.html` (calcola le sfumature `--wat-primario*`), colori dell'app come variabili `--wat-*` in `app.css` con la versione chiara e quella scura. Gli export PDF/TXT non cambiano.
 
+### 38. Importa Markdown nelle Note (v5.8)
+
+Porta nella "Descrizione dettagliata" un piano scritto in Markdown (per esempio quelli preparati da Claude) senza passare da un visualizzatore esterno:
+- **Menu Markdown** in fondo alle due toolbar delle Note: **Da file .md…** (finestra di scelta del file) e **Dagli appunti** (il testo Markdown appena copiato).
+- **Trascinamento**: si lascia cadere un file `.md` sull'editor (bordo tratteggiato mentre lo si trascina) e il testo va dove si rilascia il file. Gli altri tipi di file vengono rifiutati.
+- Il testo entra **nel punto del cursore** (in fondo se il cursore non era nell'editor), seguito da una riga vuota per continuare a scrivere. **Ctrl+Z** annulla l'importazione; il pallino della barra di stato diventa rosso come per ogni modifica.
+- Conversione con **Markdig**: titoli, grassetto, corsivo e ~~barrato~~, elenchi numerati e puntati anche annidati, liste di controllo (☐/☑), tabelle con l'allineamento delle colonne, `codice` e blocchi di codice, citazioni e link. Gli stili sono scritti nel testo salvato, quindi l'aspetto resta uguale nel PDF e nelle anteprime.
+- I tag HTML scritti nel file arrivano come testo, i link restano solo se http/https/mailto e le immagini diventano `[immagine: …]` (un percorso locale non si vedrebbe).
+- File in UTF-8 (anche con BOM), UTF-16 o ANSI; massimo 2 MB.
+- Implementazione: `Services/MarkdownHelper.cs` (conversione e adattamento dell'HTML all'editor) e `markdownImportHelper` in `index.html` (posizione del cursore, trascinamento, inserimento con `execCommand`).
+
+Nello stesso giro: **Tab** dentro una voce di elenco o una cella indenta solo quella riga (prima indentava tutto il contenuto), e il testo semplice (export TXT, copia come testo, ricerca) va a capo fra voci di elenco, titoli e righe di tabella, con le celle separate da " | ".
+
 ---
 
 ## Modello Dati
@@ -640,6 +661,7 @@ SQL Server Database
 | `ScreenshotHtmlHelper` | statico | Estrazione degli screenshot base64 dall'HTML e impronta SHA-256 (v5.7) |
 | `ImpostazioniService` | Singleton | Lettura/scrittura delle impostazioni della finestra ⚙️ in `appsettings.json` (v5.7) |
 | `TemaInterfaccia` | statico | Palette e applicazione di tema e colore principale (v5.7) |
+| `MarkdownHelper` | statico | Conversione Markdown → HTML per l'importazione nelle Note, con Markdig (v5.8) |
 
 ### Script JS in `wwwroot/index.html`
 
@@ -659,6 +681,7 @@ SQL Server Database
 | `copyToClipboard(text)` | Copia testo negli appunti con fallback `execCommand` per MAUI |
 | `modificheFormHelper` | Rilevamento delle modifiche nel form (eventi + `MutationObserver` sugli editor) per il pallino rosso/verde (v5.7) |
 | `temaHelper.applica(tema, colore)` | Applica tema chiaro/scuro e sfumature del colore principale; nell'`<head>`, ripristina l'ultima scelta prima di Blazor (v5.7) |
+| `markdownImportHelper` | Importazione Markdown nelle Note: ricorda la posizione del cursore, gestisce il trascinamento del file `.md` e inserisce l'HTML con `execCommand` (v5.8) |
 
 ---
 
@@ -712,11 +735,19 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 - `UnsavedChangesService`: singleton condiviso tra il layer MAUI (`App.xaml.cs`) e il layer Blazor (`Home.razor`). `App.xaml.cs` intercetta `AppWindow.Closing` (cancellabile), controlla il servizio e mostra `DisplayAlert`.
 - `DotNetObjectReference<Home>` per il callback Ctrl+S: creato in `OnAfterRenderAsync` al first render, disposto in `Dispose()` (il componente implementa `IDisposable`).
 - Export XLSX usa **ClosedXML** (`ClosedXML` 0.105.1 nel `.csproj`). I file vengono salvati in `Export/` nella directory dell'eseguibile.
+- L'importazione Markdown usa **Markdig** (`Markdig` 1.4.0 nel `.csproj`).
 - **Colori (v5.7)**: niente colori scritti nel CSS o negli `style=""` — vanno aggiunti come variabili `--wat-*` in `app.css`, con il valore chiaro e quello scuro (§37). Editor e anteprime dell'HTML salvato usano la classe `foglio`, che resta chiara anche nel tema scuro.
 
 ---
 
 ## Changelog
+
+### v5.8 (in sviluppo)
+- 📝 **Importa Markdown nelle Note**: menu Markdown nelle toolbar della descrizione dettagliata ("Da file .md…", "Dagli appunti") e trascinamento di un file `.md` sull'editor. Il testo entra già formattato (titoli, elenchi, ☐/☑, tabelle, codice) e Ctrl+Z lo annulla.
+- 🐛 **Tab in una voce di elenco** o in una cella indentava tutto il contenuto della descrizione; ora indenta solo quella riga.
+- 🐛 **Testo semplice** (export TXT, copia come testo, ricerca): voci di elenco, titoli e righe di tabella finivano attaccati.
+- 🆕 Nuovo helper `MarkdownHelper`; nuova dipendenza **Markdig** 1.4.0.
+- 📝 Nessuna modifica al database.
 
 ### v5.7.1
 - 🐛 **Tema scuro, titolo della finestra**: il titolo "Work Activity Tracker" restava nero sulla barra scura e si leggeva appena; ora è bianco nel tema scuro e nero in quello chiaro, anche cambiando tema a programma aperto.
@@ -1007,7 +1038,8 @@ WorkActivityTracker/
 │   ├── PdfExportService.cs               # (v5.2) Export PDF via WebView2
 │   ├── ReadmeTemplateService.cs          # (v5.2) Carica ReadmeTmplates.json
 │   ├── BozzaAttivitaService.cs           # (v5.3) Bozza di emergenza su file (VPN caduta)
-│   └── HtmlTextHelper.cs                 # (v5.5) HTML → testo semplice (unica implementazione)
+│   ├── HtmlTextHelper.cs                 # (v5.5) HTML → testo semplice (unica implementazione)
+│   └── MarkdownHelper.cs                 # (v5.8) Markdown → HTML per le Note (Markdig)
 ├── wwwroot/
 │   ├── css/app.css                       # Stili custom (font 13px, TODO, editor toolbar)
 │   └── index.html                        # Entry point HTML + script JS custom

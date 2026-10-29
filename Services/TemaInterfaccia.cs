@@ -58,8 +58,50 @@ public static class TemaInterfaccia
         {
             if (Application.Current is { } app && app.UserAppTheme != temaFinestra)
                 app.UserAppTheme = temaFinestra;
+#if WINDOWS
+            AggiornaFinestreNative(temaFinestra);
+#endif
         });
     }
+
+#if WINDOWS
+    /// <summary>
+    /// UserAppTheme scurisce la barra del titolo, ma il testo del titolo disegnato da MAUI restava
+    /// nero, illeggibile sullo sfondo scuro: il suo colore viene fissato all'apertura della finestra
+    /// e non segue il cambio di tema (nemmeno impostando RequestedTheme sulla radice, provato).
+    /// Si cerca quindi il testo del titolo nella struttura della finestra e lo si colora in base al
+    /// tema effettivo (per "Come Windows" quello di Windows).
+    /// </summary>
+    private static void AggiornaFinestreNative(AppTheme tema)
+    {
+        if (Application.Current is not { } app) return;
+        var scuro = tema == AppTheme.Dark || (tema == AppTheme.Unspecified && app.PlatformAppTheme == AppTheme.Dark);
+        var colore = new Microsoft.UI.Xaml.Media.SolidColorBrush(scuro ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black);
+
+        foreach (var finestra in app.Windows)
+        {
+            if (finestra.Handler?.PlatformView is Microsoft.UI.Xaml.Window nativa
+                && nativa.Content is Microsoft.UI.Xaml.DependencyObject radice
+                && TrovaTesto(radice, finestra.Title) is { } titolo)
+                titolo.Foreground = colore;
+        }
+    }
+
+    /// <summary>Il primo TextBlock della struttura visuale con il testo indicato (il titolo della finestra).</summary>
+    private static Microsoft.UI.Xaml.Controls.TextBlock? TrovaTesto(Microsoft.UI.Xaml.DependencyObject elemento, string? testo)
+    {
+        if (string.IsNullOrEmpty(testo)) return null;
+        if (elemento is Microsoft.UI.Xaml.Controls.TextBlock blocco && blocco.Text == testo) return blocco;
+
+        var figli = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(elemento);
+        for (var i = 0; i < figli; i++)
+        {
+            if (TrovaTesto(Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(elemento, i), testo) is { } trovato)
+                return trovato;
+        }
+        return null;
+    }
+#endif
 
     /// <summary>Il colore d'accento scelto in Windows (Impostazioni → Personalizzazione → Colori), null se non leggibile.</summary>
     public static string? ColoreAccentoWindows()

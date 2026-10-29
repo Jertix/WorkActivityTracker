@@ -702,6 +702,12 @@ tfoot.table-secondary td {
     color: var(--bs-body-color);
 }
 
+/* "bg-light text-dark" (es. il badge con l'ID nell'intestazione del form): lo sfondo è diventato
+   scuro, quindi anche il testo deve diventare chiaro, altrimenti è nero su grigio scuro */
+[data-bs-theme="dark"] .bg-light.text-dark {
+    color: var(--bs-body-color) !important;
+}
+
 /* Varianti colorate delle tabelle (table-secondary della riga dei totali, table-warning, ecc.):
    Bootstrap le lascia con i colori chiari scritti come valori. Qui prendono le tinte "subtle" del
    tema scuro; righe alterne e hover usano lo stesso colore (in Bootstrap sono velature opache). */

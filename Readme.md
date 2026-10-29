@@ -1,6 +1,6 @@
 # WorkActivityTracker
 
-![Version](https://img.shields.io/badge/version-5.7.1-blue)
+![Version](https://img.shields.io/badge/version-5.8-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![.NET](https://img.shields.io/badge/.NET-10%20MAUI-purple)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
@@ -16,7 +16,7 @@ Designed for software teams: log work sessions, associate them with clients and 
 
 ## Screenshot
 
-Versione 5.7. Persone, aziende, ticket e server sono inventati: sono i dati dimostrativi di [`Database/DatiDemo.sql`](Database/DatiDemo.sql) (vedi *Setup Database*).
+Versione 5.7, più l'importazione Markdown della 5.8. Persone, aziende, ticket e server sono inventati: sono i dati dimostrativi di [`Database/DatiDemo.sql`](Database/DatiDemo.sql) (vedi *Setup Database*).
 
 ### Interfaccia principale
 Griglia delle attività con filtri per anno/mese/settimana/giorno: le righe con un TODO aperto sono rosate, quelle con un ticket in scadenza arancioni o rosse, la selezionata gialla/arancione. In cima l'avviso dell'evento più vicino del calendario, sotto il form dell'attività (qui con gli ambienti di rilascio) e in fondo la barra di stato con il pallino verde "Attività salvata".
@@ -33,7 +33,7 @@ Editor con grassetto, evidenziazioni, testo colorato e immagini incollate; toolb
 ---
 
 ### Piano Markdown importato nella descrizione
-Novità della v5.8 (in sviluppo). Dal menu Markdown della toolbar ("Da file .md…" o "Dagli appunti"), oppure trascinando il file sull'editor, un piano scritto in Markdown entra nella descrizione già formattato: titoli, elenchi, liste di controllo ☐/☑, tabelle, codice e citazioni. Ctrl+Z annulla l'importazione.
+Novità della v5.8. Dal menu Markdown della toolbar ("Da file .md…" o "Dagli appunti"), oppure trascinando il file sull'editor, un piano scritto in Markdown entra nella descrizione già formattato: titoli, elenchi, liste di controllo ☐/☑, tabelle, codice e citazioni. Ctrl+Z annulla l'importazione.
 
 ![Piano Markdown importato](Images/11_ImportaMarkdown.png)
 
@@ -125,7 +125,7 @@ Tema scuro con il colore principale Acciaio. Gli editor restano chiari, come un 
   },
   "AppSettings": {
     "AppName": "Work Activity Tracker",
-    "Version": "5.7.1",
+    "Version": "5.8",
     "NumeroMesiMantenimentoHistory": 3,
     "MostraModalitaAdmin": true,
     "PrivacyMode": false,
@@ -742,7 +742,7 @@ Gli script SQL si trovano in `Database/` e vanno eseguiti in ordine:
 
 ## Changelog
 
-### v5.8 (in sviluppo)
+### v5.8
 - 📝 **Importa Markdown nelle Note**: menu Markdown nelle toolbar della descrizione dettagliata ("Da file .md…", "Dagli appunti") e trascinamento di un file `.md` sull'editor. Il testo entra già formattato (titoli, elenchi, ☐/☑, tabelle, codice) e Ctrl+Z lo annulla.
 - 🐛 **Tab in una voce di elenco** o in una cella indentava tutto il contenuto della descrizione; ora indenta solo quella riga.
 - 🐛 **Testo semplice** (export TXT, copia come testo, ricerca): voci di elenco, titoli e righe di tabella finivano attaccati.
